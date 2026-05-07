@@ -4,8 +4,9 @@ import { SupabaseClient } from "./db/client";
 import { step } from "./primitives/step";
 import { llm_decide, llm_extract } from "./primitives/llm";
 import { await_approval } from "./primitives/approval";
+import { PauseSignal } from "./primitives/pause";
 
-export { step, llm_decide, llm_extract, await_approval };
+export { step, llm_decide, llm_extract, await_approval, PauseSignal };
 export type { RunContext, OrchestrationDefinition, ToolDefinition, Env };
 
 // ─── defineOrchestration ─────────────────────────────────────────────────────
@@ -130,6 +131,13 @@ export function createHandler(orchestrations: OrchestrationsMap) {
           headers: { "Content-Type": "application/json" },
         });
       } catch (err) {
+        if (err instanceof PauseSignal) {
+          await db.updateRun(run.id, { status: "paused" });
+          return new Response(
+            JSON.stringify({ runId: run.id, status: "paused", approvalId: err.approvalId }),
+            { status: 202, headers: { "Content-Type": "application/json" } },
+          );
+        }
         await db.updateRun(run.id, {
           status: "failed",
           error: { message: err instanceof Error ? err.message : String(err) },

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
+import { PauseSignal } from "./pause";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -22,6 +23,12 @@ export async function llm_decide<const T extends string>(
 ): Promise<T> {
   const db = new SupabaseClient(ctx.env);
   const idx = ctx.stepIndex();
+
+  // Replay short-circuit
+  const cached = await db.getCompletedStep(ctx.runId, idx);
+  if (cached !== null) {
+    return (cached.output as { chosen: T }).chosen;
+  }
 
   const systemPrompt = `You are a decision engine. Given the context, choose exactly one of the following options and respond with ONLY that option text, nothing else:\n${options.options.map((o) => `- ${o}`).join("\n")}`;
 
@@ -87,6 +94,15 @@ export async function llm_extract<T extends z.ZodTypeAny>(
 ): Promise<z.infer<T>> {
   const db = new SupabaseClient(ctx.env);
   const idx = ctx.stepIndex();
+
+  // Replay short-circuit
+  const cached = await db.getCompletedStep(ctx.runId, idx);
+  if (cached !== null) {
+    return cached.output as z.infer<T>;
+  }
+
+  // Suppress unused import warning from the PauseSignal import above
+  void PauseSignal;
 
   const runStep = await db.createRunStep({
     run_id: ctx.runId,

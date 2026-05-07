@@ -1,5 +1,6 @@
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
+import { PauseSignal } from "./pause";
 
 const RETRY_DELAYS_MS = [1000, 3000, 10000]; // exponential-ish backoff
 
@@ -10,6 +11,15 @@ export async function step<T>(
 ): Promise<T> {
   const db = new SupabaseClient(ctx.env);
   const idx = ctx.stepIndex();
+
+  // ── Replay short-circuit ──────────────────────────────────────────────────
+  // If this run was previously paused and is now resuming, completed steps
+  // return their cached output rather than re-executing. This makes replay
+  // safe and idempotent.
+  const cached = await db.getCompletedStep(ctx.runId, idx);
+  if (cached !== null) {
+    return cached.output as T;
+  }
 
   const runStep = await db.createRunStep({
     run_id: ctx.runId,
@@ -33,6 +43,9 @@ export async function step<T>(
 
       return output;
     } catch (err) {
+      // Don't retry PauseSignals — propagate immediately
+      if (err instanceof PauseSignal) throw err;
+
       lastError = err;
       const delay = RETRY_DELAYS_MS[attempt];
       if (delay === undefined) break;

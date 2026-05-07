@@ -1,5 +1,5 @@
 import type { Env, RunContext } from "./types";
-import { createHandler } from "./index";
+import { createHandler, PauseSignal } from "./index";
 import { ingestDocument, queryDocuments } from "./agents/document-rag";
 import { runDataAnalyst } from "./agents/data-analyst";
 import { SupabaseClient } from "./db/client";
@@ -228,6 +228,96 @@ export default {
 
         const result = await runDataAnalyst(env, body);
         return json(result);
+      }
+
+      // ── Approval response: POST /api/approvals/:id/respond ──────────────────
+      const approvalMatch = pathname.match(/^\/api\/approvals\/([^/]+)\/respond$/);
+      if (approvalMatch && request.method === "POST") {
+        const approvalId = approvalMatch[1];
+        if (!approvalId) return json({ error: "Missing approval ID" }, 400);
+
+        let body: { approved: boolean; notes?: string; decidedBy?: string };
+        try {
+          body = await request.json() as typeof body;
+        } catch {
+          return json({ error: "Invalid JSON body" }, 400);
+        }
+        if (typeof body.approved !== "boolean") {
+          return json({ error: "'approved' (boolean) is required" }, 422);
+        }
+
+        const db = new SupabaseClient(env);
+
+        // Write the decision
+        await db.respondToApproval(approvalId, {
+          approved: body.approved,
+          ...(body.notes !== undefined && { notes: body.notes }),
+          ...(body.decidedBy !== undefined && { decidedBy: body.decidedBy }),
+        });
+
+        // Fetch the approval to get the run_id
+        const approval = await db.getApproval(approvalId);
+        const run = await db.getRun(approval.run_id);
+
+        if (run.status !== "paused") {
+          return json({ error: `Run ${run.id} is not paused (status: ${run.status})` }, 409);
+        }
+
+        // Look up the orchestration definition
+        const orchRecord = await db.getOrchestrationByName(
+          // name is stored on orchestration row; fetch it via the run
+          await (async () => {
+            const orchRows = await fetch(
+              `${env.SUPABASE_URL}/rest/v1/orchestration.orchestrations?id=eq.${run.orchestration_id}&select=name&limit=1`,
+              { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` } },
+            ).then((r) => r.json() as Promise<{ name: string }[]>);
+            const name = orchRows[0]?.name;
+            if (!name) throw new Error(`Orchestration ${run.orchestration_id} not found`);
+            return name;
+          })(),
+        );
+
+        const orch = orchestrations.get(orchRecord.name);
+        if (!orch) return json({ error: `Orchestration "${orchRecord.name}" not registered` }, 404);
+
+        const inputParsed = orch.inputSchema.safeParse(run.input);
+        if (!inputParsed.success) return json({ error: "Stored run input failed schema validation" }, 500);
+
+        // Mark running again before replay
+        await db.updateRun(run.id, { status: "running" });
+
+        let stepCounter = 0;
+        const ctx: RunContext = {
+          runId: run.id,
+          stepIndex: () => stepCounter++,
+          env,
+          idempotencyKey: (tool, ...parts) => `${run.id}:${tool}:${parts.join(":")}`,
+          fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+        };
+
+        try {
+          const output = await orch.run(ctx, inputParsed.data);
+          await db.updateRun(run.id, {
+            status: "completed",
+            output,
+            ended_at: new Date().toISOString(),
+          });
+          return json({ runId: run.id, status: "completed", output });
+        } catch (err) {
+          if (err instanceof PauseSignal) {
+            await db.updateRun(run.id, { status: "paused" });
+            return json({ runId: run.id, status: "paused", approvalId: err.approvalId }, 202);
+          }
+          await db.updateRun(run.id, {
+            status: "failed",
+            error: { message: err instanceof Error ? err.message : String(err) },
+            ended_at: new Date().toISOString(),
+          });
+          return json(
+            { runId: run.id, status: "failed", error: err instanceof Error ? err.message : String(err) },
+            500,
+          );
+        }
       }
 
       // ── Health ──────────────────────────────────────────────────────────────

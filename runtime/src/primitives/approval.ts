@@ -1,7 +1,7 @@
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
+import { PauseSignal } from "./pause";
 
-const POLL_INTERVAL_MS = 5000;
 const DEFAULT_EXPIRY_HOURS = 48;
 
 export interface ApprovalResult {
@@ -10,6 +10,17 @@ export interface ApprovalResult {
   decidedBy: string | null;
 }
 
+/**
+ * Pauses the run until an ops user approves or rejects via the dashboard.
+ *
+ * On first call: creates an approval row, throws PauseSignal.
+ * The runner catches PauseSignal, marks the run "paused", and returns 202.
+ *
+ * On resume (POST /api/approvals/:id/respond triggers replay):
+ * - Completed prior steps short-circuit via their cached run_steps output.
+ * - This function finds the existing approval row (decided) and returns the result.
+ * - Execution continues past this point.
+ */
 export async function await_approval(
   ctx: RunContext,
   options: {
@@ -26,6 +37,54 @@ export async function await_approval(
     Date.now() + (options.expiresInHours ?? DEFAULT_EXPIRY_HOURS) * 60 * 60 * 1000,
   ).toISOString();
 
+  // Check if this step already has a run_step record (i.e. we're replaying)
+  const existingStep = await db.getCompletedStep(ctx.runId, idx);
+
+  if (existingStep !== null) {
+    // Step was completed during a previous replay — return cached result
+    return existingStep.output as ApprovalResult;
+  }
+
+  // Check if we already have a run_step row in "running" state (created on a prior pause)
+  // by looking for an existing approval for this run at this step index.
+  // We find it via the approval row linked to the run.
+  const existingApproval = await findPendingApproval(ctx, idx);
+
+  if (existingApproval !== null) {
+    // Already have an approval row — check if it's been decided
+    if (existingApproval.status === "approved" || existingApproval.status === "rejected") {
+      // Decision came in — mark the run_step completed and return
+      await db.updateRunStep(existingApproval.runStepId, {
+        status: "completed",
+        output: {
+          approved: existingApproval.status === "approved",
+          notes: existingApproval.decision_notes,
+          decidedBy: existingApproval.decided_by,
+        },
+        ended_at: new Date().toISOString(),
+      });
+
+      return {
+        approved: existingApproval.status === "approved",
+        notes: existingApproval.decision_notes,
+        decidedBy: existingApproval.decided_by,
+      };
+    }
+
+    if (existingApproval.status === "expired") {
+      await db.updateRunStep(existingApproval.runStepId, {
+        status: "failed",
+        error: { message: "Approval expired" },
+        ended_at: new Date().toISOString(),
+      });
+      throw new Error(`Approval for "${options.name}" expired without a decision`);
+    }
+
+    // Still pending — pause again
+    throw new PauseSignal(existingApproval.id);
+  }
+
+  // First time hitting this step — create the run_step and approval row
   const runStep = await db.createRunStep({
     run_id: ctx.runId,
     step_index: idx,
@@ -35,7 +94,6 @@ export async function await_approval(
     input: { prompt: options.prompt, from: options.from },
   });
 
-  // Create the approval row — dashboard renders this in the approval inbox
   const approvalRows = await fetch(
     `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals`,
     {
@@ -61,46 +119,55 @@ export async function await_approval(
   const approvalId = approvalRows[0]?.id;
   if (!approvalId) throw new Error("Failed to create approval row");
 
-  // Poll until decided or expired
-  while (true) {
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  throw new PauseSignal(approvalId);
+}
 
-    const rows = await fetch(
-      `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals?id=eq.${approvalId}&select=status,decision_notes,decided_by&limit=1`,
-      {
-        headers: {
-          apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
+// ─── Internal helper ──────────────────────────────────────────────────────────
+
+interface ExistingApproval {
+  id: string;
+  runStepId: string;
+  status: string;
+  decision_notes: string | null;
+  decided_by: string | null;
+}
+
+async function findPendingApproval(
+  ctx: RunContext,
+  stepIndex: number,
+): Promise<ExistingApproval | null> {
+  // Look for a run_step at this index (any status)
+  const rows = await fetch(
+    `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.run_steps?run_id=eq.${ctx.runId}&step_index=eq.${stepIndex}&step_type=eq.await_approval&select=id&limit=1`,
+    {
+      headers: {
+        apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
       },
-    ).then((r) => r.json() as Promise<{ status: string; decision_notes?: string; decided_by?: string }[]>);
+    },
+  ).then((r) => r.json() as Promise<{ id: string }[]>);
 
-    const row = rows[0];
-    if (!row) throw new Error(`Approval ${approvalId} not found during poll`);
+  const runStepId = rows[0]?.id;
+  if (!runStepId) return null;
 
-    if (row.status === "approved" || row.status === "rejected") {
-      const result: ApprovalResult = {
-        approved: row.status === "approved",
-        notes: row.decision_notes ?? null,
-        decidedBy: row.decided_by ?? null,
-      };
+  const approvalRows = await fetch(
+    `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
+    {
+      headers: {
+        apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    },
+  ).then((r) => r.json() as Promise<{ id: string; status: string; decision_notes: string | null; decided_by: string | null }[]>);
 
-      await db.updateRunStep(runStep.id, {
-        status: "completed",
-        output: result,
-        ended_at: new Date().toISOString(),
-      });
+  const approval = approvalRows[0];
+  if (!approval) return null;
 
-      return result;
-    }
-
-    if (row.status === "expired" || new Date() > new Date(expiresAt)) {
-      await db.updateRunStep(runStep.id, {
-        status: "failed",
-        error: { message: "Approval expired" },
-        ended_at: new Date().toISOString(),
-      });
-      throw new Error(`Approval for "${options.name}" expired without a decision`);
-    }
-  }
+  return {
+    id: approval.id,
+    runStepId,
+    status: approval.status,
+    decision_notes: approval.decision_notes,
+    decided_by: approval.decided_by,
+  };
 }

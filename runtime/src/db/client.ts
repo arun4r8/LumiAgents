@@ -127,6 +127,77 @@ export class SupabaseClient {
     );
   }
 
+  // ─── Replay helpers ───────────────────────────────────────────────────────
+
+  /** Returns the cached output of a completed step, or null if not yet run. */
+  async getCompletedStep(runId: string, stepIndex: number): Promise<{ id: string; output: unknown } | null> {
+    const rows = await this.request<{ id: string; output: unknown }[]>(
+      `/rest/v1/orchestration.run_steps?run_id=eq.${runId}&step_index=eq.${stepIndex}&status=eq.completed&select=id,output&limit=1`,
+      "GET",
+    );
+    return rows[0] ?? null;
+  }
+
+  // ─── Approval helpers ─────────────────────────────────────────────────────
+
+  async getApprovalByRunStep(runStepId: string): Promise<{
+    id: string;
+    status: string;
+    decision_notes: string | null;
+    decided_by: string | null;
+  } | null> {
+    const rows = await this.request<{
+      id: string;
+      status: string;
+      decision_notes: string | null;
+      decided_by: string | null;
+    }[]>(
+      `/rest/v1/orchestration.approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
+      "GET",
+    );
+    return rows[0] ?? null;
+  }
+
+  async getApproval(approvalId: string): Promise<{
+    id: string;
+    run_id: string;
+    run_step_id: string;
+    status: string;
+    decision_notes: string | null;
+    decided_by: string | null;
+  }> {
+    const rows = await this.request<{
+      id: string;
+      run_id: string;
+      run_step_id: string;
+      status: string;
+      decision_notes: string | null;
+      decided_by: string | null;
+    }[]>(
+      `/rest/v1/orchestration.approvals?id=eq.${approvalId}&select=id,run_id,run_step_id,status,decision_notes,decided_by&limit=1`,
+      "GET",
+    );
+    const row = rows[0];
+    if (!row) throw new Error(`Approval ${approvalId} not found`);
+    return row;
+  }
+
+  async respondToApproval(
+    approvalId: string,
+    decision: { approved: boolean; notes?: string; decidedBy?: string },
+  ): Promise<void> {
+    await this.request(
+      `/rest/v1/orchestration.approvals?id=eq.${approvalId}`,
+      "PATCH",
+      {
+        status: decision.approved ? "approved" : "rejected",
+        decision_notes: decision.notes ?? null,
+        decided_by: decision.decidedBy ?? null,
+        decided_at: new Date().toISOString(),
+      },
+    );
+  }
+
   // ─── Orchestration lookup ─────────────────────────────────────────────────
 
   async getOrchestrationByName(name: string, version?: number): Promise<{
