@@ -17,6 +17,7 @@ out/
 
 ## Cloudflare
 .wrangler/
+dashboard/.open-next/
 
 ## Supabase
 supabase/.temp/
