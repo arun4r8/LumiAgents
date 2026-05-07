@@ -9,6 +9,7 @@ export interface Env {
   JIRA_BASE_URL: string;
   JIRA_EMAIL: string;
   JIRA_API_TOKEN: string;
+  SAM_GOV_API_KEY: string;
   ENVIRONMENT: string;
   RUNNER: Workflow;
 }
