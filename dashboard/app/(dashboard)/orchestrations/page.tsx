@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { Clock, ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -12,39 +13,61 @@ export default async function OrchestrationsPage() {
     .select("id, name, version, description, is_active, cron, created_at")
     .order("name");
 
+  const orcList = (orchestrations ?? []) as {
+    id: string;
+    name: string;
+    version: string | number;
+    description: string | null;
+    is_active: boolean;
+    cron: string | null;
+    created_at: string;
+  }[];
+
+  const active = orcList.filter((o) => o.is_active);
+
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">Orchestrations</h1>
-        <p className="text-sm text-gray-500 mt-1">Available workflows you can trigger</p>
+    <div className="page view-fade">
+      <div className="page-h">
+        <div>
+          <h1>Orchestrations</h1>
+          <div className="sub">{orcList.length} catalogued · {active.length} active</div>
+        </div>
       </div>
 
-      <div className="grid gap-3">
-        {(orchestrations ?? []).map((o) => (
-          <div key={o.id} className="bg-white rounded-xl border p-5 flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="font-medium text-sm">{o.name}</h2>
-                <span className="text-xs text-gray-400">v{o.version}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${o.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+      {orcList.length === 0 ? (
+        <div className="empty">
+          <h4>No orchestrations registered yet.</h4>
+          <p>Deploy the runtime and seed the orchestrations table.</p>
+        </div>
+      ) : (
+        <div className="orch-grid">
+          {orcList.map((o) => (
+            <div key={o.id} className="orch-card">
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div className="nm">{o.name}</div>
+                <span className={`chip ${o.is_active ? "ok" : "muted"}`}>
                   {o.is_active ? "active" : "inactive"}
                 </span>
-                {o.cron && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{o.cron}</span>}
               </div>
-              {o.description && <p className="text-sm text-gray-500">{o.description}</p>}
+              {o.description && <div className="desc">{o.description}</div>}
+              <div className="meta">
+                <span className="chip muted mono" style={{ fontSize: 10.5 }}>v{o.version}</span>
+                {o.cron && (
+                  <span className="chip accent">
+                    <Clock style={{ width: 10, height: 10 }} /> {o.cron}
+                  </span>
+                )}
+              </div>
+              <div className="ft">
+                <span className="mono tabular" style={{ fontSize: 12 }}>—</span>
+                <Link href={`/runs?orchestration=${encodeURIComponent(o.name)}`} className="row gap-sm">
+                  View runs <ArrowRight style={{ width: 12, height: 12 }} />
+                </Link>
+              </div>
             </div>
-            <Link href={`/runs?orchestration=${o.name}`}
-              className="shrink-0 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
-              View runs →
-            </Link>
-          </div>
-        ))}
-        {(orchestrations ?? []).length === 0 && (
-          <div className="bg-white rounded-xl border p-8 text-center text-gray-400 text-sm">
-            No orchestrations registered yet. Deploy the runtime and seed the orchestrations table.
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

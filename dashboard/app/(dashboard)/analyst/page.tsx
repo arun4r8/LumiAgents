@@ -1,5 +1,15 @@
 "use client";
-import { useState } from "react";
+
+import { useState, useRef } from "react";
+import { Send, Loader2 } from "lucide-react";
+
+const EXAMPLES = [
+  "How many runs failed in the last 7 days, by orchestration?",
+  "What's our average approval response time this month?",
+  "Which orchestrations ran the most in the last 30 days?",
+  "Top 5 most expensive orchestrations by token spend last week",
+  "Show me approvals that are still pending",
+];
 
 interface AnalystResult {
   answer: string;
@@ -9,26 +19,36 @@ interface AnalystResult {
   outputTokens: number;
 }
 
+function highlightSql(sql: string): string {
+  const keywords = [
+    "SELECT","FROM","WHERE","GROUP BY","ORDER BY","HAVING","LIMIT","OFFSET",
+    "JOIN","LEFT","RIGHT","INNER","OUTER","ON","AS","AND","OR","NOT","IN",
+    "COUNT","SUM","AVG","MAX","MIN","ROUND","DISTINCT","CASE","WHEN","THEN",
+    "ELSE","END","NULL","IS","INTERVAL","NOW","DATE_TRUNC","FILTER","WITH",
+  ];
+  return sql
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(
+      new RegExp(`\\b(${keywords.join("|")})\\b`, "g"),
+      '<span class="sql-kw">$1</span>'
+    );
+}
+
 export default function AnalystPage() {
-  const [question, setQuestion] = useState("");
+  const [q, setQ] = useState("");
+  const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
   const [result, setResult] = useState<AnalystResult | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const EXAMPLES = [
-    "How many opportunities do we have by agency?",
-    "What's our total contract value by status?",
-    "Show me the top 10 candidates by overall score for each job",
-    "What's our labor spend by contract this fiscal year?",
-    "Which opportunities are due in the next 30 days?",
-  ];
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!question.trim()) return;
-
-    setLoading(true);
+  async function ask(text?: string) {
+    const question = text ?? q;
+    if (!question.trim() || phase === "thinking") return;
+    if (text) setQ(text);
+    setPhase("thinking");
     setError(null);
     setResult(null);
     setShowSql(false);
@@ -39,93 +59,135 @@ export default function AnalystPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ question: question.trim() }),
         },
       );
       const data = await res.json() as AnalystResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Request failed");
       setResult(data);
+      setPhase("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
+      setPhase("idle");
     }
   }
 
+  function reset() {
+    setPhase("idle");
+    setResult(null);
+    setError(null);
+    setQ("");
+    setShowSql(false);
+    taRef.current?.focus();
+  }
+
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">Data Analyst</h1>
-        <p className="text-sm text-gray-500 mt-1">Ask questions about your data in plain English</p>
-      </div>
-
-      {/* Example questions */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {EXAMPLES.map((ex) => (
-          <button
-            key={ex}
-            onClick={() => setQuestion(ex)}
-            className="text-xs px-3 py-1.5 bg-white border rounded-full text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
-          >
-            {ex}
-          </button>
-        ))}
-      </div>
-
-      {/* Input */}
-      <form onSubmit={handleSubmit} className="flex gap-2 mb-6">
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask a question about your data…"
-          className="flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        />
-        <button
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? "Analyzing…" : "Ask"}
-        </button>
-      </form>
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-4">
-          {error}
+    <div className="page view-fade">
+      <div className="page-h">
+        <div>
+          <h1>Data Analyst</h1>
+          <div className="sub">Ask questions about runs, approvals, and orchestration metrics. Read-only.</div>
         </div>
-      )}
+        {phase !== "idle" && (
+          <button className="btn sm" onClick={reset}>New question</button>
+        )}
+      </div>
 
-      {/* Result */}
-      {result && (
-        <div className="space-y-4">
-          {/* Answer */}
-          <div className="bg-white rounded-xl border p-5">
-            <p className="text-sm text-gray-500 mb-2 font-medium">Answer</p>
-            <div className="text-sm text-gray-800 whitespace-pre-wrap">{result.answer}</div>
-            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
-              {result.rowCount !== undefined && <span>{result.rowCount} rows</span>}
-              <span>{result.inputTokens + result.outputTokens} tokens</span>
-              {result.sql && (
-                <button
-                  onClick={() => setShowSql((v) => !v)}
-                  className="text-blue-500 hover:underline"
-                >
-                  {showSql ? "Hide SQL" : "Show SQL"}
-                </button>
+      <div className="analyst-shell">
+        <div className="analyst-input">
+          <textarea
+            ref={taRef}
+            placeholder="Ask anything — e.g. how many runs failed in the last 7 days?"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                ask();
+              }
+            }}
+            disabled={phase === "thinking"}
+          />
+          <div className="ask-foot">
+            <span className="muted mono" style={{ fontSize: 11.5 }}>
+              {phase === "thinking"
+                ? "Analyzing…"
+                : phase === "done" && result
+                ? `${(result.inputTokens + result.outputTokens).toLocaleString()} tokens`
+                : "⌘ + ↵ to ask"}
+            </span>
+            <button
+              className="btn accent"
+              onClick={() => ask()}
+              disabled={!q.trim() || phase === "thinking"}
+            >
+              {phase === "thinking"
+                ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Working</>
+                : <><Send style={{ width: 13, height: 13 }} /> Ask</>}
+            </button>
+          </div>
+        </div>
+
+        {phase === "idle" && (
+          <div className="ex-chips">
+            {EXAMPLES.map((ex) => (
+              <button key={ex} className="ex-chip" onClick={() => ask(ex)}>{ex}</button>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            marginTop: 16,
+            padding: "12px 16px",
+            border: "1px solid var(--err-line)",
+            borderRadius: 8,
+            background: "var(--err-soft)",
+            color: "var(--err)",
+            fontSize: 13,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {phase !== "idle" && (
+          <div className="answer-card">
+            <div className="ah">
+              <div className="ttl">Answer</div>
+              {result && (
+                <div className="row gap-sm">
+                  {result.rowCount != null && (
+                    <span className="chip muted mono">{result.rowCount} rows</span>
+                  )}
+                  {result.sql && (
+                    <button className="btn sm" onClick={() => setShowSql((v) => !v)}>
+                      {showSql ? "Hide" : "Show"} SQL
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-
-          {/* SQL */}
-          {showSql && result.sql && (
-            <div className="bg-gray-900 rounded-xl p-4">
-              <p className="text-xs text-gray-400 mb-2 font-medium">Generated SQL</p>
-              <pre className="text-xs text-green-300 font-mono whitespace-pre-wrap">{result.sql}</pre>
+            <div className="body">
+              {phase === "thinking" ? (
+                <div className="row gap-sm muted">
+                  <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                  Inspecting schema and planning a query…
+                </div>
+              ) : (
+                <div style={{ whiteSpace: "pre-wrap" }}>{result?.answer}</div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+            {showSql && result?.sql && (
+              <pre
+                className="sql-block"
+                dangerouslySetInnerHTML={{ __html: highlightSql(result.sql) }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

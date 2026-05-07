@@ -1,7 +1,9 @@
 "use client";
+
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,55 +26,72 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/runs");
+    router.push("/overview");
     router.refresh();
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight">LumiAgents</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
+    <div className="login-shell">
+      <div className="login-card">
+        {/* Brand */}
+        <div className="login-brand">
+          <div className="brand row gap-sm" style={{ padding: 0 }}>
+            <div className="brand-mark" />
+            <span className="brand-name">Lumi<em>Agents</em></span>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4 bg-white p-6 rounded-xl border shadow-sm">
-          <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="email">Email</label>
+        <div>
+          <h2>Sign in</h2>
+          <div className="sb">Internal AI orchestration · ops only</div>
+        </div>
+
+        <form onSubmit={handleLogin} className="login-fields">
+          <div className="field">
+            <label htmlFor="email">Email</label>
             <input
               id="email"
+              className="input"
               type="email"
+              autoFocus
+              placeholder="you@lumiture.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="you@lumiture.com"
               required
             />
           </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="password">Password</label>
+          <div className="field">
+            <label htmlFor="password">Password</label>
             <input
               id="password"
+              className="input"
               type="password"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && (
+            <div style={{ fontSize: 12.5, color: "var(--err)" }}>{error}</div>
+          )}
 
           <button
             type="submit"
+            className="btn primary"
             disabled={loading}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            style={{ height: 38, justifyContent: "center" }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading
+              ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Signing in…</>
+              : "Continue"}
           </button>
         </form>
+
+        <div className="helper">SSO via Okta available · contact ops@lumiture.com</div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

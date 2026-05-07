@@ -1,153 +1,242 @@
 "use client";
-import { useState } from "react";
 
+import { useState } from "react";
+import { Search, Sparkles, Check, Loader2 } from "lucide-react";
+
+const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL;
+
+interface QueryResult {
+  answer: string;
+  sources: Array<{ sourceName: string; chunkIndex: number; similarity: number }>;
+  inputTokens: number;
+  outputTokens: number;
+}
 interface IngestResult { documentId: string; chunkCount: number; charCount: number }
-interface QueryResult { answer: string; sources: Array<{ sourceName: string; chunkIndex: number; similarity: number }>; inputTokens: number; outputTokens: number }
+
+const EXAMPLES = [
+  "Section M evaluation factors for FedRAMP-High",
+  "Lumiture past performance on AWS GovCloud",
+  "NIST 800-53 account management controls",
+];
 
 export default function DocumentsPage() {
   const [tab, setTab] = useState<"query" | "ingest">("query");
-  const [question, setQuestion] = useState("");
-  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [queryLoading, setQueryLoading] = useState(false);
 
-  const [ingestName, setIngestName] = useState("");
-  const [ingestContent, setIngestContent] = useState("");
-  const [ingestKind, setIngestKind] = useState<"pdf" | "text" | "csv">("text");
-  const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
-  const [ingestLoading, setIngestLoading] = useState(false);
+  return (
+    <div className="page view-fade">
+      <div className="page-h">
+        <div>
+          <h1>Documents</h1>
+          <div className="sub">RAG corpus · query company documents or ingest new ones</div>
+        </div>
+      </div>
+
+      <div className="tabs">
+        <button className={tab === "query" ? "active" : ""} onClick={() => setTab("query")}>Query</button>
+        <button className={tab === "ingest" ? "active" : ""} onClick={() => setTab("ingest")}>Ingest</button>
+      </div>
+
+      {tab === "query" ? <DocsQuery /> : <DocsIngest />}
+    </div>
+  );
+}
+
+function DocsQuery() {
+  const [q, setQ] = useState("");
+  const [phase, setPhase] = useState<"idle" | "loading" | "done">("idle");
+  const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL;
-
-  async function handleQuery(e: React.FormEvent) {
-    e.preventDefault();
-    setQueryLoading(true); setError(null); setQueryResult(null);
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!q.trim() || phase === "loading") return;
+    setPhase("loading");
+    setError(null);
+    setResult(null);
     try {
       const res = await fetch(`${RUNTIME}/api/documents/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: q }),
       });
       const data = await res.json() as QueryResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      setQueryResult(data);
+      setResult(data);
+      setPhase("done");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
-    } finally { setQueryLoading(false); }
+      setPhase("idle");
+    }
   }
 
-  async function handleIngest(e: React.FormEvent) {
+  return (
+    <div>
+      <form onSubmit={submit} className="row gap-sm" style={{ marginBottom: 14 }}>
+        <div className="search" style={{ flex: 1 }}>
+          <Search />
+          <input
+            placeholder="Ask a question against the document corpus…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            style={{ height: 38 }}
+          />
+        </div>
+        <button
+          type="submit"
+          className="btn accent"
+          disabled={!q.trim() || phase === "loading"}
+          style={{ height: 38, padding: "0 16px" }}
+        >
+          {phase === "loading"
+            ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Searching</>
+            : <><Search style={{ width: 13, height: 13 }} /> Search</>}
+        </button>
+      </form>
+
+      {phase === "idle" && (
+        <div className="ex-chips" style={{ marginTop: 0, marginBottom: 22 }}>
+          {EXAMPLES.map((ex) => (
+            <button key={ex} className="ex-chip" onClick={() => { setQ(ex); setTimeout(submit, 30); }}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: "12px 16px", border: "1px solid var(--err-line)", borderRadius: 8, background: "var(--err-soft)", color: "var(--err)", fontSize: 13, marginBottom: 14 }}>
+          {error}
+        </div>
+      )}
+
+      {phase === "loading" && (
+        <div className="empty">
+          <Loader2 style={{ width: 22, height: 22, color: "var(--accent)", animation: "spin 1s linear infinite" }} />
+        </div>
+      )}
+
+      {phase === "done" && result && (
+        <>
+          <div className="section-h">
+            <h3>Answer</h3>
+            <div className="meta mono">{(result.inputTokens + result.outputTokens).toLocaleString()} tokens</div>
+          </div>
+          <div className="card" style={{ padding: "14px 16px", marginBottom: 16, fontSize: 14, lineHeight: 1.6, color: "var(--ink-1)" }}>
+            {result.answer}
+          </div>
+
+          {result.sources.length > 0 && (
+            <>
+              <div className="section-h">
+                <h3>Sources ({result.sources.length})</h3>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {result.sources.map((s, i) => (
+                  <div key={i} className="chunk">
+                    <div className="ch">
+                      <div className="src">{s.sourceName}</div>
+                      <div className="score">{(s.similarity * 100).toFixed(0)}%</div>
+                    </div>
+                    <div className="bar"><div className="fill" style={{ width: `${s.similarity * 100}%` }} /></div>
+                    <div className="body" style={{ color: "var(--ink-2)", fontSize: 12 }}>Chunk §{s.chunkIndex + 1}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function DocsIngest() {
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"text" | "pdf" | "csv">("text");
+  const [content, setContent] = useState("");
+  const [phase, setPhase] = useState<"idle" | "loading" | "done">("idle");
+  const [result, setResult] = useState<IngestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setIngestLoading(true); setError(null); setIngestResult(null);
+    if (!name.trim() || !content.trim()) return;
+    setPhase("loading"); setError(null); setResult(null);
     try {
       const res = await fetch(`${RUNTIME}/api/documents/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceName: ingestName, sourceKind: ingestKind, content: ingestContent }),
+        body: JSON.stringify({ sourceName: name, sourceKind: kind, content }),
       });
       const data = await res.json() as IngestResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      setIngestResult(data);
-      setIngestName(""); setIngestContent("");
+      setResult(data);
+      setName(""); setContent("");
+      setPhase("done");
+      setTimeout(() => setPhase("idle"), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
-    } finally { setIngestLoading(false); }
+      setPhase("idle");
+    }
   }
 
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold">Documents</h1>
-        <p className="text-sm text-gray-500 mt-1">Query company documents or ingest new ones</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-        {(["query", "ingest"] as const).map((t) => (
-          <button key={t} onClick={() => { setTab(t); setError(null); }}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors capitalize ${tab === t ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {error && <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 mb-4">{error}</div>}
-
-      {tab === "query" && (
-        <div className="space-y-4">
-          <form onSubmit={handleQuery} className="flex gap-2">
-            <input value={question} onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question about your company documents…"
-              className="flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
-            <button type="submit" disabled={queryLoading || !question.trim()}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-              {queryLoading ? "Searching…" : "Ask"}
-            </button>
-          </form>
-
-          {queryResult && (
-            <div className="space-y-3">
-              <div className="bg-white rounded-xl border p-5">
-                <p className="text-sm font-medium text-gray-500 mb-2">Answer</p>
-                <div className="text-sm text-gray-800 whitespace-pre-wrap">{queryResult.answer}</div>
-                <p className="text-xs text-gray-400 mt-3">{queryResult.inputTokens + queryResult.outputTokens} tokens</p>
-              </div>
-              {queryResult.sources.length > 0 && (
-                <div className="bg-white rounded-xl border p-5">
-                  <p className="text-sm font-medium text-gray-500 mb-3">Sources</p>
-                  <div className="space-y-2">
-                    {queryResult.sources.map((s, i) => (
-                      <div key={i} className="flex items-center gap-3 text-xs text-gray-600">
-                        <span className="font-medium">{s.sourceName}</span>
-                        <span className="text-gray-400">§{s.chunkIndex + 1}</span>
-                        <span className="ml-auto bg-green-50 text-green-700 px-2 py-0.5 rounded">{(s.similarity * 100).toFixed(0)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+    <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 22 }}>
+      <form onSubmit={submit} className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="field">
+          <label>Source name</label>
+          <input className="input" placeholder="e.g. NIST SP 800-53 Rev 5" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
-      )}
-
-      {tab === "ingest" && (
-        <form onSubmit={handleIngest} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium block mb-1">Document name</label>
-              <input value={ingestName} onChange={(e) => setIngestName(e.target.value)}
-                placeholder="e.g. Capability Statement 2026"
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-            </div>
-            <div>
-              <label className="text-sm font-medium block mb-1">Type</label>
-              <select value={ingestKind} onChange={(e) => setIngestKind(e.target.value as "pdf" | "text" | "csv")}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="text">Text</option>
-                <option value="pdf">PDF (paste extracted text)</option>
-                <option value="csv">CSV</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium block mb-1">Content</label>
-            <textarea value={ingestContent} onChange={(e) => setIngestContent(e.target.value)}
-              rows={12} placeholder="Paste document text here…"
-              className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono resize-y" required />
-          </div>
-          <button type="submit" disabled={ingestLoading}
-            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {ingestLoading ? "Ingesting…" : "Ingest document"}
-          </button>
-          {ingestResult && (
-            <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-sm text-green-800">
-              ✓ Ingested <strong>{ingestResult.chunkCount} chunks</strong> from {(ingestResult.charCount / 1000).toFixed(1)}k characters.
-              Document ID: <code className="font-mono text-xs">{ingestResult.documentId}</code>
-            </div>
+        <div className="field">
+          <label>Source kind</label>
+          <select className="sel" value={kind} onChange={(e) => setKind(e.target.value as "text" | "pdf" | "csv")}>
+            <option value="text">text</option>
+            <option value="pdf">pdf</option>
+            <option value="csv">csv</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Content</label>
+          <textarea
+            className="ta mono"
+            placeholder="Paste content here…"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            style={{ minHeight: 180 }}
+            required
+          />
+          <span className="hint">Will be chunked at ~480 chars with 60-char overlap.</span>
+        </div>
+        {error && (
+          <div style={{ fontSize: 12.5, color: "var(--err)" }}>{error}</div>
+        )}
+        <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+          {phase === "done" && result && (
+            <span className="chip ok">
+              <Check style={{ width: 10, height: 10 }} />
+              {result.chunkCount} chunks ingested
+            </span>
           )}
-        </form>
-      )}
+          <button type="submit" className="btn accent" disabled={!name.trim() || !content.trim() || phase === "loading"}>
+            {phase === "loading"
+              ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Embedding</>
+              : <><Sparkles style={{ width: 13, height: 13 }} /> Ingest</>}
+          </button>
+        </div>
+      </form>
+
+      <div>
+        <div className="section-h" style={{ marginTop: 0 }}>
+          <h3>Recent ingestions</h3>
+        </div>
+        <div className="muted" style={{ fontSize: 12.5, padding: "16px 0" }}>
+          Ingestion history not yet available.
+        </div>
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
