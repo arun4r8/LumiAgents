@@ -17,6 +17,9 @@ ENVIRONMENT = "development"
 # JIRA_API_TOKEN
 # SAM_GOV_API_KEY
 
+[triggers]
+crons = ["0 8 * * 1"]   # beady/opportunity-search: every Monday 08:00 UTC
+
 [ai]
 binding = "AI"
 

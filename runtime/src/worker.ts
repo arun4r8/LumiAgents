@@ -1,4 +1,4 @@
-import type { Env } from "./types";
+import type { Env, RunContext } from "./types";
 import { createHandler } from "./index";
 import { ingestDocument, queryDocuments } from "./agents/document-rag";
 import { runDataAnalyst } from "./agents/data-analyst";
@@ -59,6 +59,69 @@ function json(data: unknown, status = 200): Response {
 }
 
 // ─── Main Worker ──────────────────────────────────────────────────────────────
+
+// ─── Cron dispatcher ──────────────────────────────────────────────────────────
+// Finds every registered orchestration whose `cron` field matches the
+// triggered cron expression and runs it with schema-defaulted input.
+
+async function dispatchCron(cronExpr: string, env: Env): Promise<void> {
+  const matching = Array.from(orchestrations.values()).filter(
+    (o) => o.cron === cronExpr,
+  );
+
+  for (const orch of matching) {
+    const inputResult = orch.inputSchema.safeParse({});
+    if (!inputResult.success) {
+      console.error(`[cron] ${orch.name}: default input failed validation`, inputResult.error);
+      continue;
+    }
+    const input = inputResult.data;
+
+    const db = new SupabaseClient(env);
+    let orchRecord: Awaited<ReturnType<typeof db.getOrchestrationByName>>;
+    try {
+      orchRecord = await db.getOrchestrationByName(orch.name, orch.version);
+    } catch (err) {
+      console.error(`[cron] ${orch.name}: orchestration record not found in DB`, err);
+      continue;
+    }
+
+    const run = await db.createRun({
+      orchestration_id: orchRecord.id,
+      orchestration_version: orch.version,
+      status: "running",
+      input,
+      triggered_by: "cron",
+      started_at: new Date().toISOString(),
+    });
+
+    let stepCounter = 0;
+    const ctx: RunContext = {
+      runId: run.id,
+      stepIndex: () => stepCounter++,
+      env,
+      idempotencyKey: (tool, ...parts) => `${run.id}:${tool}:${parts.join(":")}`,
+      fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+    };
+
+    try {
+      const output = await orch.run(ctx, input);
+      await db.updateRun(run.id, {
+        status: "completed",
+        output,
+        ended_at: new Date().toISOString(),
+      });
+      console.log(`[cron] ${orch.name} completed (run ${run.id})`);
+    } catch (err) {
+      await db.updateRun(run.id, {
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        ended_at: new Date().toISOString(),
+      });
+      console.error(`[cron] ${orch.name} failed (run ${run.id}):`, err);
+    }
+  }
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -184,6 +247,9 @@ export default {
         500,
       );
     }
+  },
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    await dispatchCron(controller.cron, env);
   },
 } satisfies ExportedHandler<Env>;
 

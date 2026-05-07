@@ -57,6 +57,7 @@ export default defineOrchestration({
   version: 1,
   description:
     "Search SAM.gov for open solicitations, score each against Lumiture's capabilities, and return a prioritised shortlist",
+  cron: "0 8 * * 1", // Every Monday at 08:00 UTC
   inputSchema,
   outputSchema,
   access: {
@@ -163,6 +164,7 @@ Only include opportunities with score ≥ ${input.minScore} in the final list.
     // Step 3: Upsert shortlisted opportunities into Supabase
     if (shortlisted.length > 0) {
       await step(ctx, "upsert-opportunities", async () => {
+        const scoredAt = new Date().toISOString();
         const rows = shortlisted.map((o) => ({
           sam_notice_id: o.noticeId,
           solicitation_number: o.solicitationNumber,
@@ -175,6 +177,12 @@ Only include opportunities with score ≥ ${input.minScore} in the final list.
           source: "sam_gov",
           source_url: o.sourceUrl,
           status: "open",
+          // Beady scoring columns (added in migration 0006)
+          fit_score: o.fitScore,
+          fit_reason: o.fitReason,
+          red_flags: o.redFlags,
+          recommendation: o.recommendation,
+          last_scored_at: scoredAt,
         }));
 
         const res = await ctx.fetch(
