@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { OverviewRealtime } from "@/components/overview-realtime";
 import {
   RefreshCw,
   Sparkles,
@@ -67,7 +68,7 @@ interface OverviewClientProps {
 // ── Root component ────────────────────────────────────────────────────
 
 export default function OverviewClient({
-  runs,
+  runs: initialRuns,
   approvals,
   orchestrations,
   recentSteps,
@@ -75,11 +76,33 @@ export default function OverviewClient({
 }: OverviewClientProps) {
   const router = useRouter();
   const [now, setNow] = useState(Date.now());
+  const [runs, setRuns] = useState<Run[]>(initialRuns);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const handleRunChange = useCallback(
+    (incoming: { id: string; status: string }) => {
+      setRealtimeConnected(true);
+      setRuns((prev) => {
+        const idx = prev.findIndex((r) => r.id === incoming.id);
+        if (idx === -1) {
+          // New run arrived via INSERT — we don't have full data, so just
+          // trigger a router refresh to pull the full row from the server.
+          router.refresh();
+          return prev;
+        }
+        // UPDATE — patch just the status field in local state
+        const next = [...prev];
+        next[idx] = { ...next[idx], status: incoming.status };
+        return next;
+      });
+    },
+    [router]
+  );
 
   const pending = approvals.filter((a) => a.status === "pending");
   const expiringSoon = pending.filter((a) => {
@@ -101,14 +124,26 @@ export default function OverviewClient({
 
   return (
     <div className="page view-fade">
+      {/* Headless Realtime subscription */}
+      <OverviewRealtime onRunChange={handleRunChange} />
+
       {/* Page header */}
       <div className="page-h">
         <div>
           <h1>Operations</h1>
           <div className="sub">
-            <span className="row gap-sm" style={{ display: "inline-flex" }}>
+            <span className="row gap-sm" style={{ display: "inline-flex", alignItems: "center" }}>
               <span className="live-dot" />
               Live · {fmtClock(now)} UTC
+              {realtimeConnected && (
+                <span
+                  className="chip ok"
+                  style={{ fontSize: 10.5, padding: "1px 6px", marginLeft: 4 }}
+                  title="Supabase Realtime connected"
+                >
+                  Realtime
+                </span>
+              )}
             </span>
           </div>
         </div>

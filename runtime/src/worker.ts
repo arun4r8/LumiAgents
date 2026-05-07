@@ -1,7 +1,7 @@
 import type { Env, RunContext } from "./types";
 import { createHandler, PauseSignal } from "./index";
 import { ingestDocument, queryDocuments } from "./agents/document-rag";
-import { runDataAnalyst } from "./agents/data-analyst";
+import { runDataAnalyst, storeCsvUpload } from "./agents/data-analyst";
 import { SupabaseClient } from "./db/client";
 
 // ─── Orchestration registry ───────────────────────────────────────────────────
@@ -253,12 +253,13 @@ export default {
         return json(result);
       }
 
-      // ── Data Analyst ────────────────────────────────────────────────────────
+      // ── Data Analyst: query ─────────────────────────────────────────────────
       if (pathname === "/api/analyst/query" && request.method === "POST") {
         const body = await request.json() as {
           question: string;
           tables?: string[];
           maxRows?: number;
+          sessionKey?: string;
         };
 
         if (!body.question) {
@@ -266,6 +267,42 @@ export default {
         }
 
         const result = await runDataAnalyst(env, body);
+        return json(result);
+      }
+
+      // ── Data Analyst: CSV upload ────────────────────────────────────────────
+      if (pathname === "/api/analyst/upload-csv" && request.method === "POST") {
+        const body = await request.json() as {
+          sessionKey: string;
+          sourceName: string;
+          csvContent: string;   // raw CSV text
+        };
+
+        if (!body.sessionKey || !body.sourceName || !body.csvContent) {
+          return json({ error: "sessionKey, sourceName, and csvContent are required" }, 400);
+        }
+
+        // Parse CSV: first line = headers, rest = rows (max 5000)
+        const lines = body.csvContent.trim().split(/\r?\n/);
+        if (lines.length < 2) {
+          return json({ error: "CSV must have at least a header row and one data row" }, 400);
+        }
+
+        const colNames = parseCsvLine(lines[0] ?? "");
+        const rows = lines.slice(1, 5001).map((line) => {
+          const vals = parseCsvLine(line);
+          const row: Record<string, string> = {};
+          colNames.forEach((col, i) => { row[col] = vals[i] ?? ""; });
+          return row;
+        });
+
+        const result = await storeCsvUpload(env, {
+          sessionKey: body.sessionKey,
+          sourceName: body.sourceName,
+          rows,
+          colNames,
+        });
+
         return json(result);
       }
 
@@ -385,6 +422,28 @@ export default {
     await dispatchCron(controller.cron, env);
   },
 } satisfies ExportedHandler<Env>;
+
+// ─── CSV line parser (handles quoted fields with commas) ─────────────────────
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === "," && !inQuotes) {
+      result.push(cur.trim());
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
 
 // ─── Minimal Zod → JSON Schema for the catalogue endpoint ────────────────────
 

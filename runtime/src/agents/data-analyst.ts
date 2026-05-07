@@ -56,15 +56,86 @@ const TABLE_SCHEMAS: Record<string, string> = {
 export interface AnalystRequest {
   question: string;
   tables?: string[];             // optional: restrict which tables to expose
-  maxRows?: number;              // default 500
+  maxRows?: number;              // default 500, max 5000
+  sessionKey?: string;           // if set, include uploaded CSV data for this session
 }
 
 export interface AnalystResult {
   answer: string;
   sql?: string;                  // the query that was run
   rowCount?: number;
+  uploadedTables?: string[];     // names of any CSV uploads included in context
   inputTokens: number;
   outputTokens: number;
+}
+
+export interface CsvUploadRequest {
+  sessionKey: string;
+  sourceName: string;
+  rows: Record<string, string>[];  // parsed CSV rows, max 5000
+  colNames: string[];
+}
+
+export interface CsvUploadResult {
+  sessionKey: string;
+  sourceName: string;
+  rowCount: number;
+  colNames: string[];
+}
+
+// ─── CSV upload helpers ───────────────────────────────────────────────────────
+
+export async function storeCsvUpload(env: Env, req: CsvUploadRequest): Promise<CsvUploadResult> {
+  const MAX_ROWS = 5000;
+  const rows = req.rows.slice(0, MAX_ROWS);
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/analyst_uploads`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      session_key: req.sessionKey,
+      source_name: req.sourceName,
+      row_count: rows.length,
+      col_names: req.colNames,
+      data: rows,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to store CSV upload: ${await res.text()}`);
+  }
+
+  return {
+    sessionKey: req.sessionKey,
+    sourceName: req.sourceName,
+    rowCount: rows.length,
+    colNames: req.colNames,
+  };
+}
+
+async function getSessionUploads(env: Env, sessionKey: string): Promise<Array<{
+  source_name: string;
+  col_names: string[];
+  row_count: number;
+}>> {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/analyst_uploads?session_key=eq.${encodeURIComponent(sessionKey)}&select=source_name,col_names,row_count&expires_at=gt.${new Date().toISOString()}`,
+    {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+
+  if (!res.ok) return [];
+  const data = await res.json() as Array<{ source_name: string; col_names: string[]; row_count: number }>;
+  return Array.isArray(data) ? data : [];
 }
 
 // ─── Supabase RPC helper ──────────────────────────────────────────────────────
@@ -97,13 +168,30 @@ export async function runDataAnalyst(env: Env, req: AnalystRequest): Promise<Ana
     ? QUERYABLE_TABLES.filter((t) => req.tables!.includes(t))
     : QUERYABLE_TABLES;
 
-  const schemaContext = allowedTables
-    .map((t) => TABLE_SCHEMAS[t] ?? t)
-    .join("\n");
+  const maxRows = Math.min(req.maxRows ?? 500, 5000);
 
-  const maxRows = req.maxRows ?? 500;
+  // Load any CSV uploads for this session
+  const sessionUploads = req.sessionKey
+    ? await getSessionUploads(env, req.sessionKey)
+    : [];
+
+  // Build schema context: curated tables + uploaded CSVs
+  const tableSchemas = allowedTables.map((t) => TABLE_SCHEMAS[t] ?? t).join("\n");
+
+  const uploadSchemas = sessionUploads.map((u) => {
+    const cols = u.col_names.map((c) => `${c} text`).join(", ");
+    return `-- Uploaded CSV: "${u.source_name}" (${u.row_count} rows)\n` +
+      `-- Query with: SELECT elem->>'colname' FROM public.analyst_uploads, jsonb_array_elements(data) AS elem WHERE session_key = '${req.sessionKey}' AND source_name = '${u.source_name}'\n` +
+      `uploaded_csv_${u.source_name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}(${cols})`;
+  }).join("\n");
+
+  const schemaContext = [tableSchemas, uploadSchemas].filter(Boolean).join("\n\n");
 
   // Phase 1: Generate SQL
+  const uploadTableNote = sessionUploads.length > 0
+    ? `\n\nFor uploaded CSVs, query via: SELECT elem->>'column' FROM public.analyst_uploads, jsonb_array_elements(data) AS elem WHERE session_key = '${req.sessionKey}' AND source_name = 'filename'. Cast numerics with (elem->>'col')::numeric.`
+    : "";
+
   const sqlResponse = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
@@ -111,12 +199,12 @@ export async function runDataAnalyst(env: Env, req: AnalystRequest): Promise<Ana
 Given a business question, write a single valid SELECT query to answer it.
 
 Rules:
-- Only use these tables: ${allowedTables.join(", ")}
+- Only use tables from the schema provided
 - Only SELECT — no INSERT, UPDATE, DELETE, DROP, or any mutation
 - Use proper joins where needed. Prefer explicit column names over SELECT *
 - Limit results to ${maxRows} rows unless aggregating
 - For financial amounts, round to 2 decimal places
-- Return ONLY the SQL query, nothing else — no markdown, no explanation`,
+- Return ONLY the SQL query, nothing else — no markdown, no explanation${uploadTableNote}`,
     messages: [
       {
         role: "user",
@@ -189,6 +277,7 @@ ${rowPreview}`,
     answer,
     sql: rawSql,
     rowCount: rows.length,
+    uploadedTables: sessionUploads.map((u) => u.source_name),
     inputTokens: sqlInputTokens + interpretResponse.usage.input_tokens,
     outputTokens: sqlOutputTokens + interpretResponse.usage.output_tokens,
   };

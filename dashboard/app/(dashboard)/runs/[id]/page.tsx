@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { StatusBadge, TriggerChip, MonoId, JsonPanel, fmtAbs, fmtDuration } from "@/components/lumi";
-import { StepsTimeline } from "@/components/steps-timeline";
+import { RunRealtime } from "@/components/run-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -93,17 +93,20 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
         />
       </div>
 
-      {/* Steps timeline */}
-      <div className="section-h">
-        <h3>Steps</h3>
-        <div className="meta">
-          {(steps ?? []).filter((s) => s.status === "completed").length} of {(steps ?? []).length} completed
-        </div>
-      </div>
-
-      <div className="card" style={{ padding: "16px 18px" }}>
-        <StepsTimeline steps={steps ?? []} />
-      </div>
+      {/* Steps timeline — live via Realtime */}
+      <RunRealtime
+        runId={run.id}
+        initialSteps={steps ?? []}
+        initialRun={{
+          id: run.id,
+          status: run.status,
+          orchestration_id: run.orchestration_id ?? null,
+          triggered_by: run.triggered_by ?? null,
+          created_at: run.created_at,
+          started_at: run.started_at ?? null,
+          ended_at: run.ended_at ?? null,
+        }}
+      />
     </div>
   );
 }
