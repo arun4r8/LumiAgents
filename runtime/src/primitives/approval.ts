@@ -6,8 +6,8 @@ const DEFAULT_EXPIRY_HOURS = 48;
 
 export interface ApprovalResult {
   approved: boolean;
-  notes?: string;
-  decidedBy?: string;
+  notes: string | null;
+  decidedBy: string | null;
 }
 
 export async function await_approval(
@@ -81,8 +81,8 @@ export async function await_approval(
     if (row.status === "approved" || row.status === "rejected") {
       const result: ApprovalResult = {
         approved: row.status === "approved",
-        notes: row.decision_notes,
-        decidedBy: row.decided_by,
+        notes: row.decision_notes ?? null,
+        decidedBy: row.decided_by ?? null,
       };
 
       await db.updateRunStep(runStep.id, {

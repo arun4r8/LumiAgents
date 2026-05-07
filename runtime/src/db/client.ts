@@ -29,7 +29,7 @@ export class SupabaseClient {
     const res = await fetch(`${this.url}${path}`, {
       method,
       headers: { ...this.headers(), ...extraHeaders },
-      body: body ? JSON.stringify(body) : undefined,
+      ...(body ? { body: JSON.stringify(body) } : {}),
     });
 
     if (!res.ok) {
