@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
-import { ingestDocument, queryDocuments } from "../../runtime/src/agents/document-rag";
+import { ingestDocument, queryDocuments } from "@/runtime/agents/document-rag";
 
 // ─── Ingest orchestration ─────────────────────────────────────────────────────
 
@@ -34,8 +34,8 @@ export const documentIngest = defineOrchestration({
         sourceName: input.sourceName,
         sourceKind: input.sourceKind,
         content: input.content,
-        storagePath: input.storagePath,
-        metadata: input.metadata,
+        ...(input.storagePath !== undefined ? { storagePath: input.storagePath } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
       }),
     );
   },

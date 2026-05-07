@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
-import { runDataAnalyst } from "../../runtime/src/agents/data-analyst";
+import { runDataAnalyst } from "@/runtime/agents/data-analyst";
 
 export const inputSchema = z.object({
   question: z.string().min(1).describe("Natural language business question"),
@@ -30,7 +30,7 @@ export default defineOrchestration({
     return step(ctx, "generate-and-interpret", () =>
       runDataAnalyst(ctx.env, {
         question: input.question,
-        tables: input.tables,
+        ...(input.tables !== undefined ? { tables: input.tables } : {}),
         maxRows: input.maxRows,
       }),
     );

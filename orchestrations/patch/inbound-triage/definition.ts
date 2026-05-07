@@ -19,7 +19,7 @@ export const outputSchema = z.object({
 });
 
 export default defineOrchestration({
-  name: "inbound-triage",
+  name: "patch/inbound-triage",
   version: 1,
   description: "Triage inbound email or Teams messages — classify, extract action items, route or auto-respond",
   inputSchema,
@@ -29,7 +29,7 @@ export default defineOrchestration({
     visibleTo: ["role:ops"],
   },
 
-  async run(ctx, input) {
+  async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
     // Step 1: Classify the message intent
     const intent = await llm_decide(ctx, {
       name: "classify-intent",

@@ -23,7 +23,7 @@ export const outputSchema = z.object({
 });
 
 export default defineOrchestration({
-  name: "resume-screening",
+  name: "angie/resume-screening",
   version: 1,
   description: "Score a resume against a job opening, format it to standard template, and produce a hiring recommendation",
   inputSchema,

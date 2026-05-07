@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/runtime": ["./runtime/src/index.ts"],
+      "@/runtime/*": ["./runtime/src/*"]
+    }
+  },
+  "include": [
+    "runtime/src/**/*.ts",
+    "orchestrations/**/*.ts",
+    "integrations/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dashboard"]
+}

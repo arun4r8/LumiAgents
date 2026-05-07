@@ -98,6 +98,20 @@ All external systems touched by the orchestration layer or existing n8n workflow
 
 ---
 
+## SAM.gov / GovCon API (opportunity data)
+**Considered:** GovSignals AI (govsignals.ai) — evaluated 2026-05-06 and ruled out.  
+GovSignals is a human-facing SaaS with no public API, no webhook output, and no programmatic access path. It cannot be called from a Worker or n8n flow.
+
+**Plan:** Use one of the following for raw opportunity ingestion into Beady's GovCon assessment:
+- **SAM.gov API** (api.sam.gov) — free with API key, 1,000 req/day. Returns structured JSON for solicitations, contract awards, and entity registrations. Auth: `api_key` query param.
+- **GovCon API** (govconapi.com) — $19–$39/month, 24,000 req/day, 59 fields per notice, cleaner JSON than SAM.gov. Auth: API key.
+
+**Orchestration layer plan:** Add a `sam-gov-opportunity.ts` integration wrapper that calls SAM.gov (or GovCon API) to fetch opportunity details by solicitation number. Beady's `govcon-assessment` orchestration will call this before running the LLM scoring chain, rather than requiring the caller to pre-load the data.
+
+**Note:** If Lumiture subscribes to GovSignals for human BD use, any opportunity IDs or notes from a capture manager's session can be manually entered as inputs to the orchestration. GovSignals remains a human tool; the orchestration layer handles the automated scoring independently.
+
+---
+
 ## Credential storage plan (Workers)
 
 | Secret | Wrangler secret name | Used by |

@@ -17,7 +17,7 @@ export const outputSchema = z.object({
 });
 
 export default defineOrchestration({
-  name: "govcon-assessment",
+  name: "beady/govcon-assessment",
   version: 1,
   description: "Assess a government contracting opportunity and produce a go/no-go recommendation with executive memo",
   inputSchema,

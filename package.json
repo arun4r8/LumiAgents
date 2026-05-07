@@ -6,7 +6,7 @@
     "dashboard"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p dashboard/tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx"
   }
 }
