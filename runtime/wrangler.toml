@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
+JIRA_BASE_URL = "https://lumiture.atlassian.net"
 ENVIRONMENT = "development"
 
 # Secrets (set via `wrangler secret put`):
@@ -12,6 +13,8 @@ ENVIRONMENT = "development"
 # ANTHROPIC_API_KEY
 # N8N_WEBHOOK_SECRET
 # APOLLO_API_KEY
+# JIRA_EMAIL
+# JIRA_API_TOKEN
 
 [[workflows]]
 name = "orchestration-runner"

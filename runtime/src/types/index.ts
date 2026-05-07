@@ -6,6 +6,9 @@ export interface Env {
   ANTHROPIC_API_KEY: string;
   N8N_WEBHOOK_SECRET: string;
   APOLLO_API_KEY: string;
+  JIRA_BASE_URL: string;
+  JIRA_EMAIL: string;
+  JIRA_API_TOKEN: string;
   ENVIRONMENT: string;
   RUNNER: Workflow;
 }
