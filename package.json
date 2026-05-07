@@ -1,0 +1,12 @@
+{
+  "name": "lumiagents",
+  "private": true,
+  "workspaces": [
+    "runtime",
+    "dashboard"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  }
+}

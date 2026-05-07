@@ -3,88 +3,123 @@
 Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 
 **Project:** Lumiture (`jlljpgdqqxljvznjslmb`) — East US (North Virginia)  
-**Status:** ⚠️ Project was paused at time of audit. Schema pulled from n8n workflow analysis and runtime observation. Full introspection pending project resume.
+**Postgres:** 17.6  
+**pgvector:** Enabled — embeddings at 3072 dimensions (Gemini text-embedding models)
 
 ---
 
-## What we know from n8n workflow analysis
+## Existing tables (public schema)
 
-The following tables are referenced directly by active n8n workflows. These are n8n's operational tables — the orchestration layer will not touch them.
+30 tables. Grouped by domain.
 
-### GovCon Assessment (`IgroV8Rw2NGJb3f6`)
-| Table | Operation | Notes |
-|-------|-----------|-------|
-| opportunities | INSERT, SELECT | Opportunity records |
-| capability_statements | SELECT | Used in vector similarity search |
-| past_performance | INSERT, SELECT | Seeded via separate webhook |
-| opportunity_documents | INSERT, SELECT | Attached files per opportunity |
-| assessments | INSERT | Final go/no-go assessment output |
-| prompt_bank | SELECT | LLM prompt templates stored in DB |
-| (vector store) | INSERT, SELECT | pgvector embeddings for capabilities + past perf |
+### GovCon / Business Development
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `opportunities` | Opportunity records | 0 | Core BD table |
+| `opportunity_documents` | Docs per opportunity | 0 | Raw text + metadata |
+| `opportunity_documents_vt` | Vector store for opp docs | 0 | 3072-dim embeddings |
+| `assessments` | Go/no-go assessment results | 0 | Links opportunity + company_profile |
+| `capability_statements` | Company capabilities | 0 | Used in vector similarity |
+| `company_profiles` | Company profile | 0 | Anchor for capabilities + past perf |
+| `past_performance` | Past performance records | 2 | Seeds vector store |
+| `past_performance_vt` | Vector store for past perf | 0 | 3072-dim embeddings |
+| `icp_profiles` | Ideal customer profiles | 0 | Target agency/domain criteria |
+| `incumbent_research` | Incumbent contractor data | 0 | Linked to opportunities |
+| `prompt_bank` | LLM prompt templates | 0 | Used by GovCon assessment |
 
-### Resume Scoring (`MjkmZrxDnJimxTW6`)
-| Table | Operation | Notes |
-|-------|-----------|-------|
-| jobs | INSERT, SELECT, UPDATE | Job posting records |
-| process_queue | INSERT, SELECT, UPDATE | Resume processing queue |
-| resume_results | INSERT | Scored resume output |
-| (storage) | GET, DELETE | Resume files in Supabase Storage |
+### Contracts / Finance
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `contracts` | Contract records | 0 | Links to opportunities |
+| `budget_lines` | CLIN-level budget | 0 | Budgeted/obligated/expended |
+| `invoices` | Invoice records | 0 | Links to contracts |
+| `labor_records` | Labor charging | 0 | Employee + contract + hours |
+| `indirect_rates` | Indirect rate structure | 0 | Fringe, overhead, G&A by FY |
 
-### LumiAnalysis (`wRwtElhzpWcbUUlk`)
-| Table | Operation | Notes |
-|-------|-----------|-------|
-| db_tables | INSERT | CSV data uploaded by users |
-| (vector store) | INSERT, SELECT | Document embeddings |
-| (task log) | INSERT | Agent task logging |
+### Resume / Recruiting
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `candidates` | Candidate records | 0 | LinkedIn/manual |
+| `resume_jobs` | Batch scoring jobs | 0 | One per job opening |
+| `resume_queue` | Resume processing queue | 0 | Locked-by pattern for dequeue |
+| `resume_results` | Scored resume output | 0 | Detailed scoring breakdown |
 
-### Inbound Email + LinkedIn (`E4WYbbvVVZRsOIrT`, `ByaMXfFp8OcOcYGi`)
-| Table | Operation | Notes |
-|-------|-----------|-------|
-| (unknown) | Unknown | Supabase referenced but tables not identified from node names |
+### Employees / HR
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `employees` | Employee records | 0 | Has Jira + GitHub fields |
+| `staff_requests` | HR requests | 0 | Links to Jira issues |
+
+### Agent / AI Telemetry (n8n-era)
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `agent_tasks` | Task records for agents | 3 | Predecessor to `runs` |
+| `agent_logs` | Per-step agent logs | 0 | Predecessor to `run_steps` |
+| `documents` | Generic doc + embedding store | 0 | 3072-dim |
+| `records` | Generic records store | 0 | |
+
+### Comms Logs
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `call_logs` | Call records | 0 | |
+| `email_logs` | Email records | 0 | |
+| `sms_logs` | SMS records | 0 | |
+
+### Auth (custom — see security note)
+| Table | Purpose | Rows | Notes |
+|-------|---------|------|-------|
+| `users` | Custom user table | 0 | Has username + password columns ⚠️ |
 
 ---
 
-## RLS status (known)
+## RLS status
 
-All existing tables were created by n8n's service role key access. RLS status is unknown until project is unpaused and schema is introspected. **Assume no RLS on existing tables until verified.**
+Anon key returns `[]` for all tables including those with data (agent_tasks has 3 rows, invisible to anon). This indicates RLS is enabled with deny-all defaults on at least the data tables. **Full RLS audit requires direct Postgres access** (currently blocked by IPv6 — see below).
 
----
-
-## New schema: `orchestration` (to be created in Phase 1)
-
-The orchestration layer adds a new schema alongside `public`. No existing n8n tables are modified.
-
-Tables to create (per `docs/data-model.md`):
-- `orchestration.orchestrations`
-- `orchestration.runs`
-- `orchestration.run_steps`
-- `orchestration.tool_calls`
-- `orchestration.artifacts`
-- `orchestration.approvals`
-- `orchestration.orchestration_access`
-
-Each table ships with RLS in the same migration. See `docs/data-model.md` for full column specs and RLS policies.
+Working assumption: RLS is partially configured but untested at the app layer. Phase 1 will write explicit, tested RLS policies for all orchestration schema tables.
 
 ---
 
-## Supabase Storage buckets (known)
+## Security flag: custom `users` table ⚠️
 
-- At least one bucket used for resume files (referenced by Resume Scoring workflow via HTTP REST calls to storage API)
-- Bucket name(s) TBD — introspect when project is unpaused
+The `users` table has `username (varchar)` and `password (varchar)` columns. This means authentication is currently handled outside Supabase Auth, with credentials stored directly in Postgres. This is a risk:
+
+- Passwords visible to anyone with service role access
+- No session management, MFA, or OAuth out of the box
+- Supabase RLS can't reference `auth.uid()` for these users
+
+**Plan:** Migrate to Supabase Auth in Phase 1. Create Supabase Auth users for existing `users` rows. The `users` table becomes a profile extension table (linked by `auth.uid()`), not an auth table. Password column is removed.
+
+---
+
+## n8n-era vs orchestration-layer tables
+
+The `agent_tasks` and `agent_logs` tables are n8n's predecessor to what the orchestration layer will manage in `orchestration.runs` and `orchestration.run_steps`. They will remain in `public` and are not touched. The new schema is additive.
 
 ---
 
 ## pgvector
 
-pgvector extension is in use (confirmed from GovCon and LumiAnalysis workflows using `vectorStoreSupabase` nodes). Extension is already enabled on the project.
+Extension enabled. All vector columns are 3072 dimensions, consistent with Gemini `text-embedding-004` (or OpenAI `text-embedding-3-large`). New orchestration tables do not need vector columns — embeddings stay in the domain tables.
 
 ---
 
-## Action items
+## IPv6 / direct Postgres access
 
-- [ ] **Unpause project** at https://supabase.com/dashboard/project/jlljpgdqqxljvznjslmb
-- [ ] Run `supabase db dump --schema public` to get full schema
-- [ ] Audit RLS on existing tables — flag any table with no RLS policy
-- [ ] Identify storage bucket names
-- [ ] Confirm pgvector version and embedding dimensions in use
-- [ ] Update this doc with introspected schema
+The Supabase CLI `db dump` and `db diff` commands require direct Postgres connection. This machine's network does not support IPv6, which the direct connection host (`db.jlljpgdqqxljvznjslmb.supabase.co`) resolves to. **Workaround:** use the Supabase Management API for schema introspection (done above), and run migrations via `supabase db push` which uses the HTTP API rather than a direct socket.
+
+---
+
+## What Phase 1 creates
+
+New `orchestration` schema (separate from `public`). No existing tables are modified.
+
+- `orchestration.orchestrations`
+- `orchestration.orchestration_access`
+- `orchestration.runs`
+- `orchestration.run_steps`
+- `orchestration.tool_calls`
+- `orchestration.artifacts`
+- `orchestration.approvals`
+
+Each table ships with RLS in the same migration file.
