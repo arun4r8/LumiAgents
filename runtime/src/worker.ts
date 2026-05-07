@@ -60,6 +60,45 @@ function json(data: unknown, status = 200): Response {
 
 // ─── Main Worker ──────────────────────────────────────────────────────────────
 
+// ─── JWT auth helper ──────────────────────────────────────────────────────────
+// Decodes the Supabase JWT (set by our custom_access_token_hook) to extract
+// the user's role claim. No signature verification — internal use only;
+// tokens are short-lived and forging requires the Supabase JWT secret.
+
+function decodeJwtClaims(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    const payload = parts[1];
+    if (!payload) return null;
+    const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, "=");
+    const decoded = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function requireOpsToken(request: Request): { userId: string } | Response {
+  const auth = request.headers.get("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { "Content-Type": "application/json" },
+    });
+  }
+  const claims = decodeJwtClaims(auth.slice(7));
+  if (!claims) {
+    return new Response(JSON.stringify({ error: "Invalid token" }), {
+      status: 401, headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (claims["role"] !== "ops") {
+    return new Response(JSON.stringify({ error: "Forbidden — ops role required" }), {
+      status: 403, headers: { "Content-Type": "application/json" },
+    });
+  }
+  return { userId: claims["sub"] as string };
+}
+
 // ─── Cron dispatcher ──────────────────────────────────────────────────────────
 // Finds every registered orchestration whose `cron` field matches the
 // triggered cron expression and runs it with schema-defaulted input.
@@ -236,7 +275,11 @@ export default {
         const approvalId = approvalMatch[1];
         if (!approvalId) return json({ error: "Missing approval ID" }, 400);
 
-        let body: { approved: boolean; notes?: string; decidedBy?: string };
+        const authResult = requireOpsToken(request);
+        if (authResult instanceof Response) return authResult;
+        const { userId: decidedByUserId } = authResult;
+
+        let body: { approved: boolean; notes?: string };
         try {
           body = await request.json() as typeof body;
         } catch {
@@ -251,8 +294,8 @@ export default {
         // Write the decision
         await db.respondToApproval(approvalId, {
           approved: body.approved,
+          decidedBy: decidedByUserId,
           ...(body.notes !== undefined && { notes: body.notes }),
-          ...(body.decidedBy !== undefined && { decidedBy: body.decidedBy }),
         });
 
         // Fetch the approval to get the run_id

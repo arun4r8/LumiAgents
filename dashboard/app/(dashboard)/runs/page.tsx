@@ -4,20 +4,41 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function RunsPage() {
+export default async function RunsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ orchestration?: string }>;
+}) {
+  const { orchestration } = await searchParams;
   const supabase = await createClient();
 
-  const { data: runs, error } = await supabase
+  let query = supabase
     .schema("orchestration")
     .from("runs")
     .select(`id, status, triggered_by, created_at, started_at, ended_at, orchestrations ( name, version )`)
     .order("created_at", { ascending: false })
     .limit(100);
 
+  if (orchestration) {
+    // Filter via the joined orchestration name
+    query = query.eq("orchestrations.name", orchestration);
+  }
+
+  const { data: runs, error } = await query;
+
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Runs</h1>
+        <div>
+          <h1 className="text-xl font-semibold">Runs</h1>
+          {orchestration && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              Filtered by <span className="font-medium text-gray-700">{orchestration}</span>
+              {" · "}
+              <Link href="/runs" className="text-blue-600 hover:underline">Clear</Link>
+            </p>
+          )}
+        </div>
       </div>
 
       {error && (

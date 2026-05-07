@@ -1,12 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
+import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApprovalsPage() {
   const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
 
   const { data: approvals } = await supabase
     .schema("orchestration")
@@ -45,7 +44,7 @@ export default async function ApprovalsPage() {
                     </p>
                   </div>
 
-                  <ApprovalActions approvalId={approval.id} userId={user?.id ?? ""} />
+                  <ApprovalActions approvalId={approval.id} />
                 </div>
               </div>
             );
@@ -56,17 +55,37 @@ export default async function ApprovalsPage() {
   );
 }
 
-function ApprovalActions({ approvalId, userId }: { approvalId: string; userId: string }) {
+function ApprovalActions({ approvalId }: { approvalId: string }) {
   async function decide(formData: FormData) {
     "use server";
-    const status = formData.get("status") as "approved" | "rejected";
-    const notes = formData.get("notes") as string | null;
+    const approved = formData.get("status") === "approved";
+    const notes = formData.get("notes");
+
+    // Get the user's session token to authenticate against the Worker
     const supabase = await createClient();
-    await supabase
-      .schema("orchestration")
-      .from("approvals")
-      .update({ status, decided_by: userId, decided_at: new Date().toISOString(), decision_notes: notes })
-      .eq("id", approvalId);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
+
+    const res = await fetch(`${runtimeUrl}/api/approvals/${approvalId}/respond`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        approved,
+        ...(notes && typeof notes === "string" && notes.trim() ? { notes: notes.trim() } : {}),
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Worker responded ${res.status}: ${err}`);
+    }
+
+    revalidatePath("/approvals");
   }
 
   return (
