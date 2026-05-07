@@ -4,14 +4,14 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   ANTHROPIC_API_KEY: string;
-  N8N_WEBHOOK_SECRET: string;
-  APOLLO_API_KEY: string;
+  N8N_WEBHOOK_SECRET?: string;  // optional — set when n8n webhooks have Header Auth configured
+  APOLLO_API_KEY?: string;      // optional — set when Apollo API key is obtained
   JIRA_BASE_URL: string;
   JIRA_EMAIL: string;
   JIRA_API_TOKEN: string;
   SAM_GOV_API_KEY: string;
   ENVIRONMENT: string;
-  RUNNER: Workflow;
+  AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────

@@ -17,11 +17,6 @@ ENVIRONMENT = "development"
 # JIRA_API_TOKEN
 # SAM_GOV_API_KEY
 
-[[workflows]]
-name = "orchestration-runner"
-binding = "RUNNER"
-class_name = "OrchestrationRunner"
-
 [ai]
 binding = "AI"
 
