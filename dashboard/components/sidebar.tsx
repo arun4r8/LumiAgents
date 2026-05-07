@@ -9,6 +9,7 @@ import {
   CheckSquare,
   BarChart2,
   FileText,
+  Settings,
   LogOut,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
@@ -36,6 +37,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/approvals",      label: "Approvals",       icon: <CheckSquare />, badge: pendingApprovals || undefined },
     { href: "/analyst",        label: "Data Analyst",    icon: <BarChart2 /> },
     { href: "/documents",      label: "Documents",       icon: <FileText /> },
+    { href: "/settings",       label: "Settings",        icon: <Settings /> },
   ];
 
   const initials = userEmail
