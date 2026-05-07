@@ -26,15 +26,12 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: runtime/pnpm-lock.yaml
 
       - name: Install dependencies
-        working-directory: runtime
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        working-directory: runtime
-        run: pnpm exec tsc --noEmit
+        run: pnpm exec tsc --noEmit -p tsconfig.json
 
       - name: Deploy Worker
         working-directory: runtime

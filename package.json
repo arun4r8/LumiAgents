@@ -1,12 +1,13 @@
 {
   "name": "lumiagents",
   "private": true,
-  "workspaces": [
-    "runtime",
-    "dashboard"
-  ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p dashboard/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250430.0",
+    "typescript": "^5.4.5",
+    "zod": "^3.23.8"
   }
 }
