@@ -11,6 +11,7 @@ ENVIRONMENT = "development"
 # SUPABASE_SERVICE_ROLE_KEY
 # ANTHROPIC_API_KEY
 # N8N_WEBHOOK_SECRET
+# APOLLO_API_KEY
 
 [[workflows]]
 name = "orchestration-runner"

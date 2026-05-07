@@ -5,6 +5,7 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string;
   ANTHROPIC_API_KEY: string;
   N8N_WEBHOOK_SECRET: string;
+  APOLLO_API_KEY: string;
   ENVIRONMENT: string;
   RUNNER: Workflow;
 }
