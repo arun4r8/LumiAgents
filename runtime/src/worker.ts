@@ -1,50 +1,14 @@
-import type { Env, RunContext } from "./types";
-import { createHandler, PauseSignal } from "./index";
+import { z } from "zod";
+import type { Env } from "./types";
 import { ingestDocument, queryDocuments } from "./agents/document-rag";
 import { runDataAnalyst, storeCsvUpload } from "./agents/data-analyst";
+import { runAgentChat } from "./agents/agent-chat";
+import { parseBotActivity, sendBotReplyWithToken } from "../../integrations/teams/bot";
 import { SupabaseClient } from "./db/client";
+import { orchestrations } from "./registry";
 
-// ─── Orchestration registry ───────────────────────────────────────────────────
-// Import all orchestration definitions and register them by name.
-// The name key MUST match the `name` field in the definition.
-
-import angieResumeFormatting from "../../orchestrations/angie/resume-formatting/definition";
-import angieResumeScreening from "../../orchestrations/angie/resume-screening/definition";
-import angieCandidateSourcing from "../../orchestrations/angie/candidate-sourcing/definition";
-import beadyGovconAssessment from "../../orchestrations/beady/govcon-assessment/definition";
-import beadyOpportunitySearch from "../../orchestrations/beady/opportunity-search/definition";
-import moneyDataAnalyst from "../../orchestrations/money/data-analyst";
-import moneyFinancialReport from "../../orchestrations/money/financial-report/definition";
-import patchInboundTriage from "../../orchestrations/patch/inbound-triage/definition";
-import patchTicketOps from "../../orchestrations/patch/ticket-ops/definition";
-import patchStaffRequest from "../../orchestrations/patch/staff-request/definition";
-import * as patchDocumentRag from "../../orchestrations/patch/document-rag";
-
-import { z } from "zod";
-import type { OrchestrationDefinition } from "./types";
-
-type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
-
-function reg(o: AnyOrch): [string, AnyOrch] {
-  return [o.name, o];
-}
-
-const orchestrations = new Map<string, AnyOrch>([
-  reg(angieResumeFormatting  as unknown as AnyOrch),
-  reg(angieResumeScreening   as unknown as AnyOrch),
-  reg(angieCandidateSourcing as unknown as AnyOrch),
-  reg(beadyGovconAssessment  as unknown as AnyOrch),
-  reg(beadyOpportunitySearch as unknown as AnyOrch),
-  reg(moneyDataAnalyst       as unknown as AnyOrch),
-  reg(moneyFinancialReport   as unknown as AnyOrch),
-  reg(patchInboundTriage     as unknown as AnyOrch),
-  reg(patchTicketOps         as unknown as AnyOrch),
-  reg(patchStaffRequest      as unknown as AnyOrch),
-  reg(patchDocumentRag.documentIngest as unknown as AnyOrch),
-  reg(patchDocumentRag.documentQuery  as unknown as AnyOrch),
-]);
-
-const orchHandler = createHandler(orchestrations);
+// Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
+export { RunOrchestration } from "./workflow";
 
 // ─── Request helpers ──────────────────────────────────────────────────────────
 
@@ -134,36 +98,26 @@ async function dispatchCron(cronExpr: string, env: Env): Promise<void> {
       started_at: new Date().toISOString(),
     });
 
-    let stepCounter = 0;
-    const ctx: RunContext = {
-      runId: run.id,
-      stepIndex: () => stepCounter++,
-      env,
-      idempotencyKey: (tool, ...parts) => `${run.id}:${tool}:${parts.join(":")}`,
-      fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
-    };
-
+    // Dispatch to the durable Workflow — the cron handler just needs to kick it off.
     try {
-      const output = await orch.run(ctx, input);
-      await db.updateRun(run.id, {
-        status: "completed",
-        output,
-        ended_at: new Date().toISOString(),
+      await env.ORCHESTRATION_WORKFLOW.create({
+        id: run.id,
+        params: { runId: run.id, orchestrationName: orch.name },
       });
-      console.log(`[cron] ${orch.name} completed (run ${run.id})`);
+      console.log(`[cron] ${orch.name} dispatched to Workflow (run ${run.id})`);
     } catch (err) {
       await db.updateRun(run.id, {
         status: "failed",
-        error: err instanceof Error ? err.message : String(err),
+        error: { message: err instanceof Error ? err.message : String(err) },
         ended_at: new Date().toISOString(),
       });
-      console.error(`[cron] ${orch.name} failed (run ${run.id}):`, err);
+      console.error(`[cron] ${orch.name} failed to dispatch (run ${run.id}):`, err);
     }
   }
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
 
@@ -180,8 +134,39 @@ export default {
 
     try {
       // ── Orchestration runner: POST /api/orchestrations/:name/run ────────────
-      if (pathname.startsWith("/api/orchestrations/")) {
-        return orchHandler.fetch(request, env);
+      const runMatch = pathname.match(/^\/api\/orchestrations\/([^/]+)\/run$/);
+      if (runMatch && request.method === "POST") {
+        const name = decodeURIComponent(runMatch[1] ?? "");
+        const orch = orchestrations.get(name);
+        if (!orch) return json({ error: `Orchestration "${name}" not found` }, 404);
+
+        let body: unknown;
+        try { body = await request.json(); }
+        catch { return json({ error: "Invalid JSON body" }, 400); }
+
+        const parsed = orch.inputSchema.safeParse(body);
+        if (!parsed.success) {
+          return json({ error: "Invalid input", issues: parsed.error.issues }, 422);
+        }
+
+        const db = new SupabaseClient(env);
+        const orchRecord = await db.getOrchestrationByName(name, orch.version);
+        const run = await db.createRun({
+          orchestration_id: orchRecord.id,
+          orchestration_version: orch.version,
+          status: "running",
+          input: parsed.data,
+          triggered_by: "webhook",
+          started_at: new Date().toISOString(),
+        });
+
+        // Dispatch to the durable Workflow; returns 202 immediately.
+        await env.ORCHESTRATION_WORKFLOW.create({
+          id: run.id,
+          params: { runId: run.id, orchestrationName: name },
+        });
+
+        return json({ runId: run.id, status: "running" }, 202);
       }
 
       // ── Orchestration catalogue: GET /api/orchestrations ────────────────────
@@ -307,6 +292,8 @@ export default {
       }
 
       // ── Approval response: POST /api/approvals/:id/respond ──────────────────
+      // In Workflow mode the sleeping Workflow polls for this decision automatically —
+      // no replay needed. Just record the decision and return.
       const approvalMatch = pathname.match(/^\/api\/approvals\/([^/]+)\/respond$/);
       if (approvalMatch && request.method === "POST") {
         const approvalId = approvalMatch[1];
@@ -328,76 +315,77 @@ export default {
 
         const db = new SupabaseClient(env);
 
-        // Write the decision
+        // Persist the decision — the Workflow's next poll will pick it up.
         await db.respondToApproval(approvalId, {
           approved: body.approved,
           decidedBy: decidedByUserId,
           ...(body.notes !== undefined && { notes: body.notes }),
         });
 
-        // Fetch the approval to get the run_id
         const approval = await db.getApproval(approvalId);
-        const run = await db.getRun(approval.run_id);
+        return json({ runId: approval.run_id, status: body.approved ? "approved" : "rejected" });
+      }
 
-        if (run.status !== "paused") {
-          return json({ error: `Run ${run.id} is not paused (status: ${run.status})` }, 409);
-        }
+      // ── Agent chat: POST /api/agents/:slug/chat ─────────────────────────────
+      const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)\/chat$/);
+      if (agentMatch && request.method === "POST") {
+        const slug = agentMatch[1] as "angie" | "beady" | "patch" | "money";
 
-        // Look up the orchestration definition
-        const orchRecord = await db.getOrchestrationByName(
-          // name is stored on orchestration row; fetch it via the run
-          await (async () => {
-            const orchRows = await fetch(
-              `${env.SUPABASE_URL}/rest/v1/orchestration.orchestrations?id=eq.${run.orchestration_id}&select=name&limit=1`,
-              { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` } },
-            ).then((r) => r.json() as Promise<{ name: string }[]>);
-            const name = orchRows[0]?.name;
-            if (!name) throw new Error(`Orchestration ${run.orchestration_id} not found`);
-            return name;
-          })(),
-        );
+        let body: { messages?: unknown; files?: unknown };
+        try { body = await request.json() as typeof body; }
+        catch { return json({ error: "Invalid JSON body" }, 400); }
 
-        const orch = orchestrations.get(orchRecord.name);
-        if (!orch) return json({ error: `Orchestration "${orchRecord.name}" not registered` }, 404);
-
-        const inputParsed = orch.inputSchema.safeParse(run.input);
-        if (!inputParsed.success) return json({ error: "Stored run input failed schema validation" }, 500);
-
-        // Mark running again before replay
-        await db.updateRun(run.id, { status: "running" });
-
-        let stepCounter = 0;
-        const ctx: RunContext = {
-          runId: run.id,
-          stepIndex: () => stepCounter++,
-          env,
-          idempotencyKey: (tool, ...parts) => `${run.id}:${tool}:${parts.join(":")}`,
-          fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
+        const runtimeUrl = `${url.protocol}//${url.host}`;
+        const chatReq: import("./agents/agent-chat").AgentChatRequest = {
+          agentSlug: slug,
+          messages: (body.messages ?? []) as import("./agents/agent-chat").ChatMessage[],
         };
+        const rawFiles = body.files as import("./agents/agent-chat").FileAttachment[] | undefined;
+        if (rawFiles?.length) chatReq.files = rawFiles;
+        const result = await runAgentChat(env, chatReq, runtimeUrl);
 
-        try {
-          const output = await orch.run(ctx, inputParsed.data);
-          await db.updateRun(run.id, {
-            status: "completed",
-            output,
-            ended_at: new Date().toISOString(),
-          });
-          return json({ runId: run.id, status: "completed", output });
-        } catch (err) {
-          if (err instanceof PauseSignal) {
-            await db.updateRun(run.id, { status: "paused" });
-            return json({ runId: run.id, status: "paused", approvalId: err.approvalId }, 202);
-          }
-          await db.updateRun(run.id, {
-            status: "failed",
-            error: { message: err instanceof Error ? err.message : String(err) },
-            ended_at: new Date().toISOString(),
-          });
-          return json(
-            { runId: run.id, status: "failed", error: err instanceof Error ? err.message : String(err) },
-            500,
-          );
+        return json(result);
+      }
+
+      // ── Teams Bot: POST /api/teams/bot ───────────────────────────────────────
+      if (pathname === "/api/teams/bot" && request.method === "POST") {
+        const parsed = await parseBotActivity(request, env);
+
+        if (!parsed.valid || !parsed.activity) {
+          return new Response("Unauthorized", { status: 401 });
         }
+
+        // Only handle "message" activities; ignore conversationUpdate etc.
+        if (parsed.activity.type !== "message" || !parsed.text) {
+          return new Response(null, { status: 200 });
+        }
+
+        const slug = (parsed.agentSlug ?? "patch") as "angie" | "beady" | "patch" | "money";
+        const runtimeUrl = `${url.protocol}//${url.host}`;
+
+        // Run the agent chat (fire and forget the reply so Teams doesn't time out)
+        const chatPromise = runAgentChat(env, {
+          agentSlug: slug,
+          messages: [{ role: "user", content: parsed.text }],
+        }, runtimeUrl).then(async (result) => {
+          const replyText = result.runIds.length > 0
+            ? `${result.reply}\n\n*Run IDs: ${result.runIds.join(", ")}*`
+            : result.reply;
+          await sendBotReplyWithToken(
+            env,
+            parsed.serviceUrl,
+            parsed.conversationId,
+            parsed.activity!.id,
+            replyText,
+          );
+        }).catch((err) => {
+          console.error("[teams-bot] reply error:", err);
+        });
+
+        // Use waitUntil so the reply finishes sending after the 200 response
+        ctx.waitUntil(chatPromise);
+
+        return new Response(null, { status: 200 });
       }
 
       // ── Health ──────────────────────────────────────────────────────────────

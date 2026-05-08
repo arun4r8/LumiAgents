@@ -16,6 +16,15 @@ ENVIRONMENT = "development"
 # JIRA_EMAIL
 # JIRA_API_TOKEN
 # SAM_GOV_API_KEY
+# TEAMS_INCOMING_WEBHOOK_URL   ← Teams channel connector URL (notifications)
+# TEAMS_BOT_APP_ID             ← Azure Bot registration App ID
+# TEAMS_BOT_APP_SECRET         ← Azure Bot registration client secret
+
+[[workflows]]
+name = "orchestration-workflow"
+binding = "ORCHESTRATION_WORKFLOW"
+class_name = "RunOrchestration"
+script_name = "lumiagents-runtime"
 
 [triggers]
 crons = ["0 8 * * 1"]   # beady/opportunity-search: every Monday 08:00 UTC

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { WorkflowStep } from "cloudflare:workers";
 
 export interface Env {
   SUPABASE_URL: string;
@@ -21,6 +22,12 @@ export interface Env {
   ACCOUNTING_API_URL?: string;
   ACCOUNTING_API_KEY?: string;
   AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
+  /** Cloudflare Workflows binding — present in deployed Workers, absent in local dev without wrangler. */
+  ORCHESTRATION_WORKFLOW: Workflow;
+  // Teams integration (set via `wrangler secret put`)
+  TEAMS_INCOMING_WEBHOOK_URL?: string;
+  TEAMS_BOT_APP_ID?: string;
+  TEAMS_BOT_APP_SECRET?: string;
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────
@@ -31,6 +38,8 @@ export interface RunContext {
   env: Env;
   idempotencyKey: (tool: string, ...parts: string[]) => string;
   fetch: typeof fetch;
+  /** Set when running inside a Cloudflare Workflow — enables durable step execution. */
+  workflowStep?: WorkflowStep;
 }
 
 // ─── Orchestration definition ─────────────────────────────────────────────────

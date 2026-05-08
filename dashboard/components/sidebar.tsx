@@ -12,6 +12,7 @@ import {
   Database,
   Settings,
   LogOut,
+  Bot,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
 
@@ -63,6 +64,14 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
 
       {/* Nav */}
       <nav style={{ flex: 1 }}>
+        <div className="nav-sect">Agents</div>
+        <Link
+          href="/agents"
+          className={`nav-link${isActive("/agents") ? " active" : ""}`}
+        >
+          <Bot />
+          <span className="grow">Agents</span>
+        </Link>
         <div className="nav-sect">Ops</div>
         {nav.map((item) => (
           <Link

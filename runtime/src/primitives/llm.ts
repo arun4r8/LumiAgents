@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
-import { PauseSignal } from "./pause";
 
 const MODEL = "claude-sonnet-4-6";
 
@@ -42,6 +41,45 @@ export async function llm_decide<const T extends string>(
     status: "running",
     input: { prompt: options.prompt, options: options.options, context: options.input },
   });
+
+  // In Workflow mode, wrap the LLM call in step.do() for durability + retry
+  if (ctx.workflowStep) {
+    try {
+      const result = await ctx.workflowStep.do(`llm-decide-${idx}`, {
+        retries: { limit: 2, delay: "10 seconds", backoff: "linear" },
+      }, async () => {
+        const client = makeClient(ctx);
+        const response = await client.messages.create({
+          model: MODEL, max_tokens: 64,
+          system: systemPrompt,
+          messages: [{ role: "user", content: userPrompt }],
+        });
+        const raw = response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+        const chosen = options.options.find((o) => o === raw);
+        if (!chosen) throw new Error(`Model returned "${raw}" which is not in options: ${options.options.join(", ")}`);
+        return { chosen, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, raw };
+      });
+
+      await db.updateRunStep(runStep.id, {
+        status: "completed",
+        output: { chosen: result.chosen },
+        llm_model: MODEL,
+        llm_prompt: userPrompt,
+        llm_response: result.raw,
+        llm_input_tokens: result.inputTokens,
+        llm_output_tokens: result.outputTokens,
+        ended_at: new Date().toISOString(),
+      });
+      return result.chosen;
+    } catch (err) {
+      await db.updateRunStep(runStep.id, {
+        status: "failed",
+        error: { message: err instanceof Error ? err.message : String(err) },
+        ended_at: new Date().toISOString(),
+      });
+      throw err;
+    }
+  }
 
   try {
     const client = makeClient(ctx);
@@ -101,9 +139,6 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     return cached.output as z.infer<T>;
   }
 
-  // Suppress unused import warning from the PauseSignal import above
-  void PauseSignal;
-
   const runStep = await db.createRunStep({
     run_id: ctx.runId,
     step_index: idx,
@@ -113,11 +148,67 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     input: { prompt: options.prompt, context: options.input },
   });
 
+  const userPrompt = `${options.prompt}\n\nContext:\n${JSON.stringify(options.input, null, 2)}`;
+  const toolSchema = zodToJsonSchema(options.schema);
+
+  // In Workflow mode, wrap the LLM call in step.do() for durability + retry
+  if (ctx.workflowStep) {
+    try {
+      const result = await ctx.workflowStep.do(`llm-extract-${idx}`, {
+        retries: { limit: 2, delay: "10 seconds", backoff: "linear" },
+      }, async () => {
+        const client = makeClient(ctx);
+        const response = await client.messages.create({
+          model: MODEL,
+          max_tokens: 4096,
+          tools: [
+            {
+              name: "extract",
+              description: "Extract structured data from the provided context",
+              input_schema: toolSchema as Anthropic.Tool["input_schema"],
+            },
+          ],
+          tool_choice: { type: "tool", name: "extract" },
+          messages: [{ role: "user", content: userPrompt }],
+        });
+
+        const toolUse = response.content.find((b) => b.type === "tool_use");
+        if (!toolUse || toolUse.type !== "tool_use") {
+          throw new Error("Model did not call the extract tool");
+        }
+
+        const parsed = options.schema.parse(toolUse.input);
+        return {
+          parsed,
+          raw: JSON.stringify(toolUse.input),
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+        };
+      });
+
+      await db.updateRunStep(runStep.id, {
+        status: "completed",
+        output: result.parsed,
+        llm_model: MODEL,
+        llm_prompt: options.prompt,
+        llm_response: result.raw,
+        llm_input_tokens: result.inputTokens,
+        llm_output_tokens: result.outputTokens,
+        ended_at: new Date().toISOString(),
+      });
+      return result.parsed as z.infer<T>;
+    } catch (err) {
+      await db.updateRunStep(runStep.id, {
+        status: "failed",
+        error: { message: err instanceof Error ? err.message : String(err) },
+        ended_at: new Date().toISOString(),
+      });
+      throw err;
+    }
+  }
+
   try {
     const client = makeClient(ctx);
-
-    // Use tool use for structured extraction
-    const toolSchema = zodToJsonSchema(options.schema);
 
     const response = await client.messages.create({
       model: MODEL,
@@ -130,12 +221,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
         },
       ],
       tool_choice: { type: "tool", name: "extract" },
-      messages: [
-        {
-          role: "user",
-          content: `${options.prompt}\n\nContext:\n${JSON.stringify(options.input, null, 2)}`,
-        },
-      ],
+      messages: [{ role: "user", content: userPrompt }],
     });
 
     const toolUse = response.content.find((b) => b.type === "tool_use");

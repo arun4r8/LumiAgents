@@ -1,1 +1,1 @@
-export { sendTeamsMessage, sendTeamsCard } from "../../../integrations/n8n/teams-message";
+export { sendTeamsMessage, sendTeamsCard } from "../../../integrations/teams/notify";
