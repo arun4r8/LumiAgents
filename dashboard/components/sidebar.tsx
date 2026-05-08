@@ -9,6 +9,7 @@ import {
   CheckSquare,
   BarChart2,
   FileText,
+  Database,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -37,6 +38,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/approvals",      label: "Approvals",       icon: <CheckSquare />, badge: pendingApprovals || undefined },
     { href: "/analyst",        label: "Data Analyst",    icon: <BarChart2 /> },
     { href: "/documents",      label: "Documents",       icon: <FileText /> },
+    { href: "/data",           label: "Data",            icon: <Database /> },
     { href: "/settings",       label: "Settings",        icon: <Settings /> },
   ];
 

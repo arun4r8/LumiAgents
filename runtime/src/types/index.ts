@@ -11,6 +11,15 @@ export interface Env {
   JIRA_API_TOKEN: string;
   SAM_GOV_API_KEY: string;
   ENVIRONMENT: string;
+  // CRM integration (Salesforce / HubSpot / Deltek Costpoint / …)
+  CRM_API_URL?: string;
+  CRM_API_KEY?: string;
+  // HR integration (BambooHR / Workday / ADP / …)
+  HR_API_URL?: string;
+  HR_API_KEY?: string;
+  // Accounting integration (QuickBooks / Unanet / Deltek Vision / …)
+  ACCOUNTING_API_URL?: string;
+  ACCOUNTING_API_KEY?: string;
   AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
 }
 
