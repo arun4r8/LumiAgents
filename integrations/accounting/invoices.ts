@@ -7,7 +7,7 @@
 //   3. Replace the throw below with real HTTP calls and map the response onto InvoiceRecord
 //   4. If filtering by contractId, translate it to the accounting system's project/contract ID
 
-import { assertAccountingConfigured, type AccountingEnv } from "./base.ts";
+import { assertAccountingConfigured, type AccountingEnv } from "./base";
 
 /**
  * Mirrors the columns in public.invoices.

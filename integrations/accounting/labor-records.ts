@@ -8,7 +8,7 @@
 //      onto LaborRecord
 //   4. Handle pagination — labor APIs often return large result sets
 
-import { assertAccountingConfigured, type AccountingEnv } from "./base.ts";
+import { assertAccountingConfigured, type AccountingEnv } from "./base";
 
 /**
  * Mirrors the columns in public.labor_records.

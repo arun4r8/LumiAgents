@@ -8,7 +8,7 @@
 //      fields onto ContractRecord
 //   4. Add an idempotency strategy if the CRM is not read-only from this side
 
-import { assertCrmConfigured, type CrmEnv } from "./base.ts";
+import { assertCrmConfigured, type CrmEnv } from "./base";
 
 /**
  * Mirrors the columns in public.contracts.

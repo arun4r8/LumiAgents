@@ -7,7 +7,7 @@
 //   3. Replace the throw below with real HTTP calls and map the response onto BudgetLineRecord
 //   4. Translate contractId to the accounting system's project/contract identifier
 
-import { assertAccountingConfigured, type AccountingEnv } from "./base.ts";
+import { assertAccountingConfigured, type AccountingEnv } from "./base";
 
 /**
  * Mirrors the columns in public.budget_lines.

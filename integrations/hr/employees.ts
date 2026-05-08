@@ -8,7 +8,7 @@
 //      fields onto EmployeeRecord
 //   4. Handle pagination — most HR APIs return results in pages of 50–100
 
-import { assertHrConfigured, type HrEnv } from "./base.ts";
+import { assertHrConfigured, type HrEnv } from "./base";
 
 /**
  * Mirrors the columns in public.employees.
