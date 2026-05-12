@@ -28,6 +28,9 @@ export interface Env {
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   TEAMS_BOT_APP_ID?: string;
   TEAMS_BOT_APP_SECRET?: string;
+  // GitHub integration — Obsidian vault sync (set via `wrangler secret put`)
+  GITHUB_API_TOKEN: string;
+  GITHUB_WEBHOOK_SECRET?: string;
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────

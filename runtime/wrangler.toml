@@ -19,6 +19,8 @@ ENVIRONMENT = "development"
 # TEAMS_INCOMING_WEBHOOK_URL   ← Teams channel connector URL (notifications)
 # TEAMS_BOT_APP_ID             ← Azure Bot registration App ID
 # TEAMS_BOT_APP_SECRET         ← Azure Bot registration client secret
+# GITHUB_API_TOKEN             ← GitHub PAT with repo scope (vault read/write)
+# GITHUB_WEBHOOK_SECRET        ← Secret set in the GitHub push webhook config
 
 [[workflows]]
 name = "orchestration-workflow"
