@@ -18,6 +18,7 @@
     }
   },
   "include": [
+    "agents/**/*.ts",
     "runtime/src/**/*.ts",
     "orchestrations/**/*.ts",
     "integrations/**/*.ts"
