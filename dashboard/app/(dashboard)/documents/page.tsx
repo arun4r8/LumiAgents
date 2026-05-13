@@ -156,9 +156,28 @@ function DocsIngest() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"text" | "pdf" | "csv">("text");
   const [content, setContent] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "loading" | "done">("idle");
   const [result, setResult] = useState<IngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const useFile = kind === "csv" || kind === "pdf";
+
+  function handleKindChange(next: "text" | "pdf" | "csv") {
+    setKind(next);
+    setContent("");
+    setFileName(null);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ""));
+    const reader = new FileReader();
+    reader.onload = (ev) => setContent(ev.target?.result as string ?? "");
+    reader.readAsText(file);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -173,7 +192,7 @@ function DocsIngest() {
       const data = await res.json() as IngestResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setResult(data);
-      setName(""); setContent("");
+      setName(""); setContent(""); setFileName(null);
       setPhase("done");
       setTimeout(() => setPhase("idle"), 3000);
     } catch (err) {
@@ -191,7 +210,7 @@ function DocsIngest() {
         </div>
         <div className="field">
           <label>Source kind</label>
-          <select className="sel" value={kind} onChange={(e) => setKind(e.target.value as "text" | "pdf" | "csv")}>
+          <select className="sel" value={kind} onChange={(e) => handleKindChange(e.target.value as "text" | "pdf" | "csv")}>
             <option value="text">text</option>
             <option value="pdf">pdf</option>
             <option value="csv">csv</option>
@@ -199,15 +218,54 @@ function DocsIngest() {
         </div>
         <div className="field">
           <label>Content</label>
-          <textarea
-            className="ta mono"
-            placeholder="Paste content here…"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            style={{ minHeight: 180 }}
-            required
-          />
-          <span className="hint">Will be chunked at ~480 chars with 60-char overlap.</span>
+          {useFile ? (
+            <div>
+              <label
+                htmlFor="file-upload"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 14px",
+                  border: "1px dashed var(--line)",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: 13.5,
+                  color: fileName ? "var(--ink)" : "var(--ink-3)",
+                  background: "var(--bg-2)",
+                  transition: "border-color 120ms",
+                }}
+              >
+                <Sparkles style={{ width: 14, height: 14, flexShrink: 0, color: "var(--accent)" }} />
+                {fileName ?? `Choose a .${kind} file to upload`}
+              </label>
+              <input
+                id="file-upload"
+                type="file"
+                accept={kind === "csv" ? ".csv,text/csv" : ".pdf,.txt,text/plain"}
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
+              {kind === "pdf" && (
+                <span className="hint">Upload a text-based PDF or a .txt export of one.</span>
+              )}
+              {kind === "csv" && (
+                <span className="hint">CSV will be chunked row-by-row for retrieval.</span>
+              )}
+            </div>
+          ) : (
+            <>
+              <textarea
+                className="ta mono"
+                placeholder="Paste content here…"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                style={{ minHeight: 180 }}
+                required
+              />
+              <span className="hint">Will be chunked at ~480 chars with 60-char overlap.</span>
+            </>
+          )}
         </div>
         {error && (
           <div style={{ fontSize: 12.5, color: "var(--err)" }}>{error}</div>
