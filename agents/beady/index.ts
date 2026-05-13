@@ -14,6 +14,19 @@ assessment pipeline. Use search_opportunities to find new leads and discuss resu
 in the database. Be analytical and concise. Cite specific evaluation factors when making recommendations.`,
   tools: [
     {
+      name: "assess_opportunity",
+      description: "Run a full GovCon qualification assessment for an opportunity already in the database — produces a 5-dimensional score, go/no-go recommendation, and executive memo.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          opportunityId: { type: "string", description: "Supabase opportunity row ID (UUID)" },
+          sourceUrl: { type: "string", description: "SAM.gov or solicitation URL (optional)" },
+          notes: { type: "string", description: "Analyst context or notes" },
+        },
+        required: ["opportunityId"],
+      },
+    },
+    {
       name: "search_opportunities",
       description: "Search SAM.gov for active contract opportunities.",
       inputSchema: {
@@ -27,8 +40,21 @@ in the database. Be analytical and concise. Cite specific evaluation factors whe
         },
       },
     },
+    {
+      name: "seed_past_performance",
+      description: "Embed a past performance record into the GovCon RAG index so it is available for future assessments.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          pastPerformanceId: { type: "string", description: "Supabase past_performance row ID (UUID)" },
+        },
+        required: ["pastPerformanceId"],
+      },
+    },
   ],
   toolMap: {
-    search_opportunities: { orchestration: "beady/opportunity-search" },
+    assess_opportunity:    { orchestration: "beady/govcon-assessment" },
+    search_opportunities:  { orchestration: "beady/opportunity-search" },
+    seed_past_performance: { orchestration: "beady/past-performance-seed" },
   },
 };
