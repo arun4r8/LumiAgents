@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Search, Sparkles, Check, Loader2 } from "lucide-react";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL;
+const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 interface QueryResult {
   answer: string;

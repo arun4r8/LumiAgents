@@ -31,6 +31,8 @@ export async function step<T>(
       return rs.id;
     });
 
+    ctx.currentStepId = runStepId;
+
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const output = (await wf.do(`step-${idx}-run`, {
@@ -74,6 +76,7 @@ export async function step<T>(
     status: "running",
   });
 
+  ctx.currentStepId = runStep.id;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {

@@ -43,6 +43,8 @@ export interface RunContext {
   fetch: typeof fetch;
   /** Set when running inside a Cloudflare Workflow — enables durable step execution. */
   workflowStep?: WorkflowStep;
+  /** ID of the currently-executing run_step row — set by step() before invoking fn(). */
+  currentStepId?: string;
 }
 
 // ─── Orchestration definition ─────────────────────────────────────────────────

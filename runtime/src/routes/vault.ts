@@ -58,7 +58,7 @@ export async function handleVault(
       orchestration_version: 1,
       status: "running",
       input: body,
-      triggered_by: "webhook",
+      triggered_by: "user",
       started_at: new Date().toISOString(),
     });
 

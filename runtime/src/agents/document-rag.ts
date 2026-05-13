@@ -67,9 +67,16 @@ async function sbPost<T>(env: Env, path: string, body: unknown): Promise<T> {
 }
 
 async function sbRpc<T>(env: Env, fn: string, args: unknown): Promise<T> {
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+  // PostgREST doesn't accept schema-prefixed fn names in the URL path.
+  // For non-public schemas, pass the schema via Content-Profile header.
+  const dotIdx = fn.indexOf(".");
+  const schema = dotIdx !== -1 ? fn.slice(0, dotIdx) : null;
+  const fnName = dotIdx !== -1 ? fn.slice(dotIdx + 1) : fn;
+  const extraHeaders = schema ? { "Content-Profile": schema } : {};
+
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
     method: "POST",
-    headers: sbHeaders(env),
+    headers: { ...sbHeaders(env), ...extraHeaders },
     body: JSON.stringify(args),
   });
   if (!res.ok) throw new Error(`Supabase RPC ${fn} → ${res.status}: ${await res.text()}`);

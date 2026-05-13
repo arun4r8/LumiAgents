@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
 JIRA_BASE_URL = "https://lumiture.atlassian.net"
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_SERVICE_ROLE_KEY

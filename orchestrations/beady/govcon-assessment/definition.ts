@@ -19,7 +19,7 @@ export default defineOrchestration({
   name: "beady/govcon-assessment",
   version: 1,
   description:
-    "Run a full GovCon qualification assessment via n8n — 5-dimensional scoring with RAG against past performance and capability statements",
+    "Run a full GovCon qualification assessment — 5-dimensional scoring with RAG against past performance and capability statements",
   inputSchema,
   outputSchema,
   access: {

@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
-import { json, schemaToJsonSchema } from "./helpers";
+import { json, schemaToJsonSchema, requireOpsToken } from "./helpers";
 
 export async function handleOrchestrations(
   request: Request,
@@ -14,6 +14,9 @@ export async function handleOrchestrations(
   // POST /api/orchestrations/:name/run
   const runMatch = pathname.match(/^\/api\/orchestrations\/([^/]+)\/run$/);
   if (runMatch && request.method === "POST") {
+    const authResult = requireOpsToken(request);
+    if (authResult instanceof Response) return authResult;
+
     const name = decodeURIComponent(runMatch[1] ?? "");
     const orch = orchestrations.get(name);
     if (!orch) return json({ error: `Orchestration "${name}" not found` }, 404);

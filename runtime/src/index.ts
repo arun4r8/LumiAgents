@@ -28,7 +28,7 @@ export function defineTool<
     const db = new SupabaseClient(ctx.env);
 
     const toolCallRow = await db.createToolCall({
-      run_step_id: ctx.runId,
+      ...(ctx.currentStepId ? { run_step_id: ctx.currentStepId } : {}),
       tool_name: def.name,
       request: input,
     });

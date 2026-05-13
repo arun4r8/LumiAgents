@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Clock, ArrowRight, Play, X, Loader2, Check, AlertTriangle, ChevronDown } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -137,9 +138,14 @@ function OrchCard({
     }
 
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${RUNTIME}/api/orchestrations/${encodeURIComponent(orch.name)}/run`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify(Object.keys(payload).length > 0 ? payload : {}),
       });
 

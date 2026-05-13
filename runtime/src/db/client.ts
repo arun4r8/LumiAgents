@@ -96,7 +96,7 @@ export class SupabaseClient {
   // ─── Tool calls ───────────────────────────────────────────────────────────
 
   async createToolCall(data: {
-    run_step_id: string;
+    run_step_id?: string;
     tool_name: string;
     idempotency_key?: string;
     request?: unknown;
