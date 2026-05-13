@@ -7,12 +7,12 @@ import type { OrchestrationDefinition } from "./types";
 import angieCandidateSourcing from "../../orchestrations/angie/candidate-sourcing/definition";
 import beadyOpportunitySearch from "../../orchestrations/beady/opportunity-search/definition";
 import patchVaultSync         from "../../orchestrations/patch/vault-sync/definition";
-import moneyDataAnalyst       from "../../orchestrations/money/data-analyst";
+import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
 import patchTicketOps         from "../../orchestrations/patch/ticket-ops/definition";
 import patchStaffRequest      from "../../orchestrations/patch/staff-request/definition";
-import * as patchDocumentRag  from "../../orchestrations/patch/document-rag";
+import * as patchDocumentRag  from "../../orchestrations/patch/document-rag/definition";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 

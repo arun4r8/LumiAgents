@@ -28,7 +28,7 @@ export function defineTool<
     const db = new SupabaseClient(ctx.env);
 
     const toolCallRow = await db.createToolCall({
-      run_step_id: ctx.runId, // caller sets the step id via ctx; simplified here
+      run_step_id: ctx.runId,
       tool_name: def.name,
       request: input,
     });
@@ -37,7 +37,7 @@ export function defineTool<
     try {
       const parsed = def.inputSchema.parse(input);
       const output = await def.run(ctx, parsed);
-      def.outputSchema.parse(output); // validate output
+      def.outputSchema.parse(output);
 
       await db.updateToolCall(toolCallRow.id, {
         response: output,
@@ -53,101 +53,5 @@ export function defineTool<
       });
       throw err;
     }
-  };
-}
-
-// ─── HTTP trigger handler ─────────────────────────────────────────────────────
-
-type OrchestrationsMap = Map<string, OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>>;
-
-export function createHandler(orchestrations: OrchestrationsMap) {
-  return {
-    async fetch(request: Request, env: Env): Promise<Response> {
-      const url = new URL(request.url);
-
-      // POST /api/orchestrations/:name/run
-      const match = url.pathname.match(/^\/api\/orchestrations\/([^/]+)\/run$/);
-      if (!match || request.method !== "POST") {
-        return new Response("Not found", { status: 404 });
-      }
-
-      const name = decodeURIComponent(match[1] ?? "");
-      const orch = orchestrations.get(name);
-      if (!orch) {
-        return new Response(JSON.stringify({ error: `Orchestration "${name}" not found` }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      let body: unknown;
-      try {
-        body = await request.json();
-      } catch {
-        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const parsed = orch.inputSchema.safeParse(body);
-      if (!parsed.success) {
-        return new Response(JSON.stringify({ error: "Invalid input", issues: parsed.error.issues }), {
-          status: 422,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      const db = new SupabaseClient(env);
-      const orchRecord = await db.getOrchestrationByName(name, orch.version);
-
-      const run = await db.createRun({
-        orchestration_id: orchRecord.id,
-        orchestration_version: orch.version,
-        status: "running",
-        input: parsed.data,
-        triggered_by: "webhook",
-        started_at: new Date().toISOString(),
-      });
-
-      let stepCounter = 0;
-
-      const ctx: RunContext = {
-        runId: run.id,
-        stepIndex: () => stepCounter++,
-        env,
-        idempotencyKey: (tool, ...parts) => `${run.id}:${tool}:${parts.join(":")}`,
-        fetch: (...args) => fetch(...args),
-      };
-
-      try {
-        const output = await orch.run(ctx, parsed.data);
-        await db.updateRun(run.id, {
-          status: "completed",
-          output,
-          ended_at: new Date().toISOString(),
-        });
-        return new Response(JSON.stringify({ runId: run.id, output }), {
-          headers: { "Content-Type": "application/json" },
-        });
-      } catch (err) {
-        if (err instanceof PauseSignal) {
-          await db.updateRun(run.id, { status: "paused" });
-          return new Response(
-            JSON.stringify({ runId: run.id, status: "paused", approvalId: err.approvalId }),
-            { status: 202, headers: { "Content-Type": "application/json" } },
-          );
-        }
-        await db.updateRun(run.id, {
-          status: "failed",
-          error: { message: err instanceof Error ? err.message : String(err) },
-          ended_at: new Date().toISOString(),
-        });
-        return new Response(
-          JSON.stringify({ runId: run.id, error: err instanceof Error ? err.message : String(err) }),
-          { status: 500, headers: { "Content-Type": "application/json" } },
-        );
-      }
-    },
   };
 }
