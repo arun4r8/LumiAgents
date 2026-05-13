@@ -141,10 +141,11 @@ async function getSessionUploads(env: Env, sessionKey: string): Promise<Array<{
 // ─── Supabase RPC helper ──────────────────────────────────────────────────────
 
 async function runAnalystQuery(env: Env, sql: string): Promise<unknown[]> {
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/orchestration.analyst_query`, {
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/analyst_query`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Content-Profile": "orchestration",
       apikey: env.SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     },

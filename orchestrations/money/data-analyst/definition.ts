@@ -17,7 +17,7 @@ export const outputSchema = z.object({
 });
 
 export default defineOrchestration({
-  name: "data-analyst",
+  name: "money/data-analyst",
   version: 1,
   description: "Answer business questions by generating and running SQL against Lumiture's data, then interpreting the results",
   inputSchema,

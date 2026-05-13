@@ -27,7 +27,7 @@ export async function handleDocuments(
     }
 
     const db = new SupabaseClient(env);
-    const orchRecord = await db.getOrchestrationByName("document-ingest").catch(() => null);
+    const orchRecord = await db.getOrchestrationByName("patch/document-ingest").catch(() => null);
 
     const run = orchRecord
       ? await db.createRun({

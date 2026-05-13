@@ -19,7 +19,7 @@ export const ingestOutputSchema = z.object({
 });
 
 export const documentIngest = defineOrchestration({
-  name: "document-ingest",
+  name: "patch/document-ingest",
   version: 1,
   description: "Ingest a document into the RAG knowledge base — chunks, embeds, and stores it",
   inputSchema: ingestInputSchema,
@@ -61,7 +61,7 @@ export const queryOutputSchema = z.object({
 });
 
 export const documentQuery = defineOrchestration({
-  name: "document-query",
+  name: "patch/document-query",
   version: 1,
   description: "Answer a question using the company document knowledge base (RAG)",
   inputSchema: queryInputSchema,
