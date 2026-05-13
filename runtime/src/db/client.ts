@@ -1,4 +1,4 @@
-import type { Env, Run, RunStep } from "../types";
+import type { Env, Run, RunStep, Schedule } from "../types";
 
 // Minimal typed Supabase REST client — no Node deps, pure fetch.
 
@@ -214,5 +214,67 @@ export class SupabaseClient {
     const row = rows[0];
     if (!row) throw new Error(`Orchestration "${name}" not found`);
     return row;
+  }
+
+  // ─── Schedules ────────────────────────────────────────────────────────────
+
+  async getActiveSchedules(): Promise<Schedule[]> {
+    return this.request<Schedule[]>(
+      "/rest/v1/orchestration.schedules?is_active=eq.true&select=id,orchestration_name,label,cron_expression,default_input,last_run_at",
+      "GET",
+    );
+  }
+
+  async touchSchedule(id: string, ranAt: string): Promise<void> {
+    await this.request(
+      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      "PATCH",
+      { last_run_at: ranAt, updated_at: ranAt },
+    );
+  }
+
+  async listSchedules(): Promise<Schedule[]> {
+    return this.request<Schedule[]>(
+      "/rest/v1/orchestration.schedules?select=*&order=created_at.asc",
+      "GET",
+    );
+  }
+
+  async createSchedule(data: {
+    orchestration_name: string;
+    cron_expression: string;
+    label?: string | null;
+    default_input?: Record<string, unknown>;
+  }): Promise<Schedule> {
+    const rows = await this.request<Schedule[]>(
+      "/rest/v1/orchestration.schedules",
+      "POST",
+      {
+        orchestration_name: data.orchestration_name,
+        cron_expression: data.cron_expression,
+        label: data.label ?? null,
+        default_input: data.default_input ?? {},
+        is_active: true,
+      },
+    );
+    const row = rows[0];
+    if (!row) throw new Error("createSchedule returned no row");
+    return row;
+  }
+
+  async updateSchedule(id: string, data: Partial<Pick<Schedule, "label" | "cron_expression" | "is_active" | "default_input">>): Promise<void> {
+    await this.request(
+      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      "PATCH",
+      { ...data, updated_at: new Date().toISOString() },
+    );
+  }
+
+  async deactivateSchedule(id: string): Promise<void> {
+    await this.request(
+      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      "PATCH",
+      { is_active: false, updated_at: new Date().toISOString() },
+    );
   }
 }

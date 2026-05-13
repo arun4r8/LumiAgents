@@ -29,7 +29,7 @@ class_name = "RunOrchestration"
 script_name = "lumiagents-runtime"
 
 [triggers]
-crons = ["0 8 * * 1"]   # beady/opportunity-search: every Monday 08:00 UTC
+crons = ["*/5 * * * *"]  # meta-cron: checks orchestration.schedules every 5 min
 
 [ai]
 binding = "AI"

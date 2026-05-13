@@ -1,31 +1,50 @@
 import type { Env } from "./types";
 import { orchestrations } from "./registry";
 import { SupabaseClient } from "./db/client";
+import { scheduleDue } from "./utils/cron-match";
 import { handleOrchestrations } from "./routes/orchestrations";
 import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
 import { handleAgents } from "./routes/agents";
 import { handleVault } from "./routes/vault";
+import { handleSchedules } from "./routes/schedules";
 
 // Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
 export { RunOrchestration } from "./workflow";
 
-async function dispatchCron(cronExpr: string, env: Env): Promise<void> {
-  const matching = Array.from(orchestrations.values()).filter((o) => o.cron === cronExpr);
+async function dispatchCron(_cronExpr: string, env: Env): Promise<void> {
+  const db = new SupabaseClient(env);
+  const now = new Date();
 
-  for (const orch of matching) {
-    const inputResult = orch.inputSchema.safeParse({});
-    if (!inputResult.success) {
-      console.error(`[cron] ${orch.name}: default input failed validation`, inputResult.error);
+  let schedules: Awaited<ReturnType<typeof db.getActiveSchedules>>;
+  try {
+    schedules = await db.getActiveSchedules();
+  } catch (err) {
+    console.error("[cron] failed to load schedules from DB:", err);
+    return;
+  }
+
+  for (const schedule of schedules) {
+    const lastRunAt = schedule.last_run_at ? new Date(schedule.last_run_at) : null;
+    if (!scheduleDue(schedule.cron_expression, now, lastRunAt)) continue;
+
+    const orch = orchestrations.get(schedule.orchestration_name);
+    if (!orch) {
+      console.error(`[cron] schedule ${schedule.id}: orchestration "${schedule.orchestration_name}" not in registry`);
       continue;
     }
 
-    const db = new SupabaseClient(env);
+    const inputResult = orch.inputSchema.safeParse(schedule.default_input ?? {});
+    if (!inputResult.success) {
+      console.error(`[cron] ${orch.name}: default_input failed schema validation`, inputResult.error);
+      continue;
+    }
+
     let orchRecord: Awaited<ReturnType<typeof db.getOrchestrationByName>>;
     try {
       orchRecord = await db.getOrchestrationByName(orch.name, orch.version);
     } catch (err) {
-      console.error(`[cron] ${orch.name}: orchestration record not found in DB`, err);
+      console.error(`[cron] ${orch.name}: not found in orchestrations table`, err);
       continue;
     }
 
@@ -35,7 +54,7 @@ async function dispatchCron(cronExpr: string, env: Env): Promise<void> {
       status: "running",
       input: inputResult.data,
       triggered_by: "cron",
-      started_at: new Date().toISOString(),
+      started_at: now.toISOString(),
     });
 
     try {
@@ -43,12 +62,13 @@ async function dispatchCron(cronExpr: string, env: Env): Promise<void> {
         id: run.id,
         params: { runId: run.id, orchestrationName: orch.name },
       });
-      console.log(`[cron] ${orch.name} dispatched to Workflow (run ${run.id})`);
+      await db.touchSchedule(schedule.id, now.toISOString());
+      console.log(`[cron] ${orch.name} dispatched (run ${run.id})`);
     } catch (err) {
       await db.updateRun(run.id, {
         status: "failed",
         error: { message: err instanceof Error ? err.message : String(err) },
-        ended_at: new Date().toISOString(),
+        ended_at: now.toISOString(),
       });
       console.error(`[cron] ${orch.name} failed to dispatch (run ${run.id}):`, err);
     }
@@ -76,6 +96,7 @@ export default {
         handleApprovals,
         handleAgents,
         handleVault,
+        handleSchedules,
       ];
 
       for (const handler of handlers) {

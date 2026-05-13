@@ -100,6 +100,18 @@ export interface Run {
   created_at: string;
 }
 
+export interface Schedule {
+  id: string;
+  orchestration_name: string;
+  label: string | null;
+  cron_expression: string;
+  is_active: boolean;
+  default_input: Record<string, unknown>;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RunStep {
   id: string;
   run_id: string;
