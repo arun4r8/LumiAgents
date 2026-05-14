@@ -18,6 +18,7 @@ out/
 ## Cloudflare
 .wrangler/
 dashboard/.open-next/
+.dev.vars
 
 ## Supabase
 supabase/.temp/
