@@ -45,6 +45,43 @@ interface RunResult {
   error?: string;
 }
 
+// ─── Agent metadata ───────────────────────────────────────────────────────────
+
+const AGENTS = [
+  {
+    id: "angie",
+    label: "Angie",
+    role: "HR & Recruiting",
+    description: "Sources candidates via Apollo, scores them against job requirements, manages resume formatting, and drafts outreach — with a human approval gate before any message is sent.",
+    color: "oklch(62% 0.18 280)",
+    bg: "oklch(97% 0.03 280)",
+  },
+  {
+    id: "beady",
+    label: "Beady",
+    role: "GovCon Business Development",
+    description: "Monitors SAM.gov for federal opportunities, runs a 5-dimension go/no-go assessment against Lumiture's capabilities, and seeds past performance records into the RAG knowledge base.",
+    color: "oklch(58% 0.17 145)",
+    bg: "oklch(97% 0.03 145)",
+  },
+  {
+    id: "money",
+    label: "Money",
+    role: "Finance & Analytics",
+    description: "Answers natural language questions against financial data by generating and executing SQL, and produces multi-section executive reports.",
+    color: "oklch(62% 0.16 85)",
+    bg: "oklch(97% 0.03 85)",
+  },
+  {
+    id: "patch",
+    label: "Patch",
+    role: "IT Operations & Knowledge",
+    description: "Handles inbound triage, Jira ticket management, staff requests, vault sync from Obsidian, and document ingestion/retrieval from the RAG knowledge base.",
+    color: "oklch(60% 0.16 30)",
+    bg: "oklch(97% 0.03 30)",
+  },
+] as const;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function OrchestrationsClient({
@@ -55,33 +92,36 @@ export function OrchestrationsClient({
   toggleOrchestration: (formData: FormData) => Promise<void>;
 }) {
   const [catalogue, setCatalogue] = useState<Map<string, CatalogueEntry>>(new Map());
-  const [openForm, setOpenForm] = useState<string | null>(null); // orchestration name
+  const [openForm, setOpenForm] = useState<string | null>(null);
   const [orchestrations, setOptimisticOrchestrations] = useOptimistic(
     initialOrchestrations,
     (state, { id, is_active }: { id: string; is_active: boolean }) =>
       state.map((o) => (o.id === id ? { ...o, is_active } : o)),
   );
 
-  // Fetch live input schemas from the runtime catalogue
   useEffect(() => {
     fetch(`${RUNTIME}/api/orchestrations`)
       .then((r) => r.json())
-      .then((data: CatalogueEntry[]) => {
-        setCatalogue(new Map(data.map((e) => [e.name, e])));
-      })
-      .catch(() => {}); // silently degrade — forms just show no fields
+      .then((data: CatalogueEntry[]) => setCatalogue(new Map(data.map((e) => [e.name, e]))))
+      .catch(() => {});
   }, []);
 
   const active = orchestrations.filter((o) => o.is_active);
+
+  // Group orchestrations by agent prefix
+  const byAgent = new Map<string, Orchestration[]>();
+  for (const o of orchestrations) {
+    const prefix = o.name.split("/")[0] ?? "other";
+    if (!byAgent.has(prefix)) byAgent.set(prefix, []);
+    byAgent.get(prefix)!.push(o);
+  }
 
   return (
     <div className="page view-fade">
       <div className="page-h">
         <div>
           <h1>Orchestrations</h1>
-          <div className="sub">
-            {orchestrations.length} catalogued · {active.length} active
-          </div>
+          <div className="sub">{orchestrations.length} capabilities · {active.length} active</div>
         </div>
       </div>
 
@@ -91,20 +131,93 @@ export function OrchestrationsClient({
           <p>Deploy the runtime and seed the orchestrations table.</p>
         </div>
       ) : (
-        <div className="orch-grid">
-          {orchestrations.map((o) => (
-            <OrchCard
-              key={o.id}
-              orch={o}
-              schema={catalogue.get(o.name)?.inputSchema ?? null}
-              formOpen={openForm === o.name}
-              onToggleForm={() => setOpenForm(openForm === o.name ? null : o.name)}
-              toggleOrchestration={toggleOrchestration}
-              onOptimisticToggle={(is_active) => setOptimisticOrchestrations({ id: o.id, is_active })}
-            />
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+          {AGENTS.map((agent) => {
+            const agentOrch = byAgent.get(agent.id) ?? [];
+            if (agentOrch.length === 0) return null;
+            const activeCount = agentOrch.filter((o) => o.is_active).length;
+            return (
+              <AgentSection
+                key={agent.id}
+                agent={agent}
+                orchestrations={agentOrch}
+                activeCount={activeCount}
+                catalogue={catalogue}
+                openForm={openForm}
+                setOpenForm={setOpenForm}
+                toggleOrchestration={toggleOrchestration}
+                onOptimisticToggle={(id, is_active) => setOptimisticOrchestrations({ id, is_active })}
+              />
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Agent section ────────────────────────────────────────────────────────────
+
+function AgentSection({
+  agent, orchestrations, activeCount, catalogue, openForm, setOpenForm,
+  toggleOrchestration, onOptimisticToggle,
+}: {
+  agent: typeof AGENTS[number];
+  orchestrations: Orchestration[];
+  activeCount: number;
+  catalogue: Map<string, CatalogueEntry>;
+  openForm: string | null;
+  setOpenForm: (name: string | null) => void;
+  toggleOrchestration: (formData: FormData) => Promise<void>;
+  onOptimisticToggle: (id: string, is_active: boolean) => void;
+}) {
+  return (
+    <div>
+      {/* Agent header */}
+      <div style={{
+        display: "flex", alignItems: "flex-start", gap: 14,
+        padding: "14px 18px", borderRadius: 10,
+        background: agent.bg,
+        border: `1px solid color-mix(in oklch, ${agent.color} 20%, transparent)`,
+        marginBottom: 14,
+      }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+          background: agent.color, display: "flex", alignItems: "center",
+          justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16,
+        }}>
+          {agent.label[0]}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: agent.color }}>{agent.label}</span>
+            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>·</span>
+            <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{agent.role}</span>
+            <span className="chip muted" style={{ fontSize: 10.5, marginLeft: "auto" }}>
+              {activeCount}/{orchestrations.length} active
+            </span>
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+            {agent.description}
+          </div>
+        </div>
+      </div>
+
+      {/* Capability cards */}
+      <div className="orch-grid">
+        {orchestrations.map((o) => (
+          <OrchCard
+            key={o.id}
+            orch={o}
+            agentColor={agent.color}
+            schema={catalogue.get(o.name)?.inputSchema ?? null}
+            formOpen={openForm === o.name}
+            onToggleForm={() => setOpenForm(openForm === o.name ? null : o.name)}
+            toggleOrchestration={toggleOrchestration}
+            onOptimisticToggle={(is_active) => onOptimisticToggle(o.id, is_active)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -112,9 +225,10 @@ export function OrchestrationsClient({
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 function OrchCard({
-  orch, schema, formOpen, onToggleForm, toggleOrchestration, onOptimisticToggle,
+  orch, agentColor, schema, formOpen, onToggleForm, toggleOrchestration, onOptimisticToggle,
 }: {
   orch: Orchestration;
+  agentColor: string;
   schema: JsonSchema | null;
   formOpen: boolean;
   onToggleForm: () => void;
@@ -128,12 +242,14 @@ function OrchCard({
 
   const hasFields = schema?.properties && Object.keys(schema.properties).length > 0;
 
+  // Show just the capability slug, not the full "agent/slug"
+  const capabilityName = orch.name.split("/").slice(1).join("/").replace(/-/g, " ");
+
   async function triggerRun(e: React.FormEvent) {
     e.preventDefault();
     setPhase("running");
     setResult(null);
 
-    // Build the payload — skip empty optional fields
     const required = new Set(schema?.required ?? []);
     const payload: Record<string, unknown> = {};
 
@@ -144,7 +260,6 @@ function OrchCard({
       }
     }
 
-    // Check required fields
     for (const req of required) {
       if (!payload[req]) {
         setPhase("error");
@@ -190,10 +305,15 @@ function OrchCard({
   }
 
   return (
-    <div className={`orch-card${formOpen ? " expanded" : ""}`}>
+    <div className={`orch-card${formOpen ? " expanded" : ""}${!orch.is_active ? " inactive" : ""}`}>
       {/* ── Header ── */}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div className="nm">{orch.name}</div>
+        <div>
+          <div className="nm" style={{ textTransform: "capitalize" }}>{capabilityName}</div>
+          <code style={{ fontSize: 10.5, color: "var(--ink-4)", fontFamily: "var(--font-mono, monospace)" }}>
+            {orch.name}
+          </code>
+        </div>
         <form
           action={(fd) => {
             startTransition(async () => {
@@ -201,19 +321,17 @@ function OrchCard({
               await toggleOrchestration(fd);
             });
           }}
-          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
         >
           <input type="hidden" name="id" value={orch.id} />
           <input type="hidden" name="is_active" value={String(orch.is_active)} />
-          <span className={`chip ${orch.is_active ? "ok" : "muted"}`} style={{ fontSize: 11 }}>
-            {orch.is_active ? "active" : "inactive"}
-          </span>
           <button
             type="submit"
             title={orch.is_active ? "Deactivate" : "Activate"}
             style={{
-              width: 34, height: 20, borderRadius: 10, border: "none", cursor: "pointer", padding: 0,
-              background: orch.is_active ? "var(--ok)" : "var(--ink-4, #ccc)",
+              width: 34, height: 20, borderRadius: 10, border: "none",
+              cursor: "pointer", padding: 0, flexShrink: 0,
+              background: orch.is_active ? agentColor : "var(--ink-4, #ccc)",
               position: "relative", transition: "background 0.2s",
             }}
           >
@@ -231,9 +349,12 @@ function OrchCard({
       <div className="meta">
         <span className="chip muted mono" style={{ fontSize: 10.5 }}>v{orch.version}</span>
         {orch.cron && (
-          <span className="chip accent">
+          <span className="chip" style={{ fontSize: 10.5, background: `color-mix(in oklch, ${agentColor} 12%, transparent)`, color: agentColor }}>
             <Clock style={{ width: 10, height: 10 }} /> {orch.cron}
           </span>
+        )}
+        {!orch.is_active && (
+          <span className="chip muted" style={{ fontSize: 10.5 }}>inactive</span>
         )}
       </div>
 
@@ -355,6 +476,7 @@ function OrchCard({
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .orch-card.expanded { border-color: var(--accent); }
+        .orch-card.inactive { opacity: 0.6; }
         .run-form {
           margin-top: 14px;
           padding-top: 14px;
