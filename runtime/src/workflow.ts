@@ -56,6 +56,20 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
       throw new Error("Stored run input failed schema validation");
     }
 
+    // Resolve model: per-orchestration override → agent default → fallback
+    const DEFAULT_MODEL = "claude-sonnet-4-6";
+    const agentId = orchestrationName.split("/")[0] ?? "";
+    let resolvedModel = DEFAULT_MODEL;
+    try {
+      const [agentCfg, orchRow] = await Promise.all([
+        db.getAgentConfig(agentId).catch(() => null),
+        db.getOrchestrationByName(orchestrationName).catch(() => null),
+      ]);
+      resolvedModel = orchRow?.model ?? agentCfg?.model ?? DEFAULT_MODEL;
+    } catch {
+      // non-fatal — default is safe
+    }
+
     let stepCounter = 0;
 
     const ctx: RunContext = {
@@ -65,6 +79,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
       idempotencyKey: (tool, ...parts) => `${runId}:${tool}:${parts.join(":")}`,
       fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
       workflowStep: step,
+      model: resolvedModel,
     };
 
     try {

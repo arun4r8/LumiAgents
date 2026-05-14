@@ -46,6 +46,9 @@ export interface RunContext {
   workflowStep?: WorkflowStep;
   /** ID of the currently-executing run_step row — set by step() before invoking fn(). */
   currentStepId?: string;
+  /** LLM model resolved at run start from orchestration.agent_configs (with per-orchestration
+   *  override). Falls back to claude-sonnet-4-6. llm_decide / llm_extract read this automatically. */
+  model: string;
 }
 
 // ─── Orchestration definition ─────────────────────────────────────────────────

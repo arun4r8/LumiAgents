@@ -208,14 +208,32 @@ export class SupabaseClient {
     name: string;
     version: number;
     is_active: boolean;
+    model: string | null;
   }> {
     const versionFilter = version ? `&version=eq.${version}` : "&order=version.desc&limit=1";
-    const rows = await this.request<{ id: string; name: string; version: number; is_active: boolean }[]>(
-      `/rest/v1/orchestrations?name=eq.${encodeURIComponent(name)}${versionFilter}`,
+    const rows = await this.request<{ id: string; name: string; version: number; is_active: boolean; model: string | null }[]>(
+      `/rest/v1/orchestrations?name=eq.${encodeURIComponent(name)}${versionFilter}&select=id,name,version,is_active,model`,
       "GET",
     );
     const row = rows[0];
     if (!row) throw new Error(`Orchestration "${name}" not found`);
+    return row;
+  }
+
+  // ─── Agent config ─────────────────────────────────────────────────────────
+
+  async getAgentConfig(agentId: string): Promise<{
+    agent_id: string;
+    model: string;
+    max_tokens: number;
+    notes: string | null;
+  }> {
+    const rows = await this.request<{ agent_id: string; model: string; max_tokens: number; notes: string | null }[]>(
+      `/rest/v1/agent_configs?agent_id=eq.${encodeURIComponent(agentId)}&limit=1`,
+      "GET",
+    );
+    const row = rows[0];
+    if (!row) throw new Error(`Agent config for "${agentId}" not found`);
     return row;
   }
 

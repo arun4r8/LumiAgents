@@ -3,10 +3,14 @@ import { z } from "zod";
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
 
-const MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 function makeClient(ctx: RunContext): Anthropic {
   return new Anthropic({ apiKey: ctx.env.ANTHROPIC_API_KEY });
+}
+
+function resolveModel(ctx: RunContext): string {
+  return ctx.model ?? DEFAULT_MODEL;
 }
 
 // ─── llm_decide ──────────────────────────────────────────────────────────────
@@ -50,7 +54,7 @@ export async function llm_decide<const T extends string>(
       }, async () => {
         const client = makeClient(ctx);
         const response = await client.messages.create({
-          model: MODEL, max_tokens: 64,
+          model: resolveModel(ctx), max_tokens: 64,
           system: systemPrompt,
           messages: [{ role: "user", content: userPrompt }],
         });
@@ -63,7 +67,7 @@ export async function llm_decide<const T extends string>(
       await db.updateRunStep(runStep.id, {
         status: "completed",
         output: { chosen: result.chosen },
-        llm_model: MODEL,
+        llm_model: resolveModel(ctx),
         llm_prompt: userPrompt,
         llm_response: result.raw,
         llm_input_tokens: result.inputTokens,
@@ -84,7 +88,7 @@ export async function llm_decide<const T extends string>(
   try {
     const client = makeClient(ctx);
     const response = await client.messages.create({
-      model: MODEL,
+      model: resolveModel(ctx),
       max_tokens: 64,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
@@ -100,7 +104,7 @@ export async function llm_decide<const T extends string>(
     await db.updateRunStep(runStep.id, {
       status: "completed",
       output: { chosen },
-      llm_model: MODEL,
+      llm_model: resolveModel(ctx),
       llm_prompt: userPrompt,
       llm_response: raw,
       llm_input_tokens: response.usage.input_tokens,
@@ -159,7 +163,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
       }, async () => {
         const client = makeClient(ctx);
         const response = await client.messages.create({
-          model: MODEL,
+          model: resolveModel(ctx),
           max_tokens: 4096,
           tools: [
             {
@@ -189,7 +193,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
       await db.updateRunStep(runStep.id, {
         status: "completed",
         output: result.parsed,
-        llm_model: MODEL,
+        llm_model: resolveModel(ctx),
         llm_prompt: options.prompt,
         llm_response: result.raw,
         llm_input_tokens: result.inputTokens,
@@ -211,7 +215,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     const client = makeClient(ctx);
 
     const response = await client.messages.create({
-      model: MODEL,
+      model: resolveModel(ctx),
       max_tokens: 4096,
       tools: [
         {
@@ -234,7 +238,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     await db.updateRunStep(runStep.id, {
       status: "completed",
       output: parsed,
-      llm_model: MODEL,
+      llm_model: resolveModel(ctx),
       llm_prompt: options.prompt,
       llm_response: JSON.stringify(toolUse.input),
       llm_input_tokens: response.usage.input_tokens,
