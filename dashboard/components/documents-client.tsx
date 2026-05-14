@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Search, Sparkles, Check, Loader2, Trash2, FileText, FileSpreadsheet, File } from "lucide-react";
+import { useState, useTransition, useRef } from "react";
+import { Search, Sparkles, Check, Loader2, Trash2, FileText, FileSpreadsheet, File, Upload, ScanText } from "lucide-react";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -177,30 +177,186 @@ function DocsQuery() {
 // ─── Ingest tab ───────────────────────────────────────────────────────────────
 
 function DocsIngest() {
+  const [mode, setMode] = useState<"file" | "text">("file");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        {(["file", "text"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`btn${mode === m ? " accent" : " ghost"} sm`}
+          >
+            {m === "file"
+              ? <><ScanText style={{ width: 12, height: 12 }} /> File upload (OCR)</>
+              : <><FileText style={{ width: 12, height: 12 }} /> Paste text / CSV</>}
+          </button>
+        ))}
+      </div>
+
+      {mode === "file" ? <FileIngest /> : <TextIngest />}
+    </div>
+  );
+}
+
+function FileIngest() {
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<"text" | "pdf" | "csv">("text");
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "ocr" | "embedding" | "done">("idle");
+  const [result, setResult] = useState<IngestResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const loading = phase === "ocr" || phase === "embedding";
+
+  function pickFile(f: File) {
+    setFile(f);
+    setError(null);
+    if (!name.trim()) setName(f.name.replace(/\.[^.]+$/, ""));
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file || !name.trim() || loading) return;
+    setError(null); setResult(null);
+    setPhase("ocr");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sourceName", name);
+      // Switch label after a moment so user knows OCR finished and embedding is running
+      const ocrTimer = setTimeout(() => setPhase("embedding"), 8000);
+      const res = await fetch(`${RUNTIME}/api/documents/ingest-file`, { method: "POST", body: fd });
+      clearTimeout(ocrTimer);
+      const data = await res.json() as IngestResult & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setResult(data);
+      setFile(null); setName("");
+      if (inputRef.current) inputRef.current.value = "";
+      setPhase("done");
+      setTimeout(() => setPhase("idle"), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error");
+      setPhase("idle");
+    }
+  }
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 22 }}>
+      <form onSubmit={submit} className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault(); setDragging(false);
+            const f = e.dataTransfer.files[0];
+            if (f) pickFile(f);
+          }}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", gap: 8, padding: "28px 20px",
+            border: `2px dashed ${dragging ? "var(--accent)" : file ? "oklch(58% 0.17 145)" : "var(--line)"}`,
+            borderRadius: 10, cursor: "pointer", textAlign: "center",
+            background: dragging ? "var(--accent-soft)" : file ? "oklch(97% 0.02 145)" : "var(--bg-2)",
+            transition: "all 120ms",
+          }}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*"
+            style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); }}
+          />
+          {file ? (
+            <>
+              <ScanText style={{ width: 22, height: 22, color: "oklch(58% 0.17 145)" }} />
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{file.name}</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                {file.type || "unknown type"} · {(file.size / 1024).toFixed(0)} KB
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>Click to change</div>
+            </>
+          ) : (
+            <>
+              <Upload style={{ width: 22, height: 22, color: "var(--ink-4)" }} />
+              <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 500 }}>
+                Drop a file here or click to browse
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-4)" }}>PDF · PNG · JPG · WEBP</div>
+            </>
+          )}
+        </div>
+
+        <div className="field">
+          <label>Source name</label>
+          <input
+            className="input"
+            placeholder="e.g. NIST SP 800-53 Rev 5"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+
+        {error && <div style={{ fontSize: 12.5, color: "var(--err)" }}>{error}</div>}
+
+        <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+          {phase === "done" && result && (
+            <span className="chip ok">
+              <Check style={{ width: 10, height: 10 }} />
+              {result.chunkCount} chunks embedded
+            </span>
+          )}
+          <button
+            type="submit"
+            className="btn accent"
+            disabled={!file || !name.trim() || loading}
+          >
+            {phase === "ocr"
+              ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Extracting text…</>
+              : phase === "embedding"
+                ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Embedding…</>
+                : <><ScanText style={{ width: 13, height: 13 }} /> OCR + Ingest</>}
+          </button>
+        </div>
+      </form>
+
+      <div className="card" style={{ padding: 18 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>How it works</div>
+        <ol style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.8, paddingLeft: 18, margin: 0 }}>
+          <li>File is sent to Claude for text extraction (OCR).</li>
+          <li>Extracted text is chunked at ~1,200 chars with 200-char overlap.</li>
+          <li>Each chunk is embedded via Cloudflare Workers AI.</li>
+          <li>Chunks are stored in Supabase with pgvector for semantic search.</li>
+        </ol>
+        <div style={{ marginTop: 14, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6 }}>
+          Supported: scanned PDFs, native PDFs, PNG/JPG screenshots, WEBP. Use <strong>Paste text</strong> for plain text or CSV files.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TextIngest() {
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"text" | "csv">("text");
   const [content, setContent] = useState("");
-  const [fileName, setFileName] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "loading" | "done">("idle");
   const [result, setResult] = useState<IngestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const useFile = kind === "csv" || kind === "pdf";
-
-  function handleKindChange(next: "text" | "pdf" | "csv") {
-    setKind(next);
-    setContent("");
-    setFileName(null);
-  }
-
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ""));
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!name.trim()) setName(f.name.replace(/\.[^.]+$/, ""));
     const reader = new FileReader();
     reader.onload = (ev) => setContent(ev.target?.result as string ?? "");
-    reader.readAsText(file);
+    reader.readAsText(f);
   }
 
   async function submit(e: React.FormEvent) {
@@ -216,7 +372,7 @@ function DocsIngest() {
       const data = await res.json() as IngestResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setResult(data);
-      setName(""); setContent(""); setFileName(null);
+      setName(""); setContent("");
       setPhase("done");
       setTimeout(() => setPhase("idle"), 3000);
     } catch (err) {
@@ -233,42 +389,37 @@ function DocsIngest() {
           <input className="input" placeholder="e.g. NIST SP 800-53 Rev 5" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
         <div className="field">
-          <label>Source kind</label>
-          <select className="sel" value={kind} onChange={(e) => handleKindChange(e.target.value as "text" | "pdf" | "csv")}>
+          <label>Kind</label>
+          <select className="sel" value={kind} onChange={(e) => setKind(e.target.value as "text" | "csv")}>
             <option value="text">text</option>
-            <option value="pdf">pdf</option>
             <option value="csv">csv</option>
           </select>
         </div>
         <div className="field">
           <label>Content</label>
-          {useFile ? (
+          {kind === "csv" ? (
             <div>
-              <label
-                htmlFor="file-upload"
-                style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 8,
-                  cursor: "pointer", fontSize: 13.5,
-                  color: fileName ? "var(--ink)" : "var(--ink-3)",
-                  background: "var(--bg-2)", transition: "border-color 120ms",
-                }}
-              >
-                <Sparkles style={{ width: 14, height: 14, flexShrink: 0, color: "var(--accent)" }} />
-                {fileName ?? `Choose a .${kind} file to upload`}
+              <label htmlFor="csv-upload" style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 8,
+                cursor: "pointer", fontSize: 13.5, color: content ? "var(--ink)" : "var(--ink-3)",
+                background: "var(--bg-2)",
+              }}>
+                <FileSpreadsheet style={{ width: 14, height: 14, flexShrink: 0, color: "var(--accent)" }} />
+                {content ? "CSV loaded — paste or re-upload to replace" : "Choose a .csv file or paste below"}
               </label>
-              <input id="file-upload" type="file"
-                accept={kind === "csv" ? ".csv,text/csv" : ".pdf,.txt,text/plain"}
-                onChange={handleFileChange} style={{ display: "none" }} />
-              {kind === "pdf" && <span className="hint">Upload a text-based PDF or a .txt export of one.</span>}
-              {kind === "csv" && <span className="hint">CSV will be chunked row-by-row for retrieval.</span>}
+              <input id="csv-upload" type="file" accept=".csv,text/csv" onChange={handleFileChange} style={{ display: "none" }} />
+              <textarea className="ta mono" placeholder="Or paste CSV content here…"
+                value={content} onChange={(e) => setContent(e.target.value)}
+                style={{ minHeight: 120, marginTop: 8 }} />
+              <span className="hint">Chunked row-by-row, one chunk per row.</span>
             </div>
           ) : (
             <>
               <textarea className="ta mono" placeholder="Paste content here…"
                 value={content} onChange={(e) => setContent(e.target.value)}
-                style={{ minHeight: 180 }} required />
-              <span className="hint">Will be chunked at ~480 chars with 60-char overlap.</span>
+                style={{ minHeight: 200 }} required />
+              <span className="hint">Chunked at ~1,200 chars with 200-char overlap.</span>
             </>
           )}
         </div>
@@ -292,8 +443,8 @@ function DocsIngest() {
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Tips</div>
         <ul style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.7, paddingLeft: 16, margin: 0 }}>
           <li>Use clear, descriptive source names — they appear in query citations.</li>
-          <li>For PDFs, paste extracted text rather than uploading raw binary.</li>
           <li>CSVs are chunked row-by-row, one chunk per row.</li>
+          <li>For PDFs or images, use <strong>File upload (OCR)</strong> above.</li>
           <li>After ingesting, use <strong>Query</strong> to verify the content is retrievable.</li>
           <li>Manage the corpus in the <strong>Corpus</strong> tab.</li>
         </ul>

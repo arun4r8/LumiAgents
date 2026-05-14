@@ -65,10 +65,12 @@ export async function requireOpsToken(
       status: 401, headers: { "Content-Type": "application/json" },
     });
   }
-  // Check top-level role claim (present when JWT hook is enabled) OR app_metadata.role
-  // (present when hook is disabled). Mirrors public.is_ops() in the database.
+  // Migration 0005 changed the JWT hook to write into claims.user_role (not claims.role)
+  // to avoid PostgREST treating 'ops' as a Postgres role name. Check user_role first,
+  // then fall back to app_metadata.role for tokens issued before that migration.
   const appMeta = claims["app_metadata"] as Record<string, unknown> | undefined;
-  const role = claims["role"] ?? appMeta?.["role"];
+  const role = (claims["user_role"] as string | undefined)
+    ?? (appMeta?.["role"] as string | undefined);
   if (role !== "ops") {
     return new Response(JSON.stringify({ error: "Forbidden — ops role required" }), {
       status: 403, headers: { "Content-Type": "application/json" },
