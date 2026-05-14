@@ -17,6 +17,9 @@ export class SupabaseClient {
       "apikey": this.key,
       "Authorization": `Bearer ${this.key}`,
       "Prefer": "return=representation",
+      // All runtime DB calls target the orchestration schema.
+      // PostgREST requires Content-Profile instead of schema.table dot-notation in the URL.
+      "Content-Profile": "orchestration",
     };
   }
 
@@ -45,7 +48,7 @@ export class SupabaseClient {
 
   async createRun(data: Omit<Run, "id" | "created_at">): Promise<Run> {
     const rows = await this.request<Run[]>(
-      "/rest/v1/orchestration.runs",
+      "/rest/v1/runs",
       "POST",
       data,
     );
@@ -56,7 +59,7 @@ export class SupabaseClient {
 
   async updateRun(id: string, data: Partial<Run>): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.runs?id=eq.${id}`,
+      `/rest/v1/runs?id=eq.${id}`,
       "PATCH",
       data,
     );
@@ -64,7 +67,7 @@ export class SupabaseClient {
 
   async getRun(id: string): Promise<Run> {
     const rows = await this.request<Run[]>(
-      `/rest/v1/orchestration.runs?id=eq.${id}&limit=1`,
+      `/rest/v1/runs?id=eq.${id}&limit=1`,
       "GET",
     );
     const row = rows[0];
@@ -76,7 +79,7 @@ export class SupabaseClient {
 
   async createRunStep(data: Omit<RunStep, "id" | "started_at">): Promise<RunStep> {
     const rows = await this.request<RunStep[]>(
-      "/rest/v1/orchestration.run_steps",
+      "/rest/v1/run_steps",
       "POST",
       data,
     );
@@ -87,7 +90,7 @@ export class SupabaseClient {
 
   async updateRunStep(id: string, data: Partial<RunStep>): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.run_steps?id=eq.${id}`,
+      `/rest/v1/run_steps?id=eq.${id}`,
       "PATCH",
       data,
     );
@@ -102,7 +105,7 @@ export class SupabaseClient {
     request?: unknown;
   }): Promise<{ id: string }> {
     const rows = await this.request<{ id: string }[]>(
-      "/rest/v1/orchestration.tool_calls",
+      "/rest/v1/tool_calls",
       "POST",
       { ...data, status: "pending" },
     );
@@ -121,7 +124,7 @@ export class SupabaseClient {
     },
   ): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.tool_calls?id=eq.${id}`,
+      `/rest/v1/tool_calls?id=eq.${id}`,
       "PATCH",
       { ...data, ended_at: new Date().toISOString() },
     );
@@ -132,7 +135,7 @@ export class SupabaseClient {
   /** Returns the cached output of a completed step, or null if not yet run. */
   async getCompletedStep(runId: string, stepIndex: number): Promise<{ id: string; output: unknown } | null> {
     const rows = await this.request<{ id: string; output: unknown }[]>(
-      `/rest/v1/orchestration.run_steps?run_id=eq.${runId}&step_index=eq.${stepIndex}&status=eq.completed&select=id,output&limit=1`,
+      `/rest/v1/run_steps?run_id=eq.${runId}&step_index=eq.${stepIndex}&status=eq.completed&select=id,output&limit=1`,
       "GET",
     );
     return rows[0] ?? null;
@@ -152,7 +155,7 @@ export class SupabaseClient {
       decision_notes: string | null;
       decided_by: string | null;
     }[]>(
-      `/rest/v1/orchestration.approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
+      `/rest/v1/approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
       "GET",
     );
     return rows[0] ?? null;
@@ -174,7 +177,7 @@ export class SupabaseClient {
       decision_notes: string | null;
       decided_by: string | null;
     }[]>(
-      `/rest/v1/orchestration.approvals?id=eq.${approvalId}&select=id,run_id,run_step_id,status,decision_notes,decided_by&limit=1`,
+      `/rest/v1/approvals?id=eq.${approvalId}&select=id,run_id,run_step_id,status,decision_notes,decided_by&limit=1`,
       "GET",
     );
     const row = rows[0];
@@ -187,7 +190,7 @@ export class SupabaseClient {
     decision: { approved: boolean; notes?: string; decidedBy?: string },
   ): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.approvals?id=eq.${approvalId}`,
+      `/rest/v1/approvals?id=eq.${approvalId}`,
       "PATCH",
       {
         status: decision.approved ? "approved" : "rejected",
@@ -208,7 +211,7 @@ export class SupabaseClient {
   }> {
     const versionFilter = version ? `&version=eq.${version}` : "&order=version.desc&limit=1";
     const rows = await this.request<{ id: string; name: string; version: number; is_active: boolean }[]>(
-      `/rest/v1/orchestration.orchestrations?name=eq.${encodeURIComponent(name)}${versionFilter}`,
+      `/rest/v1/orchestrations?name=eq.${encodeURIComponent(name)}${versionFilter}`,
       "GET",
     );
     const row = rows[0];
@@ -220,14 +223,14 @@ export class SupabaseClient {
 
   async getActiveSchedules(): Promise<Schedule[]> {
     return this.request<Schedule[]>(
-      "/rest/v1/orchestration.schedules?is_active=eq.true&select=id,orchestration_name,label,cron_expression,default_input,last_run_at",
+      "/rest/v1/schedules?is_active=eq.true&select=id,orchestration_name,label,cron_expression,default_input,last_run_at",
       "GET",
     );
   }
 
   async touchSchedule(id: string, ranAt: string): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      `/rest/v1/schedules?id=eq.${id}`,
       "PATCH",
       { last_run_at: ranAt, updated_at: ranAt },
     );
@@ -235,7 +238,7 @@ export class SupabaseClient {
 
   async listSchedules(): Promise<Schedule[]> {
     return this.request<Schedule[]>(
-      "/rest/v1/orchestration.schedules?select=*&order=created_at.asc",
+      "/rest/v1/schedules?select=*&order=created_at.asc",
       "GET",
     );
   }
@@ -247,7 +250,7 @@ export class SupabaseClient {
     default_input?: Record<string, unknown>;
   }): Promise<Schedule> {
     const rows = await this.request<Schedule[]>(
-      "/rest/v1/orchestration.schedules",
+      "/rest/v1/schedules",
       "POST",
       {
         orchestration_name: data.orchestration_name,
@@ -264,7 +267,7 @@ export class SupabaseClient {
 
   async updateSchedule(id: string, data: Partial<Pick<Schedule, "label" | "cron_expression" | "is_active" | "default_input">>): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      `/rest/v1/schedules?id=eq.${id}`,
       "PATCH",
       { ...data, updated_at: new Date().toISOString() },
     );
@@ -272,7 +275,7 @@ export class SupabaseClient {
 
   async deactivateSchedule(id: string): Promise<void> {
     await this.request(
-      `/rest/v1/orchestration.schedules?id=eq.${id}`,
+      `/rest/v1/schedules?id=eq.${id}`,
       "PATCH",
       { is_active: false, updated_at: new Date().toISOString() },
     );

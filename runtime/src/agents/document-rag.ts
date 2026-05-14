@@ -53,6 +53,7 @@ function sbHeaders(env: Env) {
     apikey: env.SUPABASE_SERVICE_ROLE_KEY,
     Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
     Prefer: "return=representation",
+    "Content-Profile": "orchestration",
   };
 }
 
@@ -89,7 +90,7 @@ export async function ingestDocument(env: Env, req: IngestRequest): Promise<Inge
   // 1. Store the source document
   const [doc] = await sbPost<[{ id: string; char_count: number }]>(
     env,
-    "/rest/v1/orchestration.orch_documents",
+    "/rest/v1/orch_documents",
     {
       source_name: req.sourceName,
       source_kind: req.sourceKind,
@@ -126,7 +127,7 @@ export async function ingestDocument(env: Env, req: IngestRequest): Promise<Inge
 
   // Insert in batches of 100
   for (let i = 0; i < chunkRows.length; i += 100) {
-    await sbPost(env, "/rest/v1/orchestration.document_chunks", chunkRows.slice(i, i + 100));
+    await sbPost(env, "/rest/v1/document_chunks", chunkRows.slice(i, i + 100));
   }
 
   return {
