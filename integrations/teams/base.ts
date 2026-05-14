@@ -68,22 +68,87 @@ export async function getBotToken(env: TeamsEnv): Promise<string> {
   return data.access_token;
 }
 
+// Module-level JWKS cache: { keys, fetchedAt }. Workers isolates are short-lived
+// so this mainly avoids redundant fetches within a single invocation burst.
+let jwksCache: { keys: JsonWebKey[]; fetchedAt: number } | null = null;
+const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const BOT_FRAMEWORK_OIDC =
+  "https://login.botframework.com/v1/.well-known/openidconfiguration";
+const KNOWN_ISSUERS = new Set([
+  "https://api.botframework.com",
+  "https://sts.windows.net/d6d49420-f39b-4df7-a1dc-d59a935871db/",
+]);
+
+async function fetchJwks(): Promise<JsonWebKey[]> {
+  if (jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS) {
+    return jwksCache.keys;
+  }
+  const oidcResp = await fetch(BOT_FRAMEWORK_OIDC);
+  if (!oidcResp.ok) throw new Error(`OIDC config fetch failed: ${oidcResp.status}`);
+  const oidc = (await oidcResp.json()) as { jwks_uri: string };
+  const jwksResp = await fetch(oidc.jwks_uri);
+  if (!jwksResp.ok) throw new Error(`JWKS fetch failed: ${jwksResp.status}`);
+  const jwks = (await jwksResp.json()) as { keys: (JsonWebKey & { kid?: string })[] };
+  jwksCache = { keys: jwks.keys, fetchedAt: Date.now() };
+  return jwks.keys;
+}
+
+function base64UrlToBytes(b64: string): Uint8Array {
+  const padded = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, "=");
+  const binary = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
 /**
- * Lightweight JWT verification for incoming Bot Framework activities.
- * Checks the token against Microsoft's JWKS endpoint.
- * Returns true if valid, false otherwise.
- *
- * TODO (production hardening): also verify `aud` claim matches TEAMS_BOT_APP_ID
- * and that `iss` is a known Microsoft issuer.
+ * Verify an incoming Bot Framework activity token against Microsoft's JWKS.
+ * Validates: RS256 signature, expiry, aud (must match appId), and iss (known Microsoft issuer).
  */
 export async function verifyBotToken(
   authHeader: string | null,
-  _appId: string,
+  appId: string,
 ): Promise<boolean> {
   if (!authHeader?.startsWith("Bearer ")) return false;
+  const token = authHeader.slice(7);
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
 
-  // For now: presence check only. In production, verify the JWT signature
-  // against https://login.botframework.com/v1/.well-known/openidconfiguration
-  // TODO: implement full JWKS verification before going to production.
-  return true;
+  let header: { kid?: string; alg?: string };
+  let payload: { aud?: string; iss?: string; exp?: number; nbf?: number };
+  try {
+    header = JSON.parse(new TextDecoder().decode(base64UrlToBytes(parts[0]!)));
+    payload = JSON.parse(new TextDecoder().decode(base64UrlToBytes(parts[1]!)));
+  } catch {
+    return false;
+  }
+
+  if (!header.kid) return false;
+
+  const now = Math.floor(Date.now() / 1000);
+  if (typeof payload.exp === "number" && payload.exp < now) return false;
+  if (typeof payload.nbf === "number" && payload.nbf > now + 300) return false;
+  if (payload.aud !== appId) return false;
+  if (!payload.iss || !KNOWN_ISSUERS.has(payload.iss)) return false;
+
+  try {
+    const keys = await fetchJwks();
+    const jwk = (keys as (JsonWebKey & { kid?: string })[]).find((k) => k.kid === header.kid);
+    if (!jwk) return false;
+
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    return crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      base64UrlToBytes(parts[2]!),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+  } catch {
+    return false;
+  }
 }

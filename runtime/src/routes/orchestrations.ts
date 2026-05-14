@@ -14,7 +14,7 @@ export async function handleOrchestrations(
   // POST /api/orchestrations/:name/run
   const runMatch = pathname.match(/^\/api\/orchestrations\/([^/]+)\/run$/);
   if (runMatch && request.method === "POST") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const name = decodeURIComponent(runMatch[1] ?? "");

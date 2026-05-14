@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { OrchestrationsClient } from "@/components/orchestrations-client";
 
 export const dynamic = "force-dynamic";
@@ -21,5 +22,16 @@ export default async function OrchestrationsPage() {
     cron: string | null;
   }[];
 
-  return <OrchestrationsClient orchestrations={orcList} />;
+  async function toggleOrchestration(formData: FormData) {
+    "use server";
+    const sb = await createClient();
+    const id = formData.get("id") as string;
+    const currentlyActive = formData.get("is_active") === "true";
+    await sb.schema("orchestration").from("orchestrations")
+      .update({ is_active: !currentlyActive })
+      .eq("id", id);
+    revalidatePath("/orchestrations");
+  }
+
+  return <OrchestrationsClient orchestrations={orcList} toggleOrchestration={toggleOrchestration} />;
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useOptimistic, useTransition } from "react";
 import Link from "next/link";
-import { Clock, ArrowRight, Play, X, Loader2, Check, AlertTriangle, ChevronDown } from "lucide-react";
+import { Clock, ArrowRight, Play, X, Loader2, Check, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
@@ -47,9 +47,20 @@ interface RunResult {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function OrchestrationsClient({ orchestrations }: { orchestrations: Orchestration[] }) {
+export function OrchestrationsClient({
+  orchestrations: initialOrchestrations,
+  toggleOrchestration,
+}: {
+  orchestrations: Orchestration[];
+  toggleOrchestration: (formData: FormData) => Promise<void>;
+}) {
   const [catalogue, setCatalogue] = useState<Map<string, CatalogueEntry>>(new Map());
   const [openForm, setOpenForm] = useState<string | null>(null); // orchestration name
+  const [orchestrations, setOptimisticOrchestrations] = useOptimistic(
+    initialOrchestrations,
+    (state, { id, is_active }: { id: string; is_active: boolean }) =>
+      state.map((o) => (o.id === id ? { ...o, is_active } : o)),
+  );
 
   // Fetch live input schemas from the runtime catalogue
   useEffect(() => {
@@ -88,6 +99,8 @@ export function OrchestrationsClient({ orchestrations }: { orchestrations: Orche
               schema={catalogue.get(o.name)?.inputSchema ?? null}
               formOpen={openForm === o.name}
               onToggleForm={() => setOpenForm(openForm === o.name ? null : o.name)}
+              toggleOrchestration={toggleOrchestration}
+              onOptimisticToggle={(is_active) => setOptimisticOrchestrations({ id: o.id, is_active })}
             />
           ))}
         </div>
@@ -99,16 +112,19 @@ export function OrchestrationsClient({ orchestrations }: { orchestrations: Orche
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 function OrchCard({
-  orch, schema, formOpen, onToggleForm,
+  orch, schema, formOpen, onToggleForm, toggleOrchestration, onOptimisticToggle,
 }: {
   orch: Orchestration;
   schema: JsonSchema | null;
   formOpen: boolean;
   onToggleForm: () => void;
+  toggleOrchestration: (formData: FormData) => Promise<void>;
+  onOptimisticToggle: (is_active: boolean) => void;
 }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<"idle" | "running" | "done" | "error">("idle");
   const [result, setResult] = useState<RunResult | null>(null);
+  const [, startTransition] = useTransition();
 
   const hasFields = schema?.properties && Object.keys(schema.properties).length > 0;
 
@@ -178,9 +194,36 @@ function OrchCard({
       {/* ── Header ── */}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
         <div className="nm">{orch.name}</div>
-        <span className={`chip ${orch.is_active ? "ok" : "muted"}`}>
-          {orch.is_active ? "active" : "inactive"}
-        </span>
+        <form
+          action={(fd) => {
+            startTransition(async () => {
+              onOptimisticToggle(!orch.is_active);
+              await toggleOrchestration(fd);
+            });
+          }}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+        >
+          <input type="hidden" name="id" value={orch.id} />
+          <input type="hidden" name="is_active" value={String(orch.is_active)} />
+          <span className={`chip ${orch.is_active ? "ok" : "muted"}`} style={{ fontSize: 11 }}>
+            {orch.is_active ? "active" : "inactive"}
+          </span>
+          <button
+            type="submit"
+            title={orch.is_active ? "Deactivate" : "Activate"}
+            style={{
+              width: 34, height: 20, borderRadius: 10, border: "none", cursor: "pointer", padding: 0,
+              background: orch.is_active ? "var(--ok)" : "var(--ink-4, #ccc)",
+              position: "relative", transition: "background 0.2s",
+            }}
+          >
+            <span style={{
+              position: "absolute", top: 2, left: orch.is_active ? 16 : 2,
+              width: 16, height: 16, borderRadius: "50%", background: "#fff",
+              transition: "left 0.2s",
+            }} />
+          </button>
+        </form>
       </div>
 
       {orch.description && <div className="desc">{orch.description}</div>}

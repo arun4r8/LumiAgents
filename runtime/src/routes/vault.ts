@@ -43,7 +43,7 @@ export async function handleVault(
 
   // POST /api/vault/sync — ops-only manual full sync
   if (pathname === "/api/vault/sync" && request.method === "POST") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const body = await request.json() as { repoOwner: string; repoName: string; branch?: string };

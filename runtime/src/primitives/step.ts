@@ -34,10 +34,10 @@ export async function step<T>(
     ctx.currentStepId = runStepId;
 
     try {
+      // Cloudflare Workflows requires Serializable<T> but fn is generic () => Promise<T>.
+      // The cast is intentional — step values must be JSON-serializable by convention.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const output = (await wf.do(`step-${idx}-run`, {
-        retries: { limit: 3, delay: "5 seconds", backoff: "exponential" },
-      }, fn as () => Promise<any>)) as T;
+      const output = (await wf.do(`step-${idx}-run`, { retries: { limit: 3, delay: "5 seconds", backoff: "exponential" } }, fn as () => Promise<any>)) as T;
 
       await wf.do(`step-${idx}-close`, async () => {
         await db.updateRunStep(runStepId, {

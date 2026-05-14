@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Env } from "../types";
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -10,33 +11,65 @@ export function json(data: unknown, status = 200): Response {
   });
 }
 
-function decodeJwtClaims(token: string): Record<string, unknown> | null {
+function base64UrlToBytes(b64: string): Uint8Array {
+  const padded = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, "=");
+  const binary = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+async function verifyJwt(
+  token: string,
+  secret: string,
+): Promise<Record<string, unknown> | null> {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
   try {
-    const parts = token.split(".");
-    const payload = parts[1];
-    if (!payload) return null;
-    const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, "=");
-    const decoded = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(decoded) as Record<string, unknown>;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlToBytes(parts[2]!),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+    if (!valid) return null;
+    const payload = JSON.parse(
+      new TextDecoder().decode(base64UrlToBytes(parts[1]!)),
+    ) as Record<string, unknown>;
+    const now = Math.floor(Date.now() / 1000);
+    if (typeof payload["exp"] === "number" && payload["exp"] < now) return null;
+    return payload;
   } catch {
     return null;
   }
 }
 
-export function requireOpsToken(request: Request): { userId: string } | Response {
+export async function requireOpsToken(
+  request: Request,
+  env: Env,
+): Promise<{ userId: string } | Response> {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { "Content-Type": "application/json" },
     });
   }
-  const claims = decodeJwtClaims(auth.slice(7));
+  const claims = await verifyJwt(auth.slice(7), env.SUPABASE_JWT_SECRET);
   if (!claims) {
     return new Response(JSON.stringify({ error: "Invalid token" }), {
       status: 401, headers: { "Content-Type": "application/json" },
     });
   }
-  if (claims["role"] !== "ops") {
+  // Check top-level role claim (present when JWT hook is enabled) OR app_metadata.role
+  // (present when hook is disabled). Mirrors public.is_ops() in the database.
+  const appMeta = claims["app_metadata"] as Record<string, unknown> | undefined;
+  const role = claims["role"] ?? appMeta?.["role"];
+  if (role !== "ops") {
     return new Response(JSON.stringify({ error: "Forbidden — ops role required" }), {
       status: 403, headers: { "Content-Type": "application/json" },
     });

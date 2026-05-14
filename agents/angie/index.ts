@@ -7,9 +7,8 @@ export const angie: AgentDefinition = {
 - Sourcing candidates from Apollo based on role requirements
 - Answering questions about hiring pipelines and candidate status
 - Advising on job descriptions and interview criteria
+- Reformatting employee resumes for consulting client proposals
 
-Note: Resume screening and formatting are handled asynchronously through the n8n resume queue.
-Direct users to submit resumes via the dashboard if they need screening or formatting.
 Be concise and professional. When you trigger an orchestration, tell the user what you started and link them to the run.`,
   tools: [
     {
@@ -26,8 +25,26 @@ Be concise and professional. When you trigger an orchestration, tell the user wh
         required: ["jobTitle"],
       },
     },
+    {
+      name: "format_resume",
+      description: "Reformat an employee's resume for a consulting client proposal. Tailors content to a target role, removes weak language, quantifies impact, and trims to 3 pages.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          resume_text: { type: "string", description: "Raw resume text to reformat" },
+          target_role: {
+            type: "string",
+            enum: ["data-scientist", "analytics-practitioner", "data-engineer"],
+            description: "Target role for tailored formatting",
+          },
+          employee_name: { type: "string", description: "Employee name for personalised header (optional)" },
+        },
+        required: ["resume_text", "target_role"],
+      },
+    },
   ],
   toolMap: {
     source_candidates: { orchestration: "angie/candidate-sourcing" },
+    format_resume:     { orchestration: "angie/resume-formatting" },
   },
 };

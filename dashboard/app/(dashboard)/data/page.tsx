@@ -17,6 +17,7 @@ export default async function DataPage() {
     pastPerfRes,
     opportunitiesRes,
     candidatesRes,
+    staffRequestsRes,
   ] = await Promise.all([
     supabase.from("contracts").select("*").order("created_at", { ascending: false }).limit(100),
     supabase.from("invoices").select("*").order("invoice_date", { ascending: false }).limit(100),
@@ -25,8 +26,15 @@ export default async function DataPage() {
     supabase.from("indirect_rates").select("*").order("fiscal_year", { ascending: false }).limit(50),
     supabase.from("employees").select("*").order("full_name").limit(200),
     supabase.from("past_performance").select("*").order("created_at", { ascending: false }).limit(100),
-    supabase.from("opportunities").select("id, opportunity_name, agency, set_aside, recommendation, created_at").order("created_at", { ascending: false }).limit(50),
-    supabase.from("candidates").select("id, name, email, role, status, created_at").order("created_at", { ascending: false }).limit(100),
+    supabase.from("opportunities")
+      .select("id, opportunity_name, agency, set_aside, recommendation, fit_score, fit_reason, red_flags, last_scored_at, response_due_date, status, solicitation_number, naics_codes, created_at")
+      .order("created_at", { ascending: false }).limit(100),
+    supabase.from("candidates")
+      .select("id, name, email, first_name, last_name, role, status, current_title, current_company, match_score, match_reason, seniority, linkedin_url, source, outreach_sent, created_at")
+      .order("created_at", { ascending: false }).limit(100),
+    supabase.from("staff_requests")
+      .select("id, title, request_type, urgency, status, requested_by, jira_key, contract_id, created_at")
+      .order("created_at", { ascending: false }).limit(100),
   ]);
 
   return (
@@ -40,6 +48,7 @@ export default async function DataPage() {
       pastPerformance={(pastPerfRes.data ?? []) as Record<string, unknown>[]}
       opportunities={(opportunitiesRes.data ?? []) as Record<string, unknown>[]}
       candidates={(candidatesRes.data ?? []) as Record<string, unknown>[]}
+      staffRequests={(staffRequestsRes.data ?? []) as Record<string, unknown>[]}
       insertRow={insertRow}
       bulkInsert={bulkInsert}
       deleteRow={deleteRow}

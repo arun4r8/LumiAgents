@@ -13,7 +13,7 @@ export async function handleSchedules(
 
   // GET /api/schedules — list all schedules
   if (pathname === "/api/schedules" && request.method === "GET") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const db = new SupabaseClient(env);
@@ -23,7 +23,7 @@ export async function handleSchedules(
 
   // POST /api/schedules — create a schedule
   if (pathname === "/api/schedules" && request.method === "POST") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const body = await request.json() as {
@@ -53,7 +53,7 @@ export async function handleSchedules(
   // PATCH /api/schedules/:id — update label, cron, active flag, or default_input
   const scheduleMatch = pathname.match(/^\/api\/schedules\/([^/]+)$/);
   if (scheduleMatch && request.method === "PATCH") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const id = scheduleMatch[1]!;
@@ -68,7 +68,7 @@ export async function handleSchedules(
 
   // DELETE /api/schedules/:id — deactivate (soft delete)
   if (scheduleMatch && request.method === "DELETE") {
-    const authResult = requireOpsToken(request);
+    const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
     const id = scheduleMatch[1]!;

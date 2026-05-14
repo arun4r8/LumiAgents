@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import {
   Plus, Upload, Plug, X, ChevronDown, ChevronUp,
-  Check, Loader2, AlertTriangle, ExternalLink,
+  Check, Loader2, AlertTriangle, ExternalLink, Star,
+  User, Briefcase, Send,
 } from "lucide-react";
 
 // ─── Field config ─────────────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ interface DataClientProps {
   pastPerformance: Record<string, unknown>[];
   opportunities: Record<string, unknown>[];
   candidates: Record<string, unknown>[];
+  staffRequests: Record<string, unknown>[];
   insertRow: (table: string, data: Record<string, unknown>) => Promise<{ error?: string }>;
   bulkInsert: (table: string, rows: Record<string, unknown>[]) => Promise<{ inserted: number; error?: string }>;
   deleteRow: (table: string, id: string) => Promise<{ error?: string }>;
@@ -168,7 +170,7 @@ interface DataClientProps {
 
 export function DataClient({
   contracts, invoices, budgetLines, laborRecords, indirectRates,
-  employees, pastPerformance, opportunities, candidates,
+  employees, pastPerformance, opportunities, candidates, staffRequests,
   insertRow, bulkInsert, deleteRow,
 }: DataClientProps) {
   const [tab, setTab] = useState<"govcon" | "finance" | "people">("govcon");
@@ -247,7 +249,7 @@ export function DataClient({
       <div className="tabs" style={{ marginBottom: 24 }}>
         <button className={tab === "govcon" ? "active" : ""} onClick={() => setTab("govcon")}>
           GovCon
-          <span className="count" style={{ marginLeft: 6 }}>{contracts.length + pastPerformance.length}</span>
+          <span className="count" style={{ marginLeft: 6 }}>{opportunities.length + contracts.length + pastPerformance.length}</span>
         </button>
         <button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}>
           Finance
@@ -255,26 +257,16 @@ export function DataClient({
         </button>
         <button className={tab === "people" ? "active" : ""} onClick={() => setTab("people")}>
           People
-          <span className="count" style={{ marginLeft: 6 }}>{employees.length}</span>
+          <span className="count" style={{ marginLeft: 6 }}>{candidates.length + staffRequests.length + employees.length}</span>
         </button>
       </div>
 
-      {/* Read-only sources for context */}
-      {tab === "govcon" && (
-        <ReadOnlySection
-          label="Opportunities"
-          note="Written by n8n GovCon Assessment workflow"
-          data={opportunities}
-          columns={["opportunity_name", "agency", "set_aside", "recommendation", "created_at"]}
-        />
-      )}
+      {tab === "govcon" && <OpportunitiesPanel opportunities={opportunities} />}
       {tab === "people" && (
-        <ReadOnlySection
-          label="Candidates"
-          note="Written by n8n Resume Scoring workflow"
-          data={candidates}
-          columns={["name", "email", "role", "status", "created_at"]}
-        />
+        <>
+          <CandidatesPanel candidates={candidates} />
+          <StaffRequestsPanel staffRequests={staffRequests} />
+        </>
       )}
 
       {activeSections.map((section) => (
@@ -291,33 +283,290 @@ export function DataClient({
   );
 }
 
-// ─── Read-only section ────────────────────────────────────────────────────────
+// ─── Score badge ──────────────────────────────────────────────────────────────
 
-function ReadOnlySection({
-  label, note, data, columns,
-}: {
-  label: string;
-  note: string;
-  data: Record<string, unknown>[];
-  columns: string[];
-}) {
-  const [open, setOpen] = useState(false);
+function ScoreBadge({ score, max = 10 }: { score: unknown; max?: number }) {
+  if (score == null) return <span style={{ color: "var(--ink-3)", fontSize: 12 }}>—</span>;
+  const n = Number(score);
+  const color = n >= 7 ? "var(--ok)" : n >= 4 ? "var(--warn, #f59e0b)" : "var(--err)";
   return (
-    <div style={{ marginBottom: 24 }}>
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      fontWeight: 700, fontSize: 13, color,
+    }}>
+      <Star style={{ width: 11, height: 11, fill: color, stroke: "none" }} />
+      {n}/{max}
+    </span>
+  );
+}
+
+// ─── Opportunities panel ──────────────────────────────────────────────────────
+
+function OpportunitiesPanel({ opportunities }: { opportunities: Record<string, unknown>[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  return (
+    <div style={{ marginBottom: 28 }}>
       <div className="section-h">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h3>{label}</h3>
-          <span className="chip muted" style={{ fontSize: 11 }}>{data.length}</span>
-          <span className="chip" style={{ fontSize: 11 }}>n8n</span>
+          <h3>Opportunities</h3>
+          <span className="chip muted" style={{ fontSize: 11 }}>{opportunities.length}</span>
+          <span className="chip accent" style={{ fontSize: 11 }}>beady</span>
         </div>
-        <button className="btn sm ghost" onClick={() => setOpen((v) => !v)}>
-          {open ? "Hide" : "Show"}
-        </button>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by beady/opportunity-search</span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>{note}</div>
-      {open && (
-        <div className="card" style={{ overflow: "auto" }}>
-          <DataTable rows={data} columns={columns} />
+
+      {opportunities.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
+          No opportunities yet — run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-search</code> to populate.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {opportunities.map((opp) => {
+            const id = opp.id as string;
+            const name = (opp.opportunity_name as string | null) ?? "Untitled";
+            const agency = opp.agency as string | null;
+            const setAside = opp.set_aside as string | null;
+            const naics = opp.naics_codes != null ? String(opp.naics_codes).slice(0, 30) : null;
+            const rec = opp.recommendation as string | null;
+            const recColor = rec === "pursue" ? "ok" : rec === "monitor" ? "warn" : rec === "pass" ? "err" : "muted";
+            const dueDate = opp.response_due_date as string | null;
+            const fitReason = opp.fit_reason as string | null;
+            const redFlags = opp.red_flags as string | null;
+            const solNum = opp.solicitation_number as string | null;
+            const scoredAt = opp.last_scored_at as string | null;
+            const status = opp.status as string | null;
+            const isOpen = expanded === id;
+            return (
+              <div key={id} className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}
+                     onClick={() => setExpanded(isOpen ? null : id)}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {name}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      {agency && <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{agency}</span>}
+                      {setAside && <span className="chip muted" style={{ fontSize: 10.5 }}>{setAside}</span>}
+                      {naics && <span className="chip muted mono" style={{ fontSize: 10.5 }}>{naics}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <ScoreBadge score={opp.fit_score} />
+                    {rec && <span className={`chip ${recColor}`} style={{ fontSize: 11 }}>{rec}</span>}
+                    {dueDate && (
+                      <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+                        Due {new Date(dueDate).toLocaleDateString()}
+                      </span>
+                    )}
+                    {isOpen ? <ChevronUp style={{ width: 14, height: 14, color: "var(--ink-3)" }} />
+                             : <ChevronDown style={{ width: 14, height: 14, color: "var(--ink-3)" }} />}
+                  </div>
+                </div>
+                {isOpen && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {fitReason && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>Fit rationale</div>
+                        <div style={{ fontSize: 13, color: "var(--ink-1)" }}>{fitReason}</div>
+                      </div>
+                    )}
+                    {redFlags && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--err)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>Red flags</div>
+                        <div style={{ fontSize: 13, color: "var(--ink-2)" }}>{redFlags}</div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-3)" }}>
+                      {solNum && <span>Solicitation: <code className="mono">{solNum}</code></span>}
+                      {scoredAt && <span>Scored {new Date(scoredAt).toLocaleDateString()}</span>}
+                      {status && <span>Status: {status}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Candidates panel ──────────────────────────────────────────────────────────
+
+function CandidatesPanel({ candidates }: { candidates: Record<string, unknown>[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "shortlisted" | "pending">("all");
+
+  const filtered = candidates.filter((c) => {
+    if (filter === "shortlisted") return c.status === "shortlisted" || Number(c.match_score) >= 7;
+    if (filter === "pending") return c.status === "sourced" || c.status === "reviewing";
+    return true;
+  });
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div className="section-h">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h3>Candidates</h3>
+          <span className="chip muted" style={{ fontSize: 11 }}>{candidates.length}</span>
+          <span className="chip accent" style={{ fontSize: 11 }}>angie</span>
+        </div>
+        <div className="row gap-sm">
+          {(["all", "shortlisted", "pending"] as const).map((f) => (
+            <button key={f} className={`btn sm${filter === f ? " accent" : ""}`} onClick={() => setFilter(f)}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {candidates.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
+          No candidates yet — run <code className="mono" style={{ fontSize: 12 }}>angie/candidate-sourcing</code> to populate.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map((c) => {
+            const id = c.id as string;
+            const isOpen = expanded === id;
+            const displayName = (c.name as string | null)
+              ?? (`${String(c.first_name ?? "")} ${String(c.last_name ?? "")}`.trim() || "Unknown");
+            const currentTitle = c.current_title as string | null;
+            const currentCompany = c.current_company as string | null;
+            const role = c.role as string | null;
+            const subtitle = currentTitle
+              ? `${currentTitle}${currentCompany ? ` @ ${currentCompany}` : ""}`
+              : (role ?? "");
+            const status = c.status as string | null;
+            const statusColor = status === "shortlisted" ? "ok" : status === "rejected" ? "err" : status === "hired" ? "accent" : "muted";
+            const linkedinUrl = c.linkedin_url as string | null;
+            const matchReason = c.match_reason as string | null;
+            const email = c.email as string | null;
+            const location = c.location as string | null;
+            const seniority = c.seniority as string | null;
+            const source = c.source as string | null;
+            return (
+              <div key={id} className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}
+                     onClick={() => setExpanded(isOpen ? null : id)}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: "50%", background: "var(--bg-2)",
+                    border: "1px solid var(--line)", display: "flex", alignItems: "center",
+                    justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <User style={{ width: 15, height: 15, color: "var(--ink-3)" }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{displayName}</div>
+                    {subtitle && <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 2 }}>{subtitle}</div>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <ScoreBadge score={c.match_score} />
+                    {status && <span className={`chip ${statusColor}`} style={{ fontSize: 11 }}>{status}</span>}
+                    {c.outreach_sent === true && (
+                      <span title="Outreach sent" style={{ display: "flex", color: "var(--ok)" }}>
+                        <Send style={{ width: 12, height: 12 }} />
+                      </span>
+                    )}
+                    {linkedinUrl && (
+                      <a href={linkedinUrl} target="_blank" rel="noreferrer"
+                         onClick={(e) => e.stopPropagation()}
+                         style={{ color: "var(--ink-3)", display: "flex" }}>
+                        <ExternalLink style={{ width: 12, height: 12 }} />
+                      </a>
+                    )}
+                    {isOpen ? <ChevronUp style={{ width: 14, height: 14, color: "var(--ink-3)" }} />
+                             : <ChevronDown style={{ width: 14, height: 14, color: "var(--ink-3)" }} />}
+                  </div>
+                </div>
+                {isOpen && (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {matchReason && (
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>Match rationale</div>
+                        <div style={{ fontSize: 13, color: "var(--ink-1)" }}>{matchReason}</div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 12, color: "var(--ink-3)" }}>
+                      {email && <span>{email}</span>}
+                      {location && <span>{location}</span>}
+                      {seniority && <span className="chip muted" style={{ fontSize: 11 }}>{seniority}</span>}
+                      {source && <span className="chip" style={{ fontSize: 11 }}>{source}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "12px 0" }}>No candidates match this filter.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Staff requests panel ─────────────────────────────────────────────────────
+
+function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, unknown>[] }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div className="section-h">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h3>Staff Requests</h3>
+          <span className="chip muted" style={{ fontSize: 11 }}>{staffRequests.length}</span>
+          <span className="chip accent" style={{ fontSize: 11 }}>patch</span>
+        </div>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by patch/staff-request</span>
+      </div>
+
+      {staffRequests.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
+          No staff requests yet — run <code className="mono" style={{ fontSize: 12 }}>patch/staff-request</code> to populate.
+        </div>
+      ) : (
+        <div className="card" style={{ overflow: "auto", marginBottom: 4 }}>
+          <table className="tbl" style={{ minWidth: "100%" }}>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Urgency</th>
+                <th>Status</th>
+                <th>Requested by</th>
+                <th>Jira</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffRequests.map((r, i) => {
+                const urgency = r.urgency as string | null;
+                const urgColor = urgency === "critical" ? "err" : urgency === "high" ? "warn" : "muted";
+                const status = r.status as string | null;
+                const stColor = status === "fulfilled" ? "ok" : status === "open" ? "accent" : "muted";
+                return (
+                  <tr key={(r.id as string) ?? i}>
+                    <td style={{ fontWeight: 500 }}>{(r.title as string) ?? "—"}</td>
+                    <td><span className="chip muted" style={{ fontSize: 11 }}>{(r.request_type as string) ?? "—"}</span></td>
+                    <td>{urgency && <span className={`chip ${urgColor}`} style={{ fontSize: 11 }}>{urgency}</span>}</td>
+                    <td>{status && <span className={`chip ${stColor}`} style={{ fontSize: 11 }}>{status}</span>}</td>
+                    <td style={{ fontSize: 12.5 }}>{(r.requested_by as string) ?? "—"}</td>
+                    <td>
+                      {r.jira_key ? (
+                        <span className="mono chip" style={{ fontSize: 11 }}>{r.jira_key as string}</span>
+                      ) : <span style={{ color: "var(--ink-3)" }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      {r.created_at ? new Date(r.created_at as string).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

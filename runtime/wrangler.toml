@@ -10,6 +10,7 @@ ENVIRONMENT = "production"
 
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_SERVICE_ROLE_KEY
+# SUPABASE_JWT_SECRET
 # ANTHROPIC_API_KEY
 # N8N_WEBHOOK_SECRET
 # APOLLO_API_KEY
@@ -37,3 +38,11 @@ binding = "AI"
 [dev]
 port = 8787
 local_protocol = "http"
+
+[env.dev]
+name = "lumiagents-runtime-dev"
+
+[env.dev.vars]
+SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
+JIRA_BASE_URL = "https://lumiture.atlassian.net"
+ENVIRONMENT = "development"

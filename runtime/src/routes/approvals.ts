@@ -14,7 +14,7 @@ export async function handleApprovals(
   const approvalId = approvalMatch[1];
   if (!approvalId) return json({ error: "Missing approval ID" }, 400);
 
-  const authResult = requireOpsToken(request);
+  const authResult = await requireOpsToken(request, env);
   if (authResult instanceof Response) return authResult;
   const { userId: decidedByUserId } = authResult;
 

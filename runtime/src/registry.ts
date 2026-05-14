@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { OrchestrationDefinition } from "./types";
 
 import angieCandidateSourcing    from "../../orchestrations/angie/candidate-sourcing/definition";
+import angieResumeFormat         from "../../orchestrations/angie/resume-format/definition";
 import beadyOpportunitySearch    from "../../orchestrations/beady/opportunity-search/definition";
 import beadyGovconAssessment     from "../../orchestrations/beady/govcon-assessment/definition";
 import beadyPastPerformanceSeed  from "../../orchestrations/beady/past-performance-seed/definition";
@@ -24,6 +25,7 @@ function reg(o: AnyOrch): [string, AnyOrch] {
 
 export const orchestrations = new Map<string, AnyOrch>([
   reg(angieCandidateSourcing   as unknown as AnyOrch),
+  reg(angieResumeFormat        as unknown as AnyOrch),
   reg(beadyOpportunitySearch   as unknown as AnyOrch),
   reg(beadyGovconAssessment    as unknown as AnyOrch),
   reg(beadyPastPerformanceSeed as unknown as AnyOrch),
