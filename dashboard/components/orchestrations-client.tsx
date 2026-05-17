@@ -53,6 +53,7 @@ interface Orchestration {
   description: string | null;
   is_active: boolean;
   cron: string | null;
+  trigger_mode: string;
 }
 
 interface RunResult {
@@ -390,16 +391,26 @@ function OrchCard({
           View runs <ArrowRight style={{ width: 12, height: 12 }} />
         </Link>
 
-        <button
-          className={`btn sm${formOpen ? "" : " accent"}`}
-          onClick={formOpen && phase !== "idle" ? reset : onToggleForm}
-        >
-          {formOpen ? (
-            <><X style={{ width: 11, height: 11 }} /> Close</>
-          ) : (
-            <><Play style={{ width: 11, height: 11 }} /> Run</>
-          )}
-        </button>
+        {orch.trigger_mode === "agent" ? (
+          <Link
+            href={`/agents/${orch.name.split("/")[0]}`}
+            className="btn sm"
+            style={{ fontSize: 11.5 }}
+          >
+            Chat with {orch.name.split("/")[0]?.charAt(0).toUpperCase()}{orch.name.split("/")[0]?.slice(1)}
+          </Link>
+        ) : (
+          <button
+            className={`btn sm${formOpen ? "" : " accent"}`}
+            onClick={formOpen && phase !== "idle" ? reset : onToggleForm}
+          >
+            {formOpen ? (
+              <><X style={{ width: 11, height: 11 }} /> Close</>
+            ) : (
+              <><Play style={{ width: 11, height: 11 }} /> Run</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Run form ── */}

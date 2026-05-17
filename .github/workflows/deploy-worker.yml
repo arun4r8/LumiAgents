@@ -128,3 +128,33 @@ jobs:
           fi
           echo "✓ Catalogue check passed"
           echo "$response" | jq '[.[] | .name]'
+
+  e2e:
+    name: E2E Tests
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run e2e tests
+        working-directory: runtime
+        run: pnpm test:e2e
+        env:
+          E2E_RUNTIME_URL: ${{ secrets.NEXT_PUBLIC_RUNTIME_URL }}
+          E2E_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          E2E_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          E2E_OPS_TOKEN: ${{ secrets.E2E_OPS_TOKEN }}

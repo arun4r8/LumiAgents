@@ -15,6 +15,7 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "beady/past-performance-seed",
   version: 1,
+  triggerMode: "agent",
   description:
     "Embed a past performance record into the shared RAG corpus (orchestration.document_chunks) " +
     "so it is searchable by document-rag and govcon assessments.",

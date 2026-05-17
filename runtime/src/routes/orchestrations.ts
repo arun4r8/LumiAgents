@@ -56,6 +56,7 @@ export async function handleOrchestrations(
       version: o.version,
       description: o.description ?? null,
       access: o.access,
+      triggerMode: o.triggerMode ?? "manual",
       inputSchema: schemaToJsonSchema(o.inputSchema),
     }));
     return json(catalogue);

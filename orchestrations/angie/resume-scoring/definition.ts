@@ -16,6 +16,7 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "angie/resume-scoring",
   version: 1,
+  triggerMode: "agent",
   description: "Batch-score candidate résumés (PDF) against a job description via the AI pipeline. Supports multiple résumés per run.",
   inputSchema,
   outputSchema,

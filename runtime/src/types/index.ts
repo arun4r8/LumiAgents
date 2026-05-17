@@ -68,6 +68,7 @@ export interface OrchestrationDefinition<
   inputSchema: TInput;
   outputSchema: TOutput;
   cron?: string;
+  triggerMode?: "manual" | "agent";
   access: {
     triggerableBy: string[];
     visibleTo: string[];

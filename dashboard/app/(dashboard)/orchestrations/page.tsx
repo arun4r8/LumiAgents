@@ -10,7 +10,7 @@ export default async function OrchestrationsPage() {
   const { data: orchestrations } = await supabase
     .schema("orchestration")
     .from("orchestrations")
-    .select("id, name, version, description, is_active, cron")
+    .select("id, name, version, description, is_active, cron, trigger_mode")
     .order("name");
 
   const orcList = (orchestrations ?? []) as {
@@ -20,6 +20,7 @@ export default async function OrchestrationsPage() {
     description: string | null;
     is_active: boolean;
     cron: string | null;
+    trigger_mode: string;
   }[];
 
   async function toggleOrchestration(formData: FormData) {

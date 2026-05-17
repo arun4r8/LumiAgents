@@ -92,6 +92,7 @@ export default defineOrchestration({
   version: 1,
   description:
     "Reformat an employee's existing resume for consulting client proposals. Tailors content to one of three target roles, removes weak language, quantifies impact, and trims to 3 pages.",
+  triggerMode: "agent",
   inputSchema,
   outputSchema,
   access: {
