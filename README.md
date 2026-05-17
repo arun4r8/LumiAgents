@@ -1,64 +1,175 @@
-# Claude Code handoff package
+# LumiAgents
 
-Drop the contents of this folder into the root of your repo. Specifically:
+Agent orchestration platform built on Cloudflare Workers and Supabase. Four AI agents (Angie, Beady, Patch, Money) expose company workflows as typed, auditable, resumable orchestrations through a Next.js dashboard.
+
+## Architecture
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Dashboard** | Next.js → Cloudflare Workers | Ops + end-user interface: trigger runs, monitor, approve |
+| **Runtime** | Cloudflare Workers + Workflows | Orchestration engine: step runner, LLM calls, retries, cron |
+| **Data** | Supabase (Postgres + RLS) | Runs, steps, artifacts, domain tables; auth backbone |
+| **Integrations** | n8n webhooks + direct APIs | External systems wrapped as typed, idempotent tools |
+
+The runtime routes agent chat requests to per-agent Workers via Cloudflare Service Bindings. Each agent runs as its own Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) so metrics, logs, and deploys are isolated.
 
 ```
-your-repo/
-├── CLAUDE.md            # the constitution; auto-loaded every session
-├── docs/
-│   ├── architecture.md
-│   ├── data-model.md
-│   ├── workflow-contract.md
-│   └── roadmap.md
-└── .claude/
-    ├── skills/
-    │   ├── add-orchestration/SKILL.md
-    │   ├── add-integration/SKILL.md
-    │   └── write-migration/SKILL.md
-    ├── agents/
-    │   ├── codebase-researcher.md
-    │   └── schema-reviewer.md
-    └── commands/
-        ├── new-orchestration.md
-        ├── deploy-dev.md
-        └── prep-pr.md
+Dashboard → lumiagents-runtime (gateway + orchestrations + cron)
+                ↓ Service Bindings
+     lumiagents-angie  lumiagents-beady  lumiagents-patch  lumiagents-money
 ```
 
-## What each piece does
+## Agents
 
-**`CLAUDE.md`** — Loaded into every Claude Code session in this repo. It's the constitution: the mental model, stack, conventions, and "read first" pointers. Keep it short. When you find yourself adding more than a paragraph on a specific topic, that paragraph belongs in `docs/` or in a skill instead.
+| Agent | Domain | Key orchestrations |
+|---|---|---|
+| **Angie** | HR & Recruiting | candidate-sourcing, resume-format, resume-scoring |
+| **Beady** | GovCon BD | opportunity-search, govcon-assessment, past-performance-seed |
+| **Patch** | IT Ops & Knowledge | ticket-ops, staff-request, document-rag |
+| **Money** | Finance & Analytics | data-analyst, financial-report |
 
-**`docs/`** — The four documents Claude Code is told to read first. They contain the decisions you don't want relitigated every session: the architecture, the schema, the workflow contract, and what's in/out of scope.
+## Repo layout
 
-**`.claude/skills/`** — Reusable playbooks. These load only when a task matches the description, so they don't burn context until needed. Three to start with — adding an orchestration, adding an integration, writing a migration. Add more as you notice yourself repeating playbooks.
+```
+/agents/              — Agent entrypoints and tool definitions
+/orchestrations/      — Workflow definitions, one folder per orchestration
+/integrations/        — Typed wrappers around n8n webhooks and external APIs
+/runtime/             — Cloudflare Worker engine (routes, step runner, LLM primitives)
+  src/
+  workers/            — Per-agent wrangler configs (angie, beady, patch, money)
+/dashboard/           — Next.js app deployed via opennextjs-cloudflare
+/supabase/
+  migrations/         — Forward-only Supabase migrations (canonical location)
+/docs/                — Architecture decisions and contracts (read before coding)
+/.claude/             — Claude Code skills, agents, and slash commands
+```
 
-**`.claude/agents/`** — Subagents Claude can delegate to in their own context window. `codebase-researcher` for "find every X" questions that would otherwise pollute main context with file reads. `schema-reviewer` for migration review. Both keep main session focused.
+The `/agents/`, `/orchestrations/`, and `/integrations/` directories are TypeScript source bundled into the runtime Worker — they are **not** separate packages. Only `runtime/` and `dashboard/` are pnpm workspace packages.
 
-**`.claude/commands/`** — Slash commands for repeated workflows. `/new-orchestration <name>`, `/deploy-dev`, `/prep-pr`.
+## Local development
 
-## Day-one workflow
+**Prerequisites:** Node 22+, pnpm 9+, [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/), [Supabase CLI](https://supabase.com/docs/guides/cli)
 
-The roadmap currently sits at **Phase 0 — Decisions and inventory**. The first session with Claude Code in the new repo should be:
+**1. Install**
+```bash
+git clone <repo-url>
+cd LumiAgents
+pnpm install
+```
 
-1. Open Claude Code in the repo. Confirm it loaded `CLAUDE.md`.
-2. Ask: "Read all the docs in /docs/ and tell me back, in your own words, what we're building and what Phase 0 needs."
-3. From there, work through Phase 0 deliverables one at a time. Use plan mode (Shift+Tab) — Phase 0 is mostly thinking and writing, not coding, and plan mode keeps Claude in the right gear.
-4. When Phase 0 produces the n8n inventory, integrations inventory, target orchestrations list, auth model, and Supabase audit, move to Phase 1.
+**2. Set up runtime secrets**
+```bash
+cp runtime/.dev.vars.example runtime/.dev.vars   # or copy the template comments as a guide
+# Fill in values — see "Runtime secrets" table below
+```
 
-## Maintenance rules
+**3. Set up dashboard env**
+```bash
+cp dashboard/.env.local.example dashboard/.env.local   # or create manually
+# Fill in values — see "Dashboard env vars" table below
+```
 
-- When you find yourself correcting Claude on the same thing twice, write it down — either in `CLAUDE.md` (if it applies always) or in a skill (if it applies to a specific task).
-- When `CLAUDE.md` gets longer than ~250 lines, prune. Move detail into docs or skills. The 200-line ceiling is real — past it, the model starts ignoring instructions.
-- When a doc and the code disagree, the code is right. Update the doc the same hour.
-- Skills should describe what's non-obvious. If Claude already does the right thing without the instruction, delete the instruction.
+**4. Start everything**
+```bash
+# All 5 workers in parallel (runtime + 4 agents):
+cd runtime && pnpm dev:all
 
-## What you'll add over time
+# Dashboard (separate terminal):
+cd dashboard && pnpm dev
+```
 
-Things this package deliberately doesn't include yet, because they depend on choices you haven't made:
+Dashboard runs at `http://localhost:3000`. Runtime at `http://localhost:8787`.
 
-- Hooks (`.claude/hooks/`). Add when you have deterministic enforcement needs — e.g., block deploys without a passing test run, run a secret scanner on every edit. Premature without a real workflow yet.
-- Eval skill / agent for the LLM decision points. Add in Phase 2 when the first orchestration with `llm_decide` ships.
-- A "mock-n8n" fixture skill for tests. Add when you've written the first integration test and feel the friction.
-- A dashboard-component skill capturing your shadcn patterns. Add when you've built the second dashboard page and noticed the repetition.
+### Runtime secrets (`runtime/.dev.vars`)
 
-The pattern: don't anticipate. Add when the friction is real.
+| Key | Where to get it | Required |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API | Yes |
+| `SUPABASE_JWT_SECRET` | Supabase → Settings → API | Yes |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Yes |
+| `JIRA_EMAIL` | Your Atlassian account email | Yes (Patch) |
+| `JIRA_API_TOKEN` | Atlassian → Profile → Manage API tokens | Yes (Patch) |
+| `SAM_GOV_API_KEY` | SAM.gov → Account → API keys | Yes (Beady) |
+| `APOLLO_API_KEY` | Apollo.io → Settings → API | No (Angie sourcing) |
+| `N8N_WEBHOOK_SECRET` | n8n → Settings → API | No (n8n calls work without it) |
+| `TEAMS_INCOMING_WEBHOOK_URL` | Teams → channel connector URL | No (notifications) |
+| `GITHUB_API_TOKEN` | GitHub → Settings → Developer settings → PAT | No (vault sync) |
+
+Non-secret vars (`SUPABASE_URL`, `JIRA_BASE_URL`, `ENVIRONMENT`) are already set in `wrangler.toml` and don't need to go in `.dev.vars`.
+
+### Dashboard env vars (`dashboard/.env.local`)
+
+| Key | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://jlljpgdqqxljvznjslmb.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
+| `NEXT_PUBLIC_RUNTIME_URL` | `http://localhost:8787` (local) or prod URL (staging) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → right sidebar |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens |
+| `CF_WORKER_SCRIPT_NAME` | `lumiagents-runtime` |
+
+## Adding things
+
+The `.claude/skills/` directory has step-by-step playbooks for common tasks:
+
+- **New orchestration** — clone closest existing one in `/orchestrations/`, register in `/runtime/src/registry.ts`, add to agent tool list in `/agents/<name>/index.ts`, write a DB migration to insert it into `orchestration.orchestrations`
+- **New integration** — add a typed wrapper in `/integrations/`, follow the `defineTool` pattern and include an idempotency key
+- **New migration** — always add a new file in `supabase/migrations/`, never edit applied ones; include RLS policy in the same migration
+
+When using Claude Code: plan mode (Shift+Tab) for schema changes, runtime/engine changes, or anything spanning more than 3 files.
+
+## Deploying
+
+Push to `main` — everything deploys automatically via GitHub Actions.
+
+| Workflow | Triggers on | Deploys |
+|---|---|---|
+| `deploy-worker.yml` | `runtime/`, `orchestrations/`, `integrations/`, `agents/` | Runtime + 4 agent Workers |
+| `deploy-dashboard.yml` | `dashboard/` | Dashboard (Cloudflare Pages) |
+
+Both workflows run typecheck before deploying and smoke-test after.
+
+### GitHub Actions secrets required
+
+| Secret | Used by |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Both deploy workflows |
+| `CLOUDFLARE_ACCOUNT_ID` | Both deploy workflows |
+| `NEXT_PUBLIC_SUPABASE_URL` | Dashboard build |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Dashboard build |
+| `NEXT_PUBLIC_RUNTIME_URL` | Dashboard build + runtime smoke tests |
+| `DASHBOARD_URL` | Dashboard smoke test |
+
+### Secrets on the deployed workers
+
+Each Worker needs secrets set once via Wrangler (not environment variables):
+```bash
+# Runtime (do once, covers all orchestrations):
+wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name lumiagents-runtime
+wrangler secret put SUPABASE_JWT_SECRET       --name lumiagents-runtime
+wrangler secret put ANTHROPIC_API_KEY         --name lumiagents-runtime
+# ... (see wrangler.toml comment for full list)
+
+# Agent workers (each needs ANTHROPIC_API_KEY + SUPABASE_SERVICE_ROLE_KEY):
+wrangler secret put ANTHROPIC_API_KEY         --name lumiagents-angie
+wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name lumiagents-angie
+# repeat for beady, patch, money
+```
+
+## Read before coding
+
+These docs contain decisions that should not be relitigated without discussion:
+
+1. `docs/architecture.md` — the layer model, major technology choices and why
+2. `docs/data-model.md` — Supabase schema (`orchestrations`, `runs`, `run_steps`, `tool_calls`, `artifacts`)
+3. `docs/workflow-contract.md` — how an orchestration is defined; the `step`, `llm_decide`, `llm_extract` primitives
+4. `docs/roadmap.md` — phases and what is in/out of scope
+
+## Conventions
+
+- **TypeScript everywhere.** No `any`. Use `zod` for runtime schemas.
+- **Every tool is idempotent or carries an idempotency key.** Workers retry.
+- **RLS-first.** New tables ship with RLS in the same migration.
+- **No secrets in code.** Wrangler secrets for Workers, Supabase Vault for app-level secrets.
+- **Migrations are forward-only.** Never edit an applied migration; add a new one.
+- **No comments that describe what the code does.** Only comment *why* when it's non-obvious.
