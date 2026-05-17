@@ -157,4 +157,4 @@ jobs:
           E2E_RUNTIME_URL: ${{ secrets.NEXT_PUBLIC_RUNTIME_URL }}
           E2E_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           E2E_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          E2E_OPS_TOKEN: ${{ secrets.E2E_OPS_TOKEN }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}

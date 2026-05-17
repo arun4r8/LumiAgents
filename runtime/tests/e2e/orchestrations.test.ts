@@ -25,7 +25,7 @@ describe("Orchestration auth", () => {
   it("rejects unknown orchestration name", async () => {
     const res = await fetch(`${RUNTIME_URL}/api/orchestrations/does-not-exist/run`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: authHeaders(), // valid token — auth passes, then 404 on unknown name
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(404);
