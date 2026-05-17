@@ -12,7 +12,6 @@ import {
   Activity,
   Terminal,
   Key,
-  Clock,
   RefreshCw,
   Loader2,
   Play,
@@ -61,12 +60,6 @@ interface CfSecret {
   name: string;
   type?: string;
   created_on?: string;
-}
-
-interface CfCron {
-  cron: string;
-  created_on?: string;
-  modified_on?: string;
 }
 
 interface TailMessage {
@@ -905,116 +898,6 @@ function SecretsTab() {
 }
 
 // ── Cron tab ───────────────────────────────────────────────────────────────────
-
-function CronTab() {
-  const [schedules, setSchedules] = useState<CfCron[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [missingCreds, setMissingCreds] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/cf/cron");
-      if (res.status === 503) { setMissingCreds(true); return; }
-      if (!res.ok) {
-        const body = (await res.json()) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-      // CF returns either an array or an object with schedules property
-      const raw: unknown = await res.json();
-      if (Array.isArray(raw)) {
-        setSchedules(raw as CfCron[]);
-      } else if (
-        raw !== null &&
-        typeof raw === "object" &&
-        "schedules" in raw &&
-        Array.isArray((raw as { schedules: unknown }).schedules)
-      ) {
-        setSchedules((raw as { schedules: CfCron[] }).schedules);
-      } else {
-        setSchedules([]);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  if (missingCreds) return <SetupCard />;
-  if (loading) return <LoadingSpinner />;
-  if (error) return <ErrorCard error={error} />;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div
-        className="card pad"
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 12,
-          background: "color-mix(in srgb, var(--info, #3b82f6) 6%, transparent)",
-          borderColor: "color-mix(in srgb, var(--info, #3b82f6) 20%, transparent)",
-        }}
-      >
-        <Clock
-          style={{ width: 16, height: 16, color: "var(--info, #3b82f6)", flexShrink: 0, marginTop: 2 }}
-        />
-        <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
-          These are <strong>Cloudflare-level cron triggers</strong> bound directly to the Worker.
-          In-app dynamic schedules are managed under the{" "}
-          <strong>Schedules</strong> tab.
-        </span>
-      </div>
-
-      <section className="card pad">
-        <div className="sec-h" style={{ marginBottom: 16 }}>
-          <h3>CF Cron Triggers</h3>
-          <button className="btn ghost sm" onClick={load}>
-            <RefreshCw style={{ width: 12, height: 12 }} /> Refresh
-          </button>
-        </div>
-        {schedules.length === 0 ? (
-          <div className="muted" style={{ fontSize: 13, padding: "12px 0" }}>
-            No cron triggers configured on this Worker.
-          </div>
-        ) : (
-          <table className="tbl" style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Cron expression</th>
-                <th>Time zone</th>
-                <th>Created</th>
-                <th>Modified</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schedules.map((s, i) => (
-                <tr key={i}>
-                  <td className="mono" style={{ fontSize: 13 }}>
-                    {s.cron}
-                  </td>
-                  <td className="muted" style={{ fontSize: 12.5 }}>UTC</td>
-                  <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-                    {s.created_on ? new Date(s.created_on).toLocaleString() : "—"}
-                  </td>
-                  <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-                    {s.modified_on ? new Date(s.modified_on).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </div>
-  );
-}
-
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
 function LoadingSpinner() {
@@ -1043,14 +926,13 @@ function ErrorCard({ error }: { error: string }) {
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
-type Tab = "metrics" | "logs" | "deployments" | "secrets" | "cron";
+type Tab = "metrics" | "logs" | "deployments" | "secrets";
 
 const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
   { id: "metrics",     label: "Metrics",     icon: <Activity style={{ width: 14, height: 14 }} /> },
   { id: "logs",        label: "Logs",        icon: <Terminal style={{ width: 14, height: 14 }} /> },
   { id: "deployments", label: "Deployments", icon: <Server style={{ width: 14, height: 14 }} /> },
   { id: "secrets",     label: "Secrets",     icon: <Key style={{ width: 14, height: 14 }} /> },
-  { id: "cron",        label: "Cron",        icon: <Clock style={{ width: 14, height: 14 }} /> },
 ];
 
 // ── Root component ─────────────────────────────────────────────────────────────
@@ -1091,7 +973,6 @@ export function InfraClient() {
       {tab === "logs"        && <LogsTab />}
       {tab === "deployments" && <DeploymentsTab />}
       {tab === "secrets"     && <SecretsTab />}
-      {tab === "cron"        && <CronTab />}
     </div>
   );
 }
