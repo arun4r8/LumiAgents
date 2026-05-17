@@ -44,8 +44,11 @@ export async function GET(): Promise<NextResponse> {
       );
     }
 
-    const data = (await res.json()) as { result?: unknown[] };
-    return NextResponse.json(data.result ?? []);
+    const data = (await res.json()) as { result?: { deployments?: unknown[] } | unknown[] };
+    const items = Array.isArray(data.result)
+      ? data.result
+      : (data.result as { deployments?: unknown[] })?.deployments ?? [];
+    return NextResponse.json(items);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
