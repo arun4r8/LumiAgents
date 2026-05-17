@@ -182,6 +182,27 @@ function MetricsTab() {
     void load();
   }, [load]);
 
+  // All hooks must be called before any conditional return.
+  const buckets: CfInvocationBucket[] =
+    raw?.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? [];
+  const hourlyBuckets = useMemo(() => buildHourlyBuckets(buckets), [buckets]);
+  const maxBar = Math.max(...hourlyBuckets.map((b) => b.requests + b.errors), 1);
+
+  const totalRequests = buckets.reduce((s, b) => s + (b.sum?.requests ?? 0), 0);
+  const totalErrors = buckets.reduce((s, b) => s + (b.sum?.errors ?? 0), 0);
+  const errorRate =
+    totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : "0.00";
+  const p50Values = buckets.map((b) => b.quantiles?.cpuTimeP50 ?? 0).filter(Boolean);
+  const p99Values = buckets.map((b) => b.quantiles?.cpuTimeP99 ?? 0).filter(Boolean);
+  const avgP50 =
+    p50Values.length > 0
+      ? Math.round(p50Values.reduce((s, v) => s + v, 0) / p50Values.length)
+      : 0;
+  const avgP99 =
+    p99Values.length > 0
+      ? Math.round(p99Values.reduce((s, v) => s + v, 0) / p99Values.length)
+      : 0;
+
   if (missingCreds) return <SetupCard />;
 
   if (loading) {
@@ -200,29 +221,6 @@ function MetricsTab() {
       </div>
     );
   }
-
-  const buckets: CfInvocationBucket[] =
-    raw?.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? [];
-
-  // Aggregate KPIs
-  const totalRequests = buckets.reduce((s, b) => s + (b.sum?.requests ?? 0), 0);
-  const totalErrors = buckets.reduce((s, b) => s + (b.sum?.errors ?? 0), 0);
-  const errorRate =
-    totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : "0.00";
-  const p50Values = buckets.map((b) => b.quantiles?.cpuTimeP50 ?? 0).filter(Boolean);
-  const p99Values = buckets.map((b) => b.quantiles?.cpuTimeP99 ?? 0).filter(Boolean);
-  const avgP50 =
-    p50Values.length > 0
-      ? Math.round(p50Values.reduce((s, v) => s + v, 0) / p50Values.length)
-      : 0;
-  const avgP99 =
-    p99Values.length > 0
-      ? Math.round(p99Values.reduce((s, v) => s + v, 0) / p99Values.length)
-      : 0;
-
-  // Build hourly bar chart: 24 hourly buckets (oldest → newest)
-  const hourlyBuckets = useMemo(() => buildHourlyBuckets(buckets), [buckets]);
-  const maxBar = Math.max(...hourlyBuckets.map((b) => b.requests + b.errors), 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
