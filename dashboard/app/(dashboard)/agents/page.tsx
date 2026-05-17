@@ -101,9 +101,23 @@ function AgentCard({ agent }: { agent: AgentMeta }) {
 
       <div className="desc">{agent.description}</div>
 
+      {/* Suggested prompts */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, margin: "8px 0 4px" }}>
+        {agent.suggestedPrompts.slice(0, 2).map((p, i) => (
+          <span
+            key={i}
+            className="chip muted"
+            style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", display: "block" }}
+            title={p}
+          >
+            "{p}"
+          </span>
+        ))}
+      </div>
+
       {/* Footer */}
       <div className="ft">
-        <span />
+        <span className="muted" style={{ fontSize: 11.5 }}>+{agent.suggestedPrompts.length} example prompts</span>
         <Link href={`/agents/${agent.slug}`} className="btn accent sm">
           Chat →
         </Link>

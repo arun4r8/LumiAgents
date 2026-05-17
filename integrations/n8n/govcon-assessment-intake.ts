@@ -6,6 +6,7 @@ export const govconAssessmentIntakeInputSchema = z.object({
   opportunityId: z.string().uuid().describe("Supabase opportunity row ID"),
   sourceUrl: z.string().url().optional().describe("SAM.gov or solicitation URL"),
   notes: z.string().optional(),
+  solicitationPdfBase64: z.string().optional().describe("Base64-encoded solicitation PDF (single file only)"),
 });
 
 export const govconAssessmentIntakeOutputSchema = z.object({

@@ -3,7 +3,7 @@ import type { Env } from "../types";
 import { ingestDocument, queryDocuments } from "../agents/document-rag";
 import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
-import { json, parseCsvLine } from "./helpers";
+import { json, parseCsvLine, requireOpsToken } from "./helpers";
 
 // ─── OCR helpers ──────────────────────────────────────────────────────────────
 
@@ -248,6 +248,101 @@ export async function handleDocuments(
     });
 
     return json(result);
+  }
+
+  // GET /api/documents — list all RAG corpus documents with chunk counts, ops-only
+  if (pathname === "/api/documents" && request.method === "GET") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
+    const base = `${env.SUPABASE_URL}/rest/v1`;
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Profile": "orchestration",
+    };
+
+    const docsRes = await fetch(
+      `${base}/orch_documents?select=id,source_name,source_kind,source_uri,metadata,char_count,created_at&order=created_at.desc&limit=500`,
+      { headers },
+    );
+
+    if (!docsRes.ok) {
+      const errText = await docsRes.text();
+      return json({ error: `Failed to fetch documents: ${errText}` }, 502);
+    }
+
+    interface RawDoc {
+      id: string;
+      source_name: string;
+      source_kind: string;
+      source_uri: string | null;
+      metadata: Record<string, unknown>;
+      char_count: number | null;
+      created_at: string;
+    }
+
+    const docs = await docsRes.json() as RawDoc[];
+
+    // Build chunk counts via a second query (skip if no documents)
+    const chunkCountMap = new Map<string, number>();
+    if (docs.length > 0) {
+      const ids = docs.map((d) => d.id).join(",");
+      const chunksRes = await fetch(
+        `${base}/document_chunks?select=document_id,id&document_id=in.(${ids})`,
+        { headers },
+      );
+      if (chunksRes.ok) {
+        const chunks = await chunksRes.json() as Array<{ document_id: string; id: string }>;
+        for (const c of chunks) {
+          chunkCountMap.set(c.document_id, (chunkCountMap.get(c.document_id) ?? 0) + 1);
+        }
+      }
+    }
+
+    const result = docs.map((d) => ({
+      id: d.id,
+      source_name: d.source_name,
+      source_kind: d.source_kind,
+      source_uri: d.source_uri,
+      metadata: d.metadata,
+      char_count: d.char_count,
+      created_at: d.created_at,
+      chunk_count: chunkCountMap.get(d.id) ?? 0,
+    }));
+
+    return json(result);
+  }
+
+  // DELETE /api/documents/:id — delete a document (cascades to chunks via FK), ops-only
+  const docMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
+  if (docMatch && request.method === "DELETE") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
+    const id = docMatch[1]!;
+
+    const base = `${env.SUPABASE_URL}/rest/v1`;
+    const headers = {
+      "Content-Type": "application/json",
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Profile": "orchestration",
+      Prefer: "return=minimal",
+    };
+
+    const delRes = await fetch(
+      `${base}/orch_documents?id=eq.${encodeURIComponent(id)}`,
+      { method: "DELETE", headers },
+    );
+
+    if (!delRes.ok) {
+      const errText = await delRes.text();
+      return json({ error: `Failed to delete document: ${errText}` }, 502);
+    }
+
+    return json({ deleted: true });
   }
 
   return null;

@@ -18,13 +18,12 @@ const QUERYABLE_TABLES = [
   "public.resume_results",
   "public.resume_jobs",
   "public.past_performance",
-  "public.agent_tasks",
 ] as const;
 
 // Compact schema descriptions — keeps the prompt tight.
 // These are hand-maintained and should match the real schema.
 const TABLE_SCHEMAS: Record<string, string> = {
-  "public.opportunities": `opportunities(id uuid, opportunity_name text, agency text, vehicle text, set_aside text, contract_type text, pop text, due_date date, estimated_fte_range text, key_requirements jsonb, evaluation_basis text, extracted_facts jsonb, source_url text, solicitation_number text, page_count int, created_at timestamptz)`,
+  "public.opportunities": `opportunities(id uuid, title text, agency text, set_aside text, naics_code text, solicitation_number text, response_deadline date, posted_date date, source text, source_url text, status text, fit_score float, fit_reason text, red_flags text, recommendation text, last_scored_at timestamptz, created_at timestamptz)`,
 
   "public.assessments": `assessments(id uuid, opportunity_id uuid FK→opportunities, company_profile_id uuid, dimension_scores jsonb, weights jsonb, weighted_score float, go_no_go text, result jsonb, executive_memo text, created_at timestamptz)`,
 
@@ -48,7 +47,6 @@ const TABLE_SCHEMAS: Record<string, string> = {
 
   "public.past_performance": `past_performance(id uuid, company_profile_id uuid, title text, customer text, domain text, scope_summary text, contract_value text, period_of_performance text, relevance_tags jsonb, created_at timestamptz)`,
 
-  "public.agent_tasks": `agent_tasks(id uuid, task_type text, source text, input_json jsonb, agent text, status text, result_json jsonb, tokens_used int, duration_ms int, created_at timestamptz, completed_at timestamptz)`,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────

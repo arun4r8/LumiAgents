@@ -1,9 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Env } from "../types";
 import { AGENTS } from "../../../agents";
+import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, ensurePdfBase64 } from "../utils/pdf";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOOL_ROUNDS = 6;
+
+// Minimal env required by the chat loop — lets agent workers import this without the full runtime Env.
+export interface AgentEnv {
+  ANTHROPIC_API_KEY: string;
+}
 
 // ─── Message types ────────────────────────────────────────────────────────────
 
@@ -37,8 +42,8 @@ async function dispatchTool(
   toolName: string,
   toolInput: ToolInput,
   agentSlug: string,
-  env: Env,
   runtimeUrl: string,
+  files?: FileAttachment[],
 ): Promise<{ result: unknown; runId?: string }> {
   const agent = AGENTS[agentSlug];
   const mapping = agent?.toolMap[toolName];
@@ -47,7 +52,23 @@ async function dispatchTool(
     return { result: { error: `Unknown tool: ${toolName}` } };
   }
 
-  const payload = mapping.transform ? mapping.transform(toolInput) : toolInput;
+  let payload = mapping.transform ? mapping.transform(toolInput) : { ...toolInput };
+
+  // Inject PDF attachments for tools that require them.
+  if (PDF_REQUIRED_TOOLS.has(toolName) && files?.length) {
+    try {
+      if (PDF_BATCH_TOOLS.has(toolName)) {
+        const pdfBase64s = await Promise.all(files.map(ensurePdfBase64));
+        payload = { ...payload, pdfBase64s };
+      } else {
+        // Single-file tools: use the first attached file.
+        const pdfBase64 = await ensurePdfBase64(files[0]!);
+        payload = { ...payload, solicitationPdfBase64: pdfBase64 };
+      }
+    } catch (err) {
+      return { result: { error: err instanceof Error ? err.message : "PDF conversion failed" } };
+    }
+  }
 
   const resp = await fetch(
     `${runtimeUrl}/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/run`,
@@ -78,7 +99,7 @@ async function dispatchTool(
 // ─── Main chat loop ───────────────────────────────────────────────────────────
 
 export async function runAgentChat(
-  env: Env,
+  env: AgentEnv,
   request: AgentChatRequest,
   runtimeUrl: string,
 ): Promise<AgentChatResponse> {
@@ -144,8 +165,8 @@ export async function runAgentChat(
           block.name,
           block.input as ToolInput,
           request.agentSlug,
-          env,
           runtimeUrl,
+          request.files,
         );
         if (runId) runIds.push(runId);
         return {

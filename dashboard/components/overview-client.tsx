@@ -191,6 +191,7 @@ export default function OverviewClient({
           unit=""
           sub={`${completed} ok · ${failed} failed · ${recentRuns.length} total`}
           icon={<Check />}
+          onClick={() => navigate("/runs")}
         />
         <KpiCard
           tone="muted"
@@ -232,6 +233,9 @@ export default function OverviewClient({
                 <span className="live-dot" style={{ background: "var(--ok)", marginRight: 2 }} /> live
               </span>
             </div>
+            <button className="btn ghost sm" onClick={() => navigate("/runs")}>
+              All runs <ArrowRight style={{ width: 12, height: 12 }} />
+            </button>
           </div>
           <ActivityStream steps={recentSteps} />
         </section>
@@ -568,18 +572,20 @@ function SpendPlaceholder({ orchestrations }: { orchestrations: Orchestration[] 
         <div key={o.id} className="spend-row">
           <div className="spend-name">{o.name}</div>
           <div className="spend-bar">
-            <div className="fill" style={{ width: `${20 + Math.random() * 60}%` }} />
+            <div className="fill" style={{ width: 0 }} />
           </div>
-          <div className="spend-tok">—</div>
-          <div className="spend-cost">—</div>
-          <div className="spend-delta flat">—</div>
+          <div className="spend-tok" style={{ color: "var(--ink-3)" }}>—</div>
+          <div className="spend-cost" style={{ color: "var(--ink-3)" }}>—</div>
         </div>
       ))}
       {active.length === 0 && (
         <div className="muted" style={{ fontSize: 12, padding: "8px 0" }}>
-          Token data not yet available.
+          No active orchestrations.
         </div>
       )}
+      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
+        Per-agent token spend tracked in run_steps · aggregated view coming soon
+      </div>
     </div>
   );
 }

@@ -1,112 +1,80 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { StatusBadge, TriggerChip, MonoId, JsonPanel, fmtAbs, fmtDuration } from "@/components/lumi";
-import { RunRealtime } from "@/components/run-realtime";
+import { RunDetailClient } from "@/components/run-detail-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function RunDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RunDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const supabase = await createClient();
 
+  // Fetch the run row, joined to orchestrations for name + version
   const { data: run } = await supabase
     .schema("orchestration")
     .from("runs")
-    .select("*, orchestrations(name, version)")
+    .select(
+      "id, status, triggered_by, created_at, started_at, ended_at, input, output, error, orchestrations(name, version)"
+    )
     .eq("id", id)
     .single();
 
   if (!run) notFound();
 
+  // Fetch all steps for this run, ordered by step_index
   const { data: steps } = await supabase
     .schema("orchestration")
     .from("run_steps")
-    .select("*")
+    .select(
+      "id, step_index, step_name, step_type, status, input, output, error, started_at, ended_at, llm_model, llm_prompt, llm_response, llm_input_tokens, llm_output_tokens"
+    )
     .eq("run_id", id)
     .order("step_index");
 
-  const orch = run.orchestrations as { name: string; version: number } | null;
-  const isBlocked = run.status === "paused";
+  // Fetch tool_calls for all steps (batched — avoids N+1)
+  const stepIds = (steps ?? []).map((s) => s.id);
+  const { data: toolCalls } =
+    stepIds.length > 0
+      ? await supabase
+          .schema("orchestration")
+          .from("tool_calls")
+          .select(
+            "id, run_step_id, tool_name, request, response, status, status_code, latency_ms, ended_at"
+          )
+          .in("run_step_id", stepIds)
+      : { data: [] };
+
+  // Supabase returns joined relations as arrays; normalise orchestrations to a
+  // single object (or null) to match the Run interface expected by the client.
+  const orchRaw = run.orchestrations;
+  const orchestrations = Array.isArray(orchRaw)
+    ? (orchRaw[0] as { name: string; version: number } | undefined) ?? null
+    : (orchRaw as { name: string; version: number } | null);
+
+  type RunProp = Parameters<typeof RunDetailClient>[0]["run"];
+  const runProp: RunProp = {
+    id: run.id as string,
+    status: run.status as string,
+    triggered_by: (run.triggered_by ?? null) as string | null,
+    created_at: run.created_at as string,
+    started_at: (run.started_at ?? null) as string | null,
+    ended_at: (run.ended_at ?? null) as string | null,
+    input: run.input as unknown,
+    output: run.output as unknown,
+    error: run.error as unknown,
+    orchestrations,
+  };
 
   return (
-    <div className="page view-fade">
-      {/* Back + title */}
-      <div className="page-h">
-        <div>
-          <Link href="/runs" className="btn ghost sm" style={{ marginBottom: 8, marginLeft: -8 }}>
-            <ArrowLeft style={{ width: 12, height: 12 }} /> All runs
-          </Link>
-          <h1 className="mono" style={{ fontSize: 17 }}>{orch?.name ?? "Run"}</h1>
-          <div className="sub">Run detail</div>
-        </div>
-      </div>
-
-      {/* Run header card */}
-      <div className="runh">
-        <div className="left">
-          <div className="row gap-md">
-            <StatusBadge status={run.status} />
-            <TriggerChip trigger={{ kind: run.triggered_by ?? "—", label: run.triggered_by }} />
-            <MonoId id={run.id} />
-          </div>
-          <div className="meta">
-            <span>
-              <span className="lbl">Started</span>
-              <span className="v">{fmtAbs(run.created_at)}</span>
-            </span>
-            <span>
-              <span className="lbl">Duration</span>
-              <span className="v">{fmtDuration(run.started_at, run.ended_at)}</span>
-            </span>
-            {orch?.version != null && (
-              <span>
-                <span className="lbl">Version</span>
-                <span className="v mono">v{orch.version}</span>
-              </span>
-            )}
-            {isBlocked && (
-              <span>
-                <span className="lbl">Blocking</span>
-                <span className="chip warn">awaiting approval</span>
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="right">
-          {isBlocked && (
-            <Link href="/approvals" className="btn primary">
-              Resolve approval <ArrowRight style={{ width: 13, height: 13 }} />
-            </Link>
-          )}
-        </div>
-      </div>
-
-      {/* Input / Output */}
-      <div className="io-grid">
-        <JsonPanel title="Input" value={run.input} defaultOpen={false} />
-        <JsonPanel
-          title={run.status === "failed" ? "Error" : "Output"}
-          value={run.error ?? run.output}
-          defaultOpen={false}
-        />
-      </div>
-
-      {/* Steps timeline — live via Realtime */}
-      <RunRealtime
-        runId={run.id}
-        initialSteps={steps ?? []}
-        initialRun={{
-          id: run.id,
-          status: run.status,
-          orchestration_id: run.orchestration_id ?? null,
-          triggered_by: run.triggered_by ?? null,
-          created_at: run.created_at,
-          started_at: run.started_at ?? null,
-          ended_at: run.ended_at ?? null,
-        }}
-      />
-    </div>
+    <RunDetailClient
+      run={runProp}
+      steps={(steps ?? []) as Parameters<typeof RunDetailClient>[0]["steps"]}
+      toolCalls={
+        (toolCalls ?? []) as Parameters<typeof RunDetailClient>[0]["toolCalls"]
+      }
+    />
   );
 }

@@ -6,6 +6,7 @@ export const inputSchema = z.object({
   opportunityId: z.string().uuid().describe("Supabase opportunity row ID"),
   sourceUrl: z.string().url().optional().describe("SAM.gov or solicitation URL"),
   notes: z.string().optional().describe("Analyst notes or context for the assessment"),
+  solicitationPdfBase64: z.string().optional().describe("Base64-encoded solicitation PDF — injected automatically from chat attachments (single file only)"),
 });
 
 export const outputSchema = z.object({
@@ -32,6 +33,7 @@ export default defineOrchestration({
         opportunityId: input.opportunityId,
         ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.solicitationPdfBase64 !== undefined ? { solicitationPdfBase64: input.solicitationPdfBase64 } : {}),
       }),
     );
   },

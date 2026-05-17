@@ -6,7 +6,6 @@ import { handleOrchestrations } from "./routes/orchestrations";
 import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
 import { handleAgents } from "./routes/agents";
-import { handleVault } from "./routes/vault";
 import { handleSchedules } from "./routes/schedules";
 
 // Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
@@ -95,7 +94,6 @@ export default {
         handleDocuments,
         handleApprovals,
         handleAgents,
-        handleVault,
         handleSchedules,
       ];
 

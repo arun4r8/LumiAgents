@@ -17,11 +17,9 @@ export async function callApollo<T>(
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-cache",
+      "X-Api-Key": ctx.env.APOLLO_API_KEY,
     },
-    body: JSON.stringify({
-      ...body,
-      api_key: ctx.env.APOLLO_API_KEY,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

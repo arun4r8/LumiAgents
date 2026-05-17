@@ -15,7 +15,7 @@ in the database. Be analytical and concise. Cite specific evaluation factors whe
   tools: [
     {
       name: "assess_opportunity",
-      description: "Run a full GovCon qualification assessment for an opportunity already in the database — produces a 5-dimensional score, go/no-go recommendation, and executive memo.",
+      description: "Run a full GovCon qualification assessment for an opportunity already in the database — produces a 5-dimensional score, go/no-go recommendation, and executive memo. If the user attaches a solicitation PDF it will be forwarded to the pipeline automatically; only a single PDF is supported per assessment.",
       inputSchema: {
         type: "object",
         properties: {

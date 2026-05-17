@@ -12,6 +12,18 @@ export const angie: AgentDefinition = {
 Be concise and professional. When you trigger an orchestration, tell the user what you started and link them to the run.`,
   tools: [
     {
+      name: "score_resumes",
+      description: "Score and rank candidate résumés against a job description using the AI pipeline. Attach the PDF résumés to this message (multiple allowed — batch processing is supported). Non-PDF files are converted automatically.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          jobDescription: { type: "string", description: "Role title and key requirements to score against" },
+          jobId: { type: "string", description: "Optional existing resume_jobs row ID to append results to" },
+        },
+        required: ["jobDescription"],
+      },
+    },
+    {
       name: "source_candidates",
       description: "Search Apollo for candidates matching a role — runs a sourcing workflow that scores and filters results.",
       inputSchema: {
@@ -44,6 +56,7 @@ Be concise and professional. When you trigger an orchestration, tell the user wh
     },
   ],
   toolMap: {
+    score_resumes:     { orchestration: "angie/resume-scoring" },
     source_candidates: { orchestration: "angie/candidate-sourcing" },
     format_resume:     { orchestration: "angie/resume-formatting" },
   },

@@ -29,6 +29,23 @@ binding = "ORCHESTRATION_WORKFLOW"
 class_name = "RunOrchestration"
 script_name = "lumiagents-runtime"
 
+# Per-agent Service Bindings — route chat requests to their own CF Workers.
+[[services]]
+binding = "ANGIE_WORKER"
+service = "lumiagents-angie"
+
+[[services]]
+binding = "BEADY_WORKER"
+service = "lumiagents-beady"
+
+[[services]]
+binding = "PATCH_WORKER"
+service = "lumiagents-patch"
+
+[[services]]
+binding = "MONEY_WORKER"
+service = "lumiagents-money"
+
 [triggers]
 crons = ["*/5 * * * *"]  # meta-cron: checks orchestration.schedules every 5 min
 

@@ -2,8 +2,8 @@
 
 import { useTheme } from "@/components/theme-provider";
 import {
-  Sun, Moon, Monitor, AlignJustify, Rows3, RefreshCw, Loader2,
-  Check, AlertTriangle, Bot, GitBranch, ChevronDown, ChevronUp, Save,
+  Sun, Moon, Monitor, AlignJustify, Rows3, Loader2,
+  Check, Bot, GitBranch, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import { useTransition, useState } from "react";
 
@@ -50,16 +50,15 @@ interface Props {
   orchestrations: OrchestrationType[];
   updateAgentConfig: (agentId: string, data: { model: string; max_tokens: number; notes: string | null }) => Promise<void>;
   updateOrchestrationConfig: (id: string, data: { description: string | null; model: string | null; notes: string | null; cron: string | null }) => Promise<void>;
-  triggerVaultSync: (formData: FormData) => Promise<void>;
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-type Tab = "account" | "agents" | "orchestrations" | "appearance" | "integrations";
+type Tab = "account" | "agents" | "orchestrations" | "appearance";
 
 export function SettingsClient({
   userEmail, userCreatedAt, agentConfigs, orchestrations,
-  updateAgentConfig, updateOrchestrationConfig, triggerVaultSync,
+  updateAgentConfig, updateOrchestrationConfig,
 }: Props) {
   const [tab, setTab] = useState<Tab>("agents");
 
@@ -77,7 +76,7 @@ export function SettingsClient({
       </div>
 
       <div className="tabs" style={{ marginBottom: 24 }}>
-        {(["agents", "orchestrations", "account", "appearance", "integrations"] as Tab[]).map((t) => (
+        {(["agents", "orchestrations", "account", "appearance"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}
             style={{ textTransform: "capitalize" }}>
             {t}
@@ -106,7 +105,6 @@ export function SettingsClient({
         </div>
       )}
       {tab === "appearance" && <AppearanceTab />}
-      {tab === "integrations" && <VaultSyncSection triggerVaultSync={triggerVaultSync} />}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -503,60 +501,3 @@ function SegBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
 }
 
 function Divider() { return <hr className="settings-divider" />; }
-
-function VaultSyncSection({ triggerVaultSync }: { triggerVaultSync: (fd: FormData) => Promise<void> }) {
-  const [pending, startTransition] = useTransition();
-  const [status, setStatus] = useState<"idle" | "ok" | "err">("idle");
-  const [errMsg, setErrMsg] = useState<string | null>(null);
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    setStatus("idle"); setErrMsg(null);
-    startTransition(async () => {
-      try {
-        await triggerVaultSync(fd);
-        setStatus("ok");
-        setTimeout(() => setStatus("idle"), 4000);
-      } catch (err) {
-        setErrMsg(err instanceof Error ? err.message : "Sync failed");
-        setStatus("err");
-      }
-    });
-  }
-
-  return (
-    <div style={{ maxWidth: 680 }}>
-      <Section heading="Vault sync">
-        <form onSubmit={handleSubmit} className="card" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <div className="field" style={{ margin: 0 }}>
-              <label style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 4, display: "block" }}>GitHub owner</label>
-              <input className="input" name="repoOwner" placeholder="e.g. arun4r8" required style={{ height: 34, fontSize: 13 }} />
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 4, display: "block" }}>Repository name</label>
-              <input className="input" name="repoName" placeholder="e.g. lumiture-vault" required style={{ height: 34, fontSize: 13 }} />
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 4, display: "block" }}>Branch <span style={{ color: "var(--ink-3)" }}>(optional)</span></label>
-              <input className="input" name="branch" placeholder="main" style={{ height: 34, fontSize: 13 }} />
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-              Pulls the latest vault contents into the RAG document corpus via patch/vault-sync.
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {status === "ok" && <span className="chip ok" style={{ fontSize: 12 }}><Check style={{ width: 10, height: 10 }} /> Sync dispatched</span>}
-              {status === "err" && errMsg && <span style={{ fontSize: 12, color: "var(--err)", display: "flex", alignItems: "center", gap: 5 }}><AlertTriangle style={{ width: 12, height: 12 }} /> {errMsg}</span>}
-              <button type="submit" className="btn" disabled={pending} style={{ whiteSpace: "nowrap" }}>
-                {pending ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Syncing…</> : <><RefreshCw style={{ width: 13, height: 13 }} /> Sync now</>}
-              </button>
-            </div>
-          </div>
-        </form>
-      </Section>
-    </div>
-  );
-}

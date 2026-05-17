@@ -13,6 +13,17 @@ interface OrcDocument {
   created_at: string;
 }
 
+interface CorpusDoc {
+  id: string;
+  source_name: string;
+  source_kind: string;
+  source_uri: string | null;
+  metadata: Record<string, unknown>;
+  char_count: number | null;
+  chunk_count: number;
+  created_at: string;
+}
+
 interface QueryResult {
   answer: string;
   sources: Array<{ sourceName: string; chunkIndex: number; similarity: number }>;
@@ -27,14 +38,18 @@ const EXAMPLES = [
   "NIST 800-53 account management controls",
 ];
 
+type DocTab = "query" | "ingest" | "corpus";
+
 export function DocumentsClient({
   documents,
+  corpusDocs,
   deleteDocument,
 }: {
   documents: OrcDocument[];
+  corpusDocs: CorpusDoc[];
   deleteDocument: (id: string) => Promise<void>;
 }) {
-  const [tab, setTab] = useState<"query" | "ingest">("query");
+  const [tab, setTab] = useState<DocTab>("query");
 
   return (
     <div className="page view-fade">
@@ -48,15 +63,21 @@ export function DocumentsClient({
       <div className="tabs">
         <button className={tab === "query" ? "active" : ""} onClick={() => setTab("query")}>Query</button>
         <button className={tab === "ingest" ? "active" : ""} onClick={() => setTab("ingest")}>Ingest</button>
-        <button className={tab === "corpus" as typeof tab ? "active" : ""} onClick={() => setTab("corpus" as typeof tab)}>
+        <button className={tab === "corpus" ? "active" : ""} onClick={() => setTab("corpus")}>
           Corpus
-          <span className="count" style={{ marginLeft: 6 }}>{documents.length}</span>
+          <span className="count" style={{ marginLeft: 6 }}>{corpusDocs.length || documents.length}</span>
         </button>
       </div>
 
       {tab === "query" && <DocsQuery />}
       {tab === "ingest" && <DocsIngest />}
-      {tab === ("corpus" as string) && <DocCorpus documents={documents} deleteDocument={deleteDocument} />}
+      {tab === "corpus" && (
+        <DocCorpus
+          documents={documents}
+          corpusDocs={corpusDocs}
+          deleteDocument={deleteDocument}
+        />
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -463,13 +484,19 @@ function kindIcon(kind: string) {
 
 function DocCorpus({
   documents,
+  corpusDocs,
   deleteDocument,
 }: {
   documents: OrcDocument[];
+  corpusDocs: CorpusDoc[];
   deleteDocument: (id: string) => Promise<void>;
 }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [, startTransition] = useTransition();
+
+  // Prefer the richer corpus list from the runtime; fall back to the Supabase list
+  const useRich = corpusDocs.length > 0;
 
   function handleDelete(id: string) {
     setDeletingId(id);
@@ -479,7 +506,7 @@ function DocCorpus({
     });
   }
 
-  if (documents.length === 0) {
+  if (!useRich && documents.length === 0) {
     return (
       <div className="empty" style={{ paddingTop: 48 }}>
         <FileText style={{ width: 28, height: 28, color: "var(--ink-4)" }} />
@@ -489,6 +516,121 @@ function DocCorpus({
     );
   }
 
+  if (useRich) {
+    // Rich view — data from runtime /api/documents
+    const filtered = search.trim()
+      ? corpusDocs.filter((d) =>
+          d.source_name.toLowerCase().includes(search.trim().toLowerCase()),
+        )
+      : corpusDocs;
+
+    const totalChunks = corpusDocs.reduce((s, d) => s + d.chunk_count, 0);
+    const totalChars = corpusDocs.reduce((s, d) => s + (d.char_count ?? 0), 0);
+
+    return (
+      <div>
+        {/* Stats row */}
+        <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+          <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{corpusDocs.length}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>documents</div>
+          </div>
+          <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{totalChunks.toLocaleString()}</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>chunks</div>
+          </div>
+          <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{(totalChars / 1000).toFixed(0)}k</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>characters</div>
+          </div>
+          <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>
+              {[...new Set(corpusDocs.map((d) => d.source_kind))].join(" · ") || "—"}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>source kinds</div>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="search" style={{ marginBottom: 14 }}>
+          <Search style={{ width: 14, height: 14 }} />
+          <input
+            placeholder="Filter by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ height: 34 }}
+          />
+        </div>
+
+        {/* Table */}
+        {filtered.length === 0 ? (
+          <div className="empty" style={{ paddingTop: 32 }}>
+            <p>No documents match &ldquo;{search}&rdquo;</p>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <table className="tbl" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ paddingLeft: 16 }}>Name</th>
+                  <th>Kind</th>
+                  <th style={{ textAlign: "right" }}>Chunks</th>
+                  <th style={{ textAlign: "right" }}>Size</th>
+                  <th>Ingested</th>
+                  <th style={{ width: 48 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((doc) => (
+                  <tr key={doc.id}>
+                    <td style={{ paddingLeft: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {kindIcon(doc.source_kind)}
+                        <span style={{
+                          fontWeight: 500, fontSize: 13.5,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          maxWidth: 320,
+                        }}>
+                          {doc.source_name}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="chip muted" style={{ fontSize: 10.5 }}>{doc.source_kind}</span>
+                    </td>
+                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13 }}>
+                      {doc.chunk_count.toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13, color: "var(--ink-2)" }}>
+                      {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "—"}
+                    </td>
+                    <td style={{ fontSize: 12.5, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
+                      {new Date(doc.created_at).toLocaleDateString()}
+                    </td>
+                    <td>
+                      <button
+                        className="btn ghost sm"
+                        style={{ color: "var(--err)", padding: "4px 8px" }}
+                        onClick={() => handleDelete(doc.id)}
+                        disabled={deletingId === doc.id}
+                        title="Delete document and all its chunks"
+                      >
+                        {deletingId === doc.id
+                          ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                          : <Trash2 style={{ width: 12, height: 12 }} />}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Legacy fallback view — data from Supabase (no chunk counts)
   const totalChars = documents.reduce((s, d) => s + (d.char_count ?? 0), 0);
 
   return (

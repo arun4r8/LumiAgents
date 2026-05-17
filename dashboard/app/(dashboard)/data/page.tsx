@@ -27,7 +27,7 @@ export default async function DataPage() {
     supabase.from("employees").select("*").order("full_name").limit(200),
     supabase.from("past_performance").select("*").order("created_at", { ascending: false }).limit(100),
     supabase.from("opportunities")
-      .select("id, opportunity_name, agency, set_aside, recommendation, fit_score, fit_reason, red_flags, last_scored_at, response_due_date, status, solicitation_number, naics_codes, created_at")
+      .select("id, title, agency, set_aside, recommendation, fit_score, fit_reason, red_flags, last_scored_at, response_deadline, status, solicitation_number, naics_code, created_at")
       .order("created_at", { ascending: false }).limit(100),
     supabase.from("candidates")
       .select("id, name, email, first_name, last_name, role, status, current_title, current_company, match_score, match_reason, seniority, linkedin_url, source, outreach_sent, created_at")

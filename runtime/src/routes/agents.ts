@@ -3,6 +3,14 @@ import { runAgentChat } from "../agents/agent-chat";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json } from "./helpers";
 
+// Maps agent slug → which Env key holds its Service Binding.
+const AGENT_BINDINGS: Record<string, keyof Env> = {
+  angie: "ANGIE_WORKER",
+  beady: "BEADY_WORKER",
+  patch: "PATCH_WORKER",
+  money: "MONEY_WORKER",
+};
+
 export async function handleAgents(
   request: Request,
   env: Env,
@@ -15,12 +23,25 @@ export async function handleAgents(
   const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)\/chat$/);
   if (agentMatch && request.method === "POST") {
     const slug = agentMatch[1] as "angie" | "beady" | "patch" | "money";
+    const runtimeUrl = `${url.protocol}//${url.host}`;
 
+    const bindingKey = AGENT_BINDINGS[slug];
+    const workerBinding = bindingKey ? (env[bindingKey] as Fetcher | undefined) : undefined;
+
+    if (workerBinding) {
+      // Production: forward to the agent's own CF Worker via Service Binding.
+      // Pass runtimeUrl so the agent worker can call back for orchestration dispatch.
+      const forwarded = new Request(request, {
+        headers: { ...Object.fromEntries(request.headers), "X-Runtime-Url": runtimeUrl },
+      });
+      return workerBinding.fetch(forwarded);
+    }
+
+    // Development fallback: run the chat loop locally (no Service Binding configured).
     let body: { messages?: unknown; files?: unknown };
     try { body = await request.json() as typeof body; }
     catch { return json({ error: "Invalid JSON body" }, 400); }
 
-    const runtimeUrl = `${url.protocol}//${url.host}`;
     const chatReq: import("../agents/agent-chat").AgentChatRequest = {
       agentSlug: slug,
       messages: (body.messages ?? []) as import("../agents/agent-chat").ChatMessage[],

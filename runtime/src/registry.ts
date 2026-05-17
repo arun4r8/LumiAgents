@@ -6,10 +6,10 @@ import type { OrchestrationDefinition } from "./types";
 
 import angieCandidateSourcing    from "../../orchestrations/angie/candidate-sourcing/definition";
 import angieResumeFormat         from "../../orchestrations/angie/resume-format/definition";
+import angieResumeScoring        from "../../orchestrations/angie/resume-scoring/definition";
 import beadyOpportunitySearch    from "../../orchestrations/beady/opportunity-search/definition";
 import beadyGovconAssessment     from "../../orchestrations/beady/govcon-assessment/definition";
 import beadyPastPerformanceSeed  from "../../orchestrations/beady/past-performance-seed/definition";
-import patchVaultSync         from "../../orchestrations/patch/vault-sync/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -26,15 +26,15 @@ function reg(o: AnyOrch): [string, AnyOrch] {
 export const orchestrations = new Map<string, AnyOrch>([
   reg(angieCandidateSourcing   as unknown as AnyOrch),
   reg(angieResumeFormat        as unknown as AnyOrch),
+  reg(angieResumeScoring       as unknown as AnyOrch),
   reg(beadyOpportunitySearch   as unknown as AnyOrch),
   reg(beadyGovconAssessment    as unknown as AnyOrch),
   reg(beadyPastPerformanceSeed as unknown as AnyOrch),
-  reg(moneyDataAnalyst       as unknown as AnyOrch),
+  reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),
   reg(patchTicketOps         as unknown as AnyOrch),
   reg(patchStaffRequest      as unknown as AnyOrch),
-  reg(patchVaultSync         as unknown as AnyOrch),
   reg(patchDocumentRag.documentIngest as unknown as AnyOrch),
   reg(patchDocumentRag.documentQuery  as unknown as AnyOrch),
 ]);

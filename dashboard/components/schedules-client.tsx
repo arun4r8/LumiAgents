@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition, useRef, useState } from "react";
-import { Clock, Plus, Trash2, Power, PowerOff, Loader2, X } from "lucide-react";
+import { Clock, Plus, Trash2, Power, PowerOff, Loader2, X, Pencil, Check } from "lucide-react";
 
 interface Schedule {
   id: string;
@@ -18,6 +18,7 @@ interface Props {
   createSchedule: (formData: FormData) => Promise<void>;
   toggleSchedule: (formData: FormData) => Promise<void>;
   deleteSchedule: (formData: FormData) => Promise<void>;
+  updateSchedule: (formData: FormData) => Promise<void>;
 }
 
 function timeAgo(iso: string): string {
@@ -30,7 +31,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export function SchedulesClient({ schedules, createSchedule, toggleSchedule, deleteSchedule }: Props) {
+export function SchedulesClient({ schedules, createSchedule, toggleSchedule, deleteSchedule, updateSchedule }: Props) {
   const [showCreate, setShowCreate] = useState(false);
 
   const active = schedules.filter((s) => s.is_active).length;
@@ -76,7 +77,7 @@ export function SchedulesClient({ schedules, createSchedule, toggleSchedule, del
             </thead>
             <tbody>
               {schedules.map((s) => (
-                <ScheduleRow key={s.id} schedule={s} toggleSchedule={toggleSchedule} deleteSchedule={deleteSchedule} />
+                <ScheduleRow key={s.id} schedule={s} toggleSchedule={toggleSchedule} deleteSchedule={deleteSchedule} updateSchedule={updateSchedule} />
               ))}
             </tbody>
           </table>
@@ -161,13 +162,79 @@ function ScheduleRow({
   schedule: s,
   toggleSchedule,
   deleteSchedule,
+  updateSchedule,
 }: {
   schedule: Schedule;
   toggleSchedule: (fd: FormData) => Promise<void>;
   deleteSchedule: (fd: FormData) => Promise<void>;
+  updateSchedule: (fd: FormData) => Promise<void>;
 }) {
   const [togglePending, startToggle] = useTransition();
   const [deletePending, startDelete] = useTransition();
+  const [editPending, startEdit] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [editLabel, setEditLabel] = useState(s.label ?? "");
+  const [editCron, setEditCron] = useState(s.cron_expression);
+
+  function openEdit() {
+    setEditLabel(s.label ?? "");
+    setEditCron(s.cron_expression);
+    setEditing(true);
+  }
+
+  function handleEditSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startEdit(async () => {
+      await updateSchedule(fd);
+      setEditing(false);
+    });
+  }
+
+  if (editing) {
+    return (
+      <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
+        <td colSpan={6} style={{ padding: "12px 16px" }}>
+          <form onSubmit={handleEditSubmit} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input type="hidden" name="id" value={s.id} />
+            <div className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+              <label style={{ fontSize: 11 }}>Label</label>
+              <input
+                className="input"
+                name="label"
+                value={editLabel}
+                onChange={(e) => setEditLabel(e.target.value)}
+                placeholder="Optional label"
+                style={{ height: 30, fontSize: 13 }}
+              />
+            </div>
+            <div className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+              <label style={{ fontSize: 11 }}>Cron expression</label>
+              <input
+                className="input mono"
+                name="cron_expression"
+                value={editCron}
+                onChange={(e) => setEditCron(e.target.value)}
+                required
+                style={{ height: 30, fontSize: 13 }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "flex-end", paddingBottom: 2 }}>
+              <button type="submit" className="btn accent sm" disabled={editPending}>
+                {editPending
+                  ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                  : <Check style={{ width: 12, height: 12 }} />}
+                {editPending ? "Saving…" : "Save"}
+              </button>
+              <button type="button" className="btn ghost sm" onClick={() => setEditing(false)}>
+                <X style={{ width: 12, height: 12 }} /> Cancel
+              </button>
+            </div>
+          </form>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr style={{ borderBottom: "1px solid var(--line)" }}>
@@ -194,6 +261,9 @@ function ScheduleRow({
       </td>
       <td style={{ padding: "12px 16px" }}>
         <div className="row gap-sm" style={{ justifyContent: "flex-end" }}>
+          <button className="btn ghost sm" onClick={openEdit} title="Edit">
+            <Pencil style={{ width: 13, height: 13 }} />
+          </button>
           <form onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);

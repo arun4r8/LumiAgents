@@ -1,0 +1,14 @@
+name = "lumiagents-money"
+main = "../../src/workers/money.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
+ENVIRONMENT = "production"
+
+# Secrets (set via `wrangler secret put --name lumiagents-money`):
+# ANTHROPIC_API_KEY
+
+[dev]
+port = 8791

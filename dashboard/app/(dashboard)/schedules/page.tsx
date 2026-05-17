@@ -76,12 +76,29 @@ export default async function SchedulesPage() {
     revalidatePath("/schedules");
   }
 
+  async function updateSchedule(formData: FormData) {
+    "use server";
+    const token = await getToken();
+    const id = formData.get("id") as string;
+    const res = await fetch(`${RUNTIME}/api/schedules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        label: (formData.get("label") as string)?.trim() || null,
+        cron_expression: (formData.get("cron_expression") as string)?.trim(),
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    revalidatePath("/schedules");
+  }
+
   return (
     <SchedulesClient
       schedules={(schedules ?? []) as Schedule[]}
       createSchedule={createSchedule}
       toggleSchedule={toggleSchedule}
       deleteSchedule={deleteSchedule}
+      updateSchedule={updateSchedule}
     />
   );
 }

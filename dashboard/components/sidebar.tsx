@@ -14,6 +14,7 @@ import {
   LogOut,
   Bot,
   Clock,
+  Server,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
 
@@ -42,7 +43,8 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/analyst",        label: "Data Analyst",    icon: <BarChart2 /> },
     { href: "/documents",      label: "Documents",       icon: <FileText /> },
     { href: "/data",           label: "Data",            icon: <Database /> },
-    { href: "/settings",       label: "Settings",        icon: <Settings /> },
+    { href: "/settings",        label: "Settings",        icon: <Settings /> },
+    { href: "/infrastructure",  label: "Infrastructure",  icon: <Server /> },
   ];
 
   const initials = userEmail

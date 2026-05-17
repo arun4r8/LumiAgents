@@ -25,6 +25,11 @@ export interface Env {
   AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
   /** Cloudflare Workflows binding — present in deployed Workers, absent in local dev without wrangler. */
   ORCHESTRATION_WORKFLOW: Workflow;
+  // Per-agent Service Bindings — present in production, absent in local dev (fallback to local fn).
+  ANGIE_WORKER?: Fetcher;
+  BEADY_WORKER?: Fetcher;
+  PATCH_WORKER?: Fetcher;
+  MONEY_WORKER?: Fetcher;
   // Teams integration (set via `wrangler secret put`)
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   TEAMS_BOT_APP_ID?: string;
