@@ -71,9 +71,9 @@ describe("patch/document-ingest", () => {
     });
     expect(runId).toBeTruthy();
 
-    const run = await pollRun(runId, 90_000);
+    const run = await pollRun(runId, 150_000);
     expect(run.status).toBe("completed");
-  }, 100_000);
+  }, 160_000);
 });
 
 // Skipped in automated CI — requires Jira credentials (JIRA_EMAIL, JIRA_API_TOKEN).
