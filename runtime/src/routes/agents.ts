@@ -3,6 +3,22 @@ import { runAgentChat } from "../agents/agent-chat";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json } from "./helpers";
 
+async function mintDispatchToken(jwtSecret: string): Promise<string> {
+  const enc = (s: string) =>
+    btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  const header = enc(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const now = Math.floor(Date.now() / 1000);
+  const payload = enc(JSON.stringify({ sub: "agent-dispatch", user_role: "ops", iat: now, exp: now + 300 }));
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(jwtSecret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${header}.${payload}`));
+  const sig = btoa(String.fromCharCode(...new Uint8Array(sigBytes)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return `${header}.${payload}.${sig}`;
+}
+
 // Maps agent slug → which Env key holds its Service Binding.
 const AGENT_BINDINGS: Record<string, keyof Env> = {
   angie: "ANGIE_WORKER",
@@ -28,11 +44,17 @@ export async function handleAgents(
     const bindingKey = AGENT_BINDINGS[slug];
     const workerBinding = bindingKey ? (env[bindingKey] as Fetcher | undefined) : undefined;
 
+    const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET);
+
     if (workerBinding) {
       // Production: forward to the agent's own CF Worker via Service Binding.
-      // Pass runtimeUrl so the agent worker can call back for orchestration dispatch.
+      // Inject X-Runtime-Url (for tool dispatch callbacks) and X-Dispatch-Token (ops JWT).
       const forwarded = new Request(request, {
-        headers: { ...Object.fromEntries(request.headers), "X-Runtime-Url": runtimeUrl },
+        headers: {
+          ...Object.fromEntries(request.headers),
+          "X-Runtime-Url": runtimeUrl,
+          "X-Dispatch-Token": dispatchToken,
+        },
       });
       return workerBinding.fetch(forwarded);
     }
@@ -48,7 +70,7 @@ export async function handleAgents(
     };
     const rawFiles = body.files as import("../agents/agent-chat").FileAttachment[] | undefined;
     if (rawFiles?.length) chatReq.files = rawFiles;
-    const result = await runAgentChat(env, chatReq, runtimeUrl);
+    const result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
 
     return json(result);
   }

@@ -144,8 +144,16 @@ function SetupCard() {
 
 // ── Metrics tab ────────────────────────────────────────────────────────────────
 
+interface RunStats {
+  total: number;
+  succeeded: number;
+  failed: number;
+  cronTriggered: number;
+}
+
 function MetricsTab() {
   const [raw, setRaw] = useState<MetricsData | null>(null);
+  const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingCreds, setMissingCreds] = useState(false);
@@ -154,16 +162,22 @@ function MetricsTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/cf/metrics");
-      if (res.status === 503) {
+      const [cfRes, runsRes] = await Promise.all([
+        fetch("/api/cf/metrics"),
+        fetch("/api/runs/stats"),
+      ]);
+      if (cfRes.status === 503) {
         setMissingCreds(true);
         return;
       }
-      if (!res.ok) {
-        const body = (await res.json()) as { error?: string };
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+      if (!cfRes.ok) {
+        const body = (await cfRes.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${cfRes.status}`);
       }
-      setRaw((await res.json()) as MetricsData);
+      setRaw((await cfRes.json()) as MetricsData);
+      if (runsRes.ok) {
+        setRunStats((await runsRes.json()) as RunStats);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -181,10 +195,6 @@ function MetricsTab() {
   const hourlyBuckets = useMemo(() => buildHourlyBuckets(buckets), [buckets]);
   const maxBar = Math.max(...hourlyBuckets.map((b) => b.requests + b.errors), 1);
 
-  const totalRequests = buckets.reduce((s, b) => s + (b.sum?.requests ?? 0), 0);
-  const totalErrors = buckets.reduce((s, b) => s + (b.sum?.errors ?? 0), 0);
-  const errorRate =
-    totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : "0.00";
   const p50Values = buckets.map((b) => b.quantiles?.cpuTimeP50 ?? 0).filter(Boolean);
   const p99Values = buckets.map((b) => b.quantiles?.cpuTimeP99 ?? 0).filter(Boolean);
   const avgP50 =
@@ -217,15 +227,12 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* KPI strip */}
+      {/* KPI strip — orchestration run stats */}
       <div className="kpis">
-        <MetricKpi label="Total Requests · 24h" value={totalRequests.toLocaleString()} tone="info" />
-        <MetricKpi label="Total Errors · 24h" value={totalErrors.toLocaleString()} tone={totalErrors > 0 ? "err" : "ok"} />
-        <MetricKpi
-          label="Error Rate"
-          value={`${errorRate}%`}
-          tone={parseFloat(errorRate) > 5 ? "err" : parseFloat(errorRate) > 1 ? "warn" : "ok"}
-        />
+        <MetricKpi label="Total Runs · 24h" value={(runStats?.total ?? 0).toLocaleString()} tone="info" />
+        <MetricKpi label="Succeeded" value={(runStats?.succeeded ?? 0).toLocaleString()} tone={runStats && runStats.succeeded > 0 ? "ok" : "muted"} />
+        <MetricKpi label="Failed" value={(runStats?.failed ?? 0).toLocaleString()} tone={runStats && runStats.failed > 0 ? "err" : "ok"} />
+        <MetricKpi label="Cron-triggered" value={(runStats?.cronTriggered ?? 0).toLocaleString()} tone="muted" />
         <MetricKpi label="CPU P50 (avg)" value={`${avgP50} µs`} tone="muted" />
         <MetricKpi label="CPU P99 (avg)" value={`${avgP99} µs`} tone={avgP99 > 50000 ? "warn" : "muted"} />
       </div>

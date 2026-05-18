@@ -32,8 +32,9 @@ export function makeAgentWorker(slug: "angie" | "beady" | "patch" | "money") {
         return json({ error: "Method not allowed" }, 405);
       }
 
-      // runtimeUrl is injected by the gateway so tool dispatch calls back to the right place.
+      // runtimeUrl and dispatchToken are injected by the gateway.
       const runtimeUrl = request.headers.get("X-Runtime-Url") ?? "";
+      const dispatchToken = request.headers.get("X-Dispatch-Token") ?? undefined;
 
       let body: { messages?: unknown; files?: unknown };
       try { body = await request.json() as typeof body; }
@@ -47,7 +48,7 @@ export function makeAgentWorker(slug: "angie" | "beady" | "patch" | "money") {
       if (rawFiles?.length) chatReq.files = rawFiles;
 
       try {
-        const result = await runAgentChat(env, chatReq, runtimeUrl);
+        const result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
         return json(result);
       } catch (err) {
         console.error(`[${slug}] chat error:`, err);

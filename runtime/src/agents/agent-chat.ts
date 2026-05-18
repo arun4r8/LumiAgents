@@ -10,6 +10,7 @@ export interface AgentEnv {
   ANTHROPIC_API_KEY: string;
 }
 
+
 // ─── Message types ────────────────────────────────────────────────────────────
 
 export interface ChatMessage {
@@ -43,6 +44,7 @@ async function dispatchTool(
   toolInput: ToolInput,
   agentSlug: string,
   runtimeUrl: string,
+  dispatchToken: string | undefined,
   files?: FileAttachment[],
 ): Promise<{ result: unknown; runId?: string }> {
   const agent = AGENTS[agentSlug];
@@ -74,7 +76,10 @@ async function dispatchTool(
     `${runtimeUrl}/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/run`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {}),
+      },
       body: JSON.stringify(payload),
     },
   );
@@ -102,6 +107,7 @@ export async function runAgentChat(
   env: AgentEnv,
   request: AgentChatRequest,
   runtimeUrl: string,
+  dispatchToken?: string,
 ): Promise<AgentChatResponse> {
   const agent = AGENTS[request.agentSlug];
   if (!agent) throw new Error(`Unknown agent slug: ${request.agentSlug}`);
@@ -166,6 +172,7 @@ export async function runAgentChat(
           block.input as ToolInput,
           request.agentSlug,
           runtimeUrl,
+          dispatchToken,
           request.files,
         );
         if (runId) runIds.push(runId);
