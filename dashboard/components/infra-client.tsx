@@ -144,6 +144,13 @@ function SetupCard() {
 
 // ── Metrics tab ────────────────────────────────────────────────────────────────
 
+interface UsageData {
+  requestsToday: number;
+  workersCount: number;
+  plan: "free" | "paid";
+  limits: { requestsPerDay: number; workersMax: number | null };
+}
+
 interface RunStats {
   total: number;
   succeeded: number;
@@ -163,6 +170,7 @@ function formatCost(usd: number): string {
 function MetricsTab() {
   const [raw, setRaw] = useState<MetricsData | null>(null);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
+  const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingCreds, setMissingCreds] = useState(false);
@@ -171,9 +179,10 @@ function MetricsTab() {
     setLoading(true);
     setError(null);
     try {
-      const [cfRes, runsRes] = await Promise.all([
+      const [cfRes, runsRes, usageRes] = await Promise.all([
         fetch("/api/cf/metrics"),
         fetch("/api/runs/stats"),
+        fetch("/api/cf/usage"),
       ]);
       if (cfRes.status === 503) {
         setMissingCreds(true);
@@ -184,9 +193,8 @@ function MetricsTab() {
         throw new Error(body.error ?? `HTTP ${cfRes.status}`);
       }
       setRaw((await cfRes.json()) as MetricsData);
-      if (runsRes.ok) {
-        setRunStats((await runsRes.json()) as RunStats);
-      }
+      if (runsRes.ok) setRunStats((await runsRes.json()) as RunStats);
+      if (usageRes.ok) setUsage((await usageRes.json()) as UsageData);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -234,6 +242,10 @@ function MetricsTab() {
     );
   }
 
+  const reqPct = usage
+    ? Math.min(100, (usage.requestsToday / usage.limits.requestsPerDay) * 100)
+    : 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {/* KPI strip — orchestration run stats */}
@@ -251,6 +263,63 @@ function MetricsTab() {
         <MetricKpi label="CPU P50 (avg)" value={`${avgP50} µs`} tone="muted" />
         <MetricKpi label="CPU P99 (avg)" value={`${avgP99} µs`} tone={avgP99 > 50000 ? "warn" : "muted"} />
       </div>
+
+      {/* Plan usage */}
+      {usage && (
+        <section className="card pad">
+          <div className="sec-h" style={{ marginBottom: 16 }}>
+            <h3>Plan Usage</h3>
+            <span className="chip muted mono" style={{ fontSize: 11 }}>
+              Workers {usage.plan === "paid" ? "Paid" : "Free"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Daily requests bar */}
+            <div>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}>
+                <span style={{ color: "var(--ink-2)" }}>Requests today</span>
+                <span className="mono" style={{ fontSize: 12.5 }}>
+                  {usage.requestsToday.toLocaleString()}
+                  <span style={{ color: "var(--ink-3)" }}>
+                    {" "}/ {(usage.limits.requestsPerDay / 1_000_000).toFixed(0)}M
+                  </span>
+                </span>
+              </div>
+              <div style={{
+                height: 8,
+                borderRadius: 4,
+                background: "var(--line)",
+                overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%",
+                  width: `${reqPct}%`,
+                  borderRadius: 4,
+                  background: reqPct > 90
+                    ? "var(--err)"
+                    : reqPct > 70
+                    ? "var(--warn)"
+                    : "var(--ok)",
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+              <div className="mono muted" style={{ fontSize: 11, marginTop: 4, textAlign: "right" }}>
+                {reqPct.toFixed(1)}% of daily limit
+              </div>
+            </div>
+            {/* Workers count */}
+            <div className="row" style={{ justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ color: "var(--ink-2)" }}>Workers deployed</span>
+              <span className="mono" style={{ fontSize: 12.5 }}>
+                {usage.workersCount}
+                {usage.limits.workersMax !== null && (
+                  <span style={{ color: "var(--ink-3)" }}> / {usage.limits.workersMax}</span>
+                )}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Bar chart */}
       <section className="card pad">
