@@ -17,9 +17,10 @@ export class SupabaseClient {
       "apikey": this.key,
       "Authorization": `Bearer ${this.key}`,
       "Prefer": "return=representation",
-      // All runtime DB calls target the orchestration schema.
-      // PostgREST requires Content-Profile instead of schema.table dot-notation in the URL.
+      // PostgREST schema targeting: Content-Profile for mutations, Accept-Profile for reads.
+      // Include both so all requests (GET and POST/PATCH) hit the orchestration schema.
       "Content-Profile": "orchestration",
+      "Accept-Profile": "orchestration",
     };
   }
 
