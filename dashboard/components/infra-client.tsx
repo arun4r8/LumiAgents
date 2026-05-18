@@ -149,6 +149,15 @@ interface RunStats {
   succeeded: number;
   failed: number;
   cronTriggered: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  estimatedCostUsd: number;
+}
+
+function formatCost(usd: number): string {
+  if (usd < 0.005) return "< $0.01";
+  if (usd < 1) return `$${usd.toFixed(2)}`;
+  return `$${usd.toFixed(2)}`;
 }
 
 function MetricsTab() {
@@ -233,6 +242,12 @@ function MetricsTab() {
         <MetricKpi label="Succeeded" value={(runStats?.succeeded ?? 0).toLocaleString()} tone={runStats && runStats.succeeded > 0 ? "ok" : "muted"} />
         <MetricKpi label="Failed" value={(runStats?.failed ?? 0).toLocaleString()} tone={runStats && runStats.failed > 0 ? "err" : "ok"} />
         <MetricKpi label="Cron-triggered" value={(runStats?.cronTriggered ?? 0).toLocaleString()} tone="muted" />
+        <MetricKpi
+          label="LLM Cost · 24h"
+          value={runStats ? formatCost(runStats.estimatedCostUsd) : "—"}
+          tone="muted"
+          subLabel={runStats ? `${((runStats.totalInputTokens + runStats.totalOutputTokens) / 1000).toFixed(1)}k tokens` : undefined}
+        />
         <MetricKpi label="CPU P50 (avg)" value={`${avgP50} µs`} tone="muted" />
         <MetricKpi label="CPU P99 (avg)" value={`${avgP99} µs`} tone={avgP99 > 50000 ? "warn" : "muted"} />
       </div>
@@ -285,10 +300,12 @@ function MetricKpi({
   label,
   value,
   tone,
+  subLabel,
 }: {
   label: string;
   value: string;
   tone: string;
+  subLabel?: string;
 }) {
   return (
     <div className={`kpi tone-${tone}`}>
@@ -297,6 +314,11 @@ function MetricKpi({
       </div>
       <div className="kpi-v">
         <span className="kpi-num" style={{ fontSize: 22 }}>{value}</span>
+        {subLabel && (
+          <span style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2, display: "block" }}>
+            {subLabel}
+          </span>
+        )}
       </div>
     </div>
   );
