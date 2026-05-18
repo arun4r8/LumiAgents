@@ -10,5 +10,9 @@ ENVIRONMENT = "production"
 # Secrets (set via `wrangler secret put --name lumiagents-patch`):
 # ANTHROPIC_API_KEY
 
+[[services]]
+binding = "RUNTIME_WORKER"
+service = "lumiagents-runtime"
+
 [dev]
 port = 8790

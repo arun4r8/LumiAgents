@@ -8,6 +8,9 @@ const MAX_TOOL_ROUNDS = 6;
 // Minimal env required by the chat loop — lets agent workers import this without the full runtime Env.
 export interface AgentEnv {
   ANTHROPIC_API_KEY: string;
+  // Service Binding back to the runtime — used by agent workers for tool dispatch instead
+  // of HTTP fetch, which Cloudflare blocks when called from a Service-Binding-invoked worker.
+  RUNTIME_WORKER?: { fetch(input: RequestInfo, init?: RequestInit): Promise<Response> };
 }
 
 
@@ -46,6 +49,7 @@ async function dispatchTool(
   runtimeUrl: string,
   dispatchToken: string | undefined,
   files?: FileAttachment[],
+  runtimeWorker?: AgentEnv["RUNTIME_WORKER"],
 ): Promise<{ result: unknown; runId?: string }> {
   const agent = AGENTS[agentSlug];
   const mapping = agent?.toolMap[toolName];
@@ -72,19 +76,26 @@ async function dispatchTool(
     }
   }
 
-  const resp = await fetch(
-    `${runtimeUrl}/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/run`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {}),
-      },
-      body: JSON.stringify(payload),
+  const orchUrl = `${runtimeWorker ? "https://runtime.internal" : runtimeUrl}/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/run`;
+  const orchInit: RequestInit = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {}),
     },
-  );
+    body: JSON.stringify(payload),
+  };
+  // Use Service Binding when available (avoids CF loop-block on HTTP fetch back to runtime).
+  const resp = runtimeWorker
+    ? await runtimeWorker.fetch(orchUrl, orchInit)
+    : await fetch(orchUrl, orchInit);
 
-  const data = (await resp.json()) as { runId?: string; output?: unknown; error?: string };
+  let data: { runId?: string; output?: unknown; error?: string };
+  try {
+    data = (await resp.json()) as typeof data;
+  } catch {
+    return { result: { error: `Orchestration dispatch failed (HTTP ${resp.status})` } };
+  }
 
   if (!resp.ok) {
     return { result: { error: data.error ?? `HTTP ${resp.status}` } };
@@ -174,6 +185,7 @@ export async function runAgentChat(
           runtimeUrl,
           dispatchToken,
           request.files,
+          env.RUNTIME_WORKER,
         );
         if (runId) runIds.push(runId);
         return {
