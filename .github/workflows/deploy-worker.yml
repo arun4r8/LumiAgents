@@ -8,6 +8,7 @@ on:
       - "orchestrations/**"
       - "integrations/**"
       - "agents/**"
+      - "workers/**"
       - ".github/workflows/deploy-worker.yml"
 
 jobs:
