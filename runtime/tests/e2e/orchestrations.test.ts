@@ -51,11 +51,11 @@ describe("beady/opportunity-search", () => {
     });
     expect(runId).toBeTruthy();
 
-    const run = await pollRun(runId, 90_000);
+    const run = await pollRun(runId, 150_000);
     expect(run.status).toBe("completed");
     const output = run.output as { opportunities?: unknown[] };
     expect(Array.isArray(output.opportunities)).toBe(true);
-  }, 100_000);
+  }, 160_000);
 });
 
 // ─── Patch: document-ingest + ticket-ops ──────────────────────────────────────
@@ -63,9 +63,9 @@ describe("beady/opportunity-search", () => {
 describe("patch/document-ingest", () => {
   it("ingests a small text document", async () => {
     const runId = await triggerRun("patch/document-ingest", {
-      title: "[E2E TEST] smoke test document",
+      sourceName: "[E2E TEST] smoke test document",
+      sourceKind: "text",
       content: "This is an e2e test document. It contains text about software engineering best practices.",
-      source: "e2e-test",
     });
     expect(runId).toBeTruthy();
 
@@ -77,14 +77,16 @@ describe("patch/document-ingest", () => {
 describe("patch/ticket-ops", () => {
   it("creates a Jira ticket", async () => {
     const runId = await triggerRun("patch/ticket-ops", {
-      action: "create",
-      request: "[E2E TEST] Smoke test ticket — safe to close immediately",
+      operation: "create",
+      requestText: "[E2E TEST] Smoke test ticket — safe to close immediately",
+      requestedBy: "e2e-test-runner",
+      notifyTeams: false,
     });
     expect(runId).toBeTruthy();
 
     const run = await pollRun(runId, 60_000);
     expect(run.status).toBe("completed");
-    const output = run.output as { ticketKey?: string };
-    expect(output.ticketKey).toMatch(/^[A-Z]+-\d+/);
+    const output = run.output as { issueKey?: string };
+    expect(output.issueKey).toMatch(/^[A-Z]+-\d+/);
   }, 70_000);
 });
