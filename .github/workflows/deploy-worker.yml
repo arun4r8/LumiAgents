@@ -99,7 +99,7 @@ jobs:
 
     steps:
       - name: Wait for propagation
-        run: sleep 15
+        run: sleep 20
 
       - name: Health check
         env:
