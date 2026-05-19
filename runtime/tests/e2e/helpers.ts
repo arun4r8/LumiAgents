@@ -34,6 +34,7 @@ export function authHeaders() {
 // Poll Supabase until the run reaches a terminal state or times out.
 export async function pollRun(runId: string, timeoutMs = 120_000): Promise<{ status: string; output: unknown }> {
   const deadline = Date.now() + timeoutMs;
+  let lastStatus = "(no poll yet)";
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 4000));
     const res = await fetch(
@@ -46,13 +47,23 @@ export async function pollRun(runId: string, timeoutMs = 120_000): Promise<{ sta
         },
       },
     );
-    if (!res.ok) continue;
+    if (!res.ok) {
+      const body = await res.text();
+      lastStatus = `HTTP ${res.status}: ${body.slice(0, 200)}`;
+      console.warn(`[pollRun] ${runId}: ${lastStatus}`);
+      continue;
+    }
     const rows = await res.json() as Array<{ status: string; output: unknown }>;
+    if (rows.length === 0) {
+      lastStatus = "0 rows (RLS filtering or run not yet written)";
+      console.warn(`[pollRun] ${runId}: ${lastStatus}`);
+      continue;
+    }
     const row = rows[0];
-    if (!row) continue;
-    if (row.status === "completed" || row.status === "failed") return row;
+    lastStatus = `status=${row!.status}`;
+    if (row!.status === "completed" || row!.status === "failed") return row!;
   }
-  throw new Error(`Run ${runId} did not complete within ${timeoutMs / 1000}s`);
+  throw new Error(`Run ${runId} did not complete within ${timeoutMs / 1000}s — last poll: ${lastStatus}`);
 }
 
 export async function triggerRun(name: string, input: Record<string, unknown>): Promise<string> {
