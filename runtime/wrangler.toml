@@ -55,11 +55,3 @@ binding = "AI"
 [dev]
 port = 8787
 local_protocol = "http"
-
-[env.dev]
-name = "lumiagents-runtime-dev"
-
-[env.dev.vars]
-SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
-JIRA_BASE_URL = "https://lumiture.atlassian.net"
-ENVIRONMENT = "development"
