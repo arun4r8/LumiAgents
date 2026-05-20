@@ -6,6 +6,7 @@ import {
   Check, Bot, GitBranch, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import { useTransition, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Models available to pick ─────────────────────────────────────────────────
 
@@ -101,6 +102,9 @@ export function SettingsClient({
               <SettingsRow label="Role"><span className="chip">ops</span></SettingsRow>
               {memberSince && (<><Divider /><SettingsRow label="Member since"><span style={{ fontSize: 13, color: "var(--ink-2)" }}>{memberSince}</span></SettingsRow></>)}
             </div>
+          </Section>
+          <Section heading="Security">
+            <ChangePasswordSection />
           </Section>
         </div>
       )}
@@ -428,6 +432,74 @@ function OrchRow({ orch, agentColor, agentDefaultModel, updateOrchestrationConfi
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Change password ──────────────────────────────────────────────────────────
+
+function ChangePasswordSection() {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const mismatch = confirm.length > 0 && newPassword !== confirm;
+  const canSubmit = newPassword.length >= 6 && newPassword === confirm && status !== "loading";
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setStatus("loading");
+    setErrorMsg("");
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setErrorMsg(error.message);
+      setStatus("error");
+    } else {
+      setStatus("success");
+      setNewPassword("");
+      setConfirm("");
+      setTimeout(() => setStatus("idle"), 3000);
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: "16px 20px" }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="field" style={{ margin: 0 }}>
+          <label style={{ fontSize: 12 }}>New password <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(min 6 characters)</span></label>
+          <input
+            className="input"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            style={{ fontSize: 13 }}
+          />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label style={{ fontSize: 12 }}>Confirm password</label>
+          <input
+            className="input"
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            autoComplete="new-password"
+            style={{ fontSize: 13, borderColor: mismatch ? "var(--red, oklch(60% 0.2 25))" : undefined }}
+          />
+          {mismatch && <div style={{ fontSize: 12, color: "var(--red, oklch(60% 0.2 25))", marginTop: 4 }}>Passwords don't match</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          {status === "success" && <span className="chip ok"><Check style={{ width: 10, height: 10 }} /> Password updated</span>}
+          {status === "error" && <span style={{ fontSize: 12, color: "var(--red, oklch(60% 0.2 25))" }}>{errorMsg}</span>}
+          <button className="btn accent sm" type="submit" disabled={!canSubmit}>
+            {status === "loading" ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} /> : <Save style={{ width: 12, height: 12 }} />}
+            Update password
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
