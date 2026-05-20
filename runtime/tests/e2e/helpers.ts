@@ -13,7 +13,7 @@ export function getOpsToken(): string {
 
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const payload = Buffer.from(JSON.stringify({
-    sub: "e2e-test-runner",
+    sub: "e2e00000-0000-4000-8000-000000000000",
     role: "authenticated",          // PostgREST: SET ROLE authenticated (real Postgres role)
     user_role: "ops",               // requireOpsToken custom claim
     app_metadata: { role: "ops" }, // is_ops() RLS helper checks this branch
