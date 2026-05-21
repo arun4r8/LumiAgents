@@ -138,7 +138,13 @@ function EditorTab() {
   const getToken = useCallback(async () => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    if (session?.access_token) return session.access_token;
+    // getSession() can return null if the SSR cookie hasn't been read yet;
+    // getUser() makes a network call that refreshes and returns a valid session.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: { session: fresh } } = await supabase.auth.getSession();
+    return fresh?.access_token ?? null;
   }, []);
 
   const authHeaders = useCallback(async () => {
@@ -155,7 +161,10 @@ function EditorTab() {
     try {
       const headers = await authHeaders();
       const res = await fetch(`${RUNTIME}/api/vault/files/tree`, { headers });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
       const data = await res.json() as { files: VaultFile[] };
       setFiles(data.files);
     } catch (e) {
