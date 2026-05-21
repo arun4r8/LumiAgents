@@ -25,7 +25,7 @@ describe("Orchestration auth", () => {
   it("rejects unknown orchestration name", async () => {
     const res = await fetch(`${RUNTIME_URL}/api/orchestrations/does-not-exist/run`, {
       method: "POST",
-      headers: authHeaders(), // valid token — auth passes, then 404 on unknown name
+      headers: await authHeaders(), // valid token — auth passes, then 404 on unknown name
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(404);
@@ -34,7 +34,7 @@ describe("Orchestration auth", () => {
   it("rejects invalid input (422)", async () => {
     const res = await fetch(`${RUNTIME_URL}/api/orchestrations/angie%2Fcandidate-sourcing/run`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({ jobTitle: "x" }), // missing required jobDescription
     });
     expect(res.status).toBe(422);

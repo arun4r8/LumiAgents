@@ -77,16 +77,7 @@ export async function requireOpsToken(
     // network error — fall through to HMAC path
   }
 
-  // Fallback: HMAC-SHA256 verification for E2E test tokens (not real Supabase users)
-  const claims = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
-  if (!claims) return json({ error: "Invalid token" }, 401);
-
-  // Migration 0005 changed the JWT hook to write into claims.user_role (not claims.role)
-  const appMeta = claims["app_metadata"] as Record<string, unknown> | undefined;
-  const role = (claims["user_role"] as string | undefined)
-    ?? (appMeta?.["role"] as string | undefined);
-  if (role !== "ops") return json({ error: "Forbidden — ops role required" }, 403);
-  return { userId: claims["sub"] as string };
+  return json({ error: "Invalid token" }, 401);
 }
 
 export function parseCsvLine(line: string): string[] {

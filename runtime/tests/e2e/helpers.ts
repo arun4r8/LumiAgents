@@ -1,33 +1,33 @@
-import { createHmac } from "node:crypto";
-
 export const RUNTIME_URL = process.env.E2E_RUNTIME_URL ?? process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 export const SUPABASE_ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-// Use a pre-generated token (CI) or mint one on the fly from the local JWT secret.
-export function getOpsToken(): string {
+// Cached per process — sign in once, reuse for the whole test run.
+let _token: string | null = null;
+
+export async function getOpsToken(): Promise<string> {
   if (process.env.E2E_OPS_TOKEN) return process.env.E2E_OPS_TOKEN;
+  if (_token) return _token;
 
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET ?? "";
-  if (!jwtSecret) throw new Error("Set E2E_OPS_TOKEN or SUPABASE_JWT_SECRET");
+  const email = process.env.E2E_OPS_EMAIL;
+  const password = process.env.E2E_OPS_PASSWORD;
+  if (!email || !password) throw new Error("Set E2E_OPS_TOKEN or E2E_OPS_EMAIL + E2E_OPS_PASSWORD");
 
-  const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const payload = Buffer.from(JSON.stringify({
-    sub: "e2e00000-0000-4000-8000-000000000000",
-    role: "authenticated",          // PostgREST: SET ROLE authenticated (real Postgres role)
-    user_role: "ops",               // requireOpsToken custom claim
-    app_metadata: { role: "ops" }, // is_ops() RLS helper checks this branch
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600,
-  })).toString("base64url");
-  const sig = createHmac("sha256", jwtSecret).update(`${header}.${payload}`).digest("base64url");
-  return `${header}.${payload}.${sig}`;
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`E2E sign-in failed: ${res.status} ${await res.text()}`);
+  const data = await res.json() as { access_token: string };
+  _token = data.access_token;
+  return _token;
 }
 
-export function authHeaders() {
+export async function authHeaders(): Promise<Record<string, string>> {
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${getOpsToken()}`,
+    Authorization: `Bearer ${await getOpsToken()}`,
   };
 }
 
@@ -37,12 +37,13 @@ export async function pollRun(runId: string, timeoutMs = 120_000): Promise<{ sta
   let lastStatus = "(no poll yet)";
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 4000));
+    const token = await getOpsToken();
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/runs?id=eq.${runId}&select=status,output&limit=1`,
       {
         headers: {
           apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${getOpsToken()}`,
+          Authorization: `Bearer ${token}`,
           "Accept-Profile": "orchestration",
         },
       },
@@ -69,7 +70,7 @@ export async function pollRun(runId: string, timeoutMs = 120_000): Promise<{ sta
 export async function triggerRun(name: string, input: Record<string, unknown>): Promise<string> {
   const res = await fetch(`${RUNTIME_URL}/api/orchestrations/${encodeURIComponent(name)}/run`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: await authHeaders(),
     body: JSON.stringify(input),
   });
   if (!res.ok) {
