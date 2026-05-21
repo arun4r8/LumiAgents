@@ -15,6 +15,7 @@ import {
   Bot,
   Clock,
   Server,
+  BookOpen,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
 
@@ -42,6 +43,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/approvals",      label: "Approvals",       icon: <CheckSquare />, badge: pendingApprovals || undefined },
     { href: "/analyst",        label: "Data Analyst",    icon: <BarChart2 /> },
     { href: "/documents",      label: "Documents",       icon: <FileText /> },
+    { href: "/knowledge",      label: "Knowledge Base",  icon: <BookOpen /> },
     { href: "/data",           label: "Data",            icon: <Database /> },
     { href: "/settings",        label: "Settings",        icon: <Settings /> },
     { href: "/infrastructure",  label: "Infrastructure",  icon: <Server /> },

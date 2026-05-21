@@ -130,6 +130,21 @@ jobs:
           echo "✓ Catalogue check passed"
           echo "$response" | jq '[.[] | .name]'
 
+      - name: Vault webhook endpoint
+        env:
+          RUNTIME_URL: ${{ secrets.NEXT_PUBLIC_RUNTIME_URL }}
+        run: |
+          echo "→ POST $RUNTIME_URL/api/vault/webhook (bad sig — expect 401)"
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$RUNTIME_URL/api/vault/webhook" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: sha256=invalidsignature" \
+            -d '{"ref":"refs/heads/main","repository":{"owner":{"login":"arun4r8"},"name":"LumiKnowledge"},"commits":[]}')
+          if [ "$status" != "401" ]; then
+            echo "Expected 401, got $status — endpoint missing or auth not enforced"
+            exit 1
+          fi
+          echo "✓ Vault webhook is live and HMAC-protected"
+
   e2e:
     name: E2E Tests
     needs: smoke-test

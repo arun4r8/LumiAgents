@@ -248,8 +248,8 @@ describe.skip("patch/staff-request", () => {
 describe.skip("patch/vault-sync", () => {
   it("syncs Obsidian vault markdown into the RAG index", async () => {
     const runId = await triggerRun("patch/vault-sync", {
-      repoOwner: "arun4r8",       // replace with actual vault repo owner
-      repoName:  "obsidian-vault", // replace with actual vault repo name
+      repoOwner: "arun4r8",
+      repoName:  "LumiKnowledge",
       branch: "main",
     });
     expect(runId).toBeTruthy();

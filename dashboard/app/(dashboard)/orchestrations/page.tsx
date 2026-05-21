@@ -11,6 +11,7 @@ export default async function OrchestrationsPage() {
     .schema("orchestration")
     .from("orchestrations")
     .select("id, name, version, description, is_active, cron, trigger_mode")
+    .neq("trigger_mode", "webhook")
     .order("name");
 
   const orcList = (orchestrations ?? []) as {
