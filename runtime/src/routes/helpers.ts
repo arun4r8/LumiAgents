@@ -22,7 +22,7 @@ async function verifyJwt(
   secret: string,
 ): Promise<Record<string, unknown> | null> {
   const parts = token.split(".");
-  if (parts.length !== 3) { console.error("[jwt] bad structure"); return null; }
+  if (parts.length !== 3) return null;
   try {
     const key = await crypto.subtle.importKey(
       "raw",
@@ -37,18 +37,14 @@ async function verifyJwt(
       base64UrlToBytes(parts[2]!),
       new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
     );
-    if (!valid) { console.error("[jwt] hmac invalid — secret mismatch or corrupt token"); return null; }
+    if (!valid) return null;
     const payload = JSON.parse(
       new TextDecoder().decode(base64UrlToBytes(parts[1]!)),
     ) as Record<string, unknown>;
     const now = Math.floor(Date.now() / 1000);
-    if (typeof payload["exp"] === "number" && payload["exp"] < now) {
-      console.error("[jwt] token expired at", payload["exp"], "now", now);
-      return null;
-    }
+    if (typeof payload["exp"] === "number" && payload["exp"] < now) return null;
     return payload;
-  } catch (e) {
-    console.error("[jwt] exception:", e);
+  } catch {
     return null;
   }
 }
@@ -58,22 +54,38 @@ export async function requireOpsToken(
   env: Env,
 ): Promise<{ userId: string } | Response> {
   const auth = request.headers.get("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ")) {
-    return json({ error: "Unauthorized" }, 401);
+  if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+  const token = auth.slice(7);
+
+  // Primary: verify via Supabase Auth endpoint — works regardless of JWT secret format
+  // or key system version. The service role key is used as the apikey header (not the
+  // user token) so Supabase trusts the request to read any user's profile.
+  try {
+    const userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (userRes.ok) {
+      const user = await userRes.json() as { id: string; app_metadata?: { role?: string } };
+      const role = user.app_metadata?.["role"];
+      if (role !== "ops") return json({ error: "Forbidden — ops role required" }, 403);
+      return { userId: user.id };
+    }
+  } catch {
+    // network error — fall through to HMAC path
   }
-  const claims = await verifyJwt(auth.slice(7), env.SUPABASE_JWT_SECRET);
-  if (!claims) {
-    return json({ error: "Invalid token" }, 401);
-  }
+
+  // Fallback: HMAC-SHA256 verification for E2E test tokens (not real Supabase users)
+  const claims = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
+  if (!claims) return json({ error: "Invalid token" }, 401);
+
   // Migration 0005 changed the JWT hook to write into claims.user_role (not claims.role)
-  // to avoid PostgREST treating 'ops' as a Postgres role name. Check user_role first,
-  // then fall back to app_metadata.role for tokens issued before that migration.
   const appMeta = claims["app_metadata"] as Record<string, unknown> | undefined;
   const role = (claims["user_role"] as string | undefined)
     ?? (appMeta?.["role"] as string | undefined);
-  if (role !== "ops") {
-    return json({ error: "Forbidden — ops role required" }, 403);
-  }
+  if (role !== "ops") return json({ error: "Forbidden — ops role required" }, 403);
   return { userId: claims["sub"] as string };
 }
 
