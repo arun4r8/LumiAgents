@@ -68,7 +68,7 @@ export async function upsertVaultDocument(
     headers: sbHeaders(env),
     body: JSON.stringify({
       source_name: opts.sourceName,
-      source_kind: "text",
+      source_kind: "vault",
       source_uri:  opts.sourceUri,
       content:     opts.content,
       metadata:    { ...opts.metadata, github_blob_sha: opts.blobSha },
