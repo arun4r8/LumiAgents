@@ -51,17 +51,10 @@ export default async function KnowledgePage() {
       .limit(200),
   ]);
 
-  async function triggerManualSync(repoOwner: string, repoName: string) {
-    "use server";
-    // Handled client-side via /api/vault/sync to carry the user's auth token.
-    return { runId: "" };
-  }
-
   return (
     <KnowledgeClient
       recentRuns={(runsRes.data ?? []) as VaultRun[]}
       vaultDocs={(docsRes.data ?? []) as VaultDoc[]}
-      triggerManualSync={triggerManualSync}
     />
   );
 }

@@ -7,6 +7,7 @@ import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
 import { handleAgents } from "./routes/agents";
 import { handleSchedules } from "./routes/schedules";
+import { handleVault } from "./routes/vault";
 
 // Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
 export { RunOrchestration } from "./workflow";
@@ -82,7 +83,7 @@ export default {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
         },
       });
@@ -95,6 +96,7 @@ export default {
         handleApprovals,
         handleAgents,
         handleSchedules,
+        handleVault,
       ];
 
       for (const handler of handlers) {
