@@ -22,7 +22,7 @@ async function verifyJwt(
   secret: string,
 ): Promise<Record<string, unknown> | null> {
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) { console.error("[jwt] bad structure"); return null; }
   try {
     const key = await crypto.subtle.importKey(
       "raw",
@@ -37,14 +37,18 @@ async function verifyJwt(
       base64UrlToBytes(parts[2]!),
       new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
     );
-    if (!valid) return null;
+    if (!valid) { console.error("[jwt] hmac invalid — secret mismatch or corrupt token"); return null; }
     const payload = JSON.parse(
       new TextDecoder().decode(base64UrlToBytes(parts[1]!)),
     ) as Record<string, unknown>;
     const now = Math.floor(Date.now() / 1000);
-    if (typeof payload["exp"] === "number" && payload["exp"] < now) return null;
+    if (typeof payload["exp"] === "number" && payload["exp"] < now) {
+      console.error("[jwt] token expired at", payload["exp"], "now", now);
+      return null;
+    }
     return payload;
-  } catch {
+  } catch (e) {
+    console.error("[jwt] exception:", e);
     return null;
   }
 }
