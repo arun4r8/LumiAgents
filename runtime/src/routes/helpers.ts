@@ -55,15 +55,11 @@ export async function requireOpsToken(
 ): Promise<{ userId: string } | Response> {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: "Unauthorized" }, 401);
   }
   const claims = await verifyJwt(auth.slice(7), env.SUPABASE_JWT_SECRET);
   if (!claims) {
-    return new Response(JSON.stringify({ error: "Invalid token" }), {
-      status: 401, headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: "Invalid token" }, 401);
   }
   // Migration 0005 changed the JWT hook to write into claims.user_role (not claims.role)
   // to avoid PostgREST treating 'ops' as a Postgres role name. Check user_role first,
@@ -72,9 +68,7 @@ export async function requireOpsToken(
   const role = (claims["user_role"] as string | undefined)
     ?? (appMeta?.["role"] as string | undefined);
   if (role !== "ops") {
-    return new Response(JSON.stringify({ error: "Forbidden — ops role required" }), {
-      status: 403, headers: { "Content-Type": "application/json" },
-    });
+    return json({ error: "Forbidden — ops role required" }, 403);
   }
   return { userId: claims["sub"] as string };
 }
