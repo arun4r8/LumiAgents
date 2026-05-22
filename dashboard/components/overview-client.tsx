@@ -569,6 +569,8 @@ function ThroughputChart({ runs }: { runs: Run[] }) {
 const AGENTS: { key: string; label: string }[] = [
   { key: "angie", label: "Angie" },
   { key: "beady", label: "Beady" },
+  { key: "money", label: "Money" },
+  { key: "patch", label: "Patch" },
 ];
 
 function SpendPlaceholder({ orchestrations }: { orchestrations: Orchestration[] }) {

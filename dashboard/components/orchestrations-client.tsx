@@ -142,16 +142,9 @@ export function OrchestrationsClient({
         </div>
       </div>
 
-      {orchestrations.length === 0 ? (
-        <div className="empty">
-          <h4>No orchestrations registered yet.</h4>
-          <p>Deploy the runtime and seed the orchestrations table.</p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
           {AGENTS.map((agent) => {
             const agentOrch = byAgent.get(agent.id) ?? [];
-            if (agentOrch.length === 0) return null;
             const scheduledCount = agentOrch.filter((o) => o.cron !== null).length;
             return (
               <AgentSection
@@ -168,7 +161,6 @@ export function OrchestrationsClient({
             );
           })}
         </div>
-      )}
     </div>
   );
 }
@@ -223,20 +215,26 @@ function AgentSection({
       </div>
 
       {/* Capability cards */}
-      <div className="orch-grid">
-        {orchestrations.map((o) => (
-          <OrchCard
-            key={o.id}
-            orch={o}
-            agentColor={agent.color}
-            schema={catalogue.get(o.name)?.inputSchema ?? null}
-            formOpen={openForm === o.name}
-            onToggleForm={() => setOpenForm(openForm === o.name ? null : o.name)}
-            toggleOrchestration={toggleOrchestration}
-            onOptimisticToggle={(is_active) => onOptimisticToggle(o.id, is_active)}
-          />
-        ))}
-      </div>
+      {orchestrations.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12.5, padding: "10px 4px" }}>
+          No capabilities registered yet — deploy the runtime to seed this agent&apos;s orchestrations.
+        </div>
+      ) : (
+        <div className="orch-grid">
+          {orchestrations.map((o) => (
+            <OrchCard
+              key={o.id}
+              orch={o}
+              agentColor={agent.color}
+              schema={catalogue.get(o.name)?.inputSchema ?? null}
+              formOpen={openForm === o.name}
+              onToggleForm={() => setOpenForm(openForm === o.name ? null : o.name)}
+              toggleOrchestration={toggleOrchestration}
+              onOptimisticToggle={(is_active) => onOptimisticToggle(o.id, is_active)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
