@@ -27,7 +27,12 @@ export const resumeScorer = defineTool({
     await callN8nWebhook(
       ctx,
       RESUME_SCORER_WEBHOOK,
-      { ...input, jobId },
+      {
+        task_id: jobId,
+        roleKey: input.jobDescription,
+        fileCount: input.pdfBase64s.length,
+        pdfBase64s: input.pdfBase64s,
+      },
       ctx.idempotencyKey("resume-scorer", jobId),
     );
     return { jobId, submitted: input.pdfBase64s.length };
