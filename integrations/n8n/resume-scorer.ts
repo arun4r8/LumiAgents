@@ -13,16 +13,23 @@ export const resumeScorerOutputSchema = z.object({
   submitted: z.number(),
 });
 
+// n8n runs the scoring pipeline asynchronously and returns HTTP 200 with an empty body.
+// We generate the jobId locally so orchestration steps can correlate results without
+// waiting for n8n to respond.
+const RESUME_SCORER_WEBHOOK = "00077e0c-97aa-4476-a138-ed7941bf4eef";
+
 export const resumeScorer = defineTool({
   name: "resumeScorer",
   inputSchema: resumeScorerInputSchema,
   outputSchema: resumeScorerOutputSchema,
   async run(ctx, input) {
-    return callN8nWebhook(
+    const jobId = input.jobId ?? crypto.randomUUID();
+    await callN8nWebhook(
       ctx,
-      "resume-scorer",
-      input,
-      ctx.idempotencyKey("resume-scorer", input.jobDescription.slice(0, 40)),
+      RESUME_SCORER_WEBHOOK,
+      { ...input, jobId },
+      ctx.idempotencyKey("resume-scorer", jobId),
     );
+    return { jobId, submitted: input.pdfBase64s.length };
   },
 });

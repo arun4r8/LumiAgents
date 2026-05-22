@@ -31,5 +31,7 @@ export async function callN8nWebhook<T>(
     throw new Error(`n8n webhook ${path} → ${res.status}: ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  const text = await res.text();
+  if (!text.trim()) return {} as T;
+  return JSON.parse(text) as T;
 }
