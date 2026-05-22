@@ -103,6 +103,7 @@ export default function AgentChatClient({
   const [error, setError]       = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<AttachedFile[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const fileRef    = useRef<HTMLInputElement>(null);
@@ -141,15 +142,35 @@ export default function AgentChatClient({
 
   // ── Send ───────────────────────────────────────────────────────────────────
 
+  // Each batch sent to the runtime: must stay well under the 100MB Workers body limit.
+  // 20 × ~300KB PDFs ≈ 6MB base64 per request — safe for any Workers plan.
+  const FILE_BATCH = 20;
+
+  // Build the payload messages array. Server-side ChatMessage uses `content` (not `text`).
+  function toApiMessages(history: Message[]): Array<{ role: string; content: string }> {
+    return history.map((m) => ({ role: m.role, content: m.text }));
+  }
+
+  async function callAgentChat(
+    history: Message[],
+    files: AttachedFile[],
+  ): Promise<ChatResponse> {
+    const res = await fetch(`${RUNTIME_URL}/api/agents/${slug}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: toApiMessages(history), files }),
+    });
+    const data = await res.json() as ChatResponse & { error?: string };
+    if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    return data;
+  }
+
   async function send(text?: string) {
     const msgText = (text ?? input).trim();
     if (!msgText || thinking) return;
 
-    const userMessage: Message = {
-      role: "user",
-      text: msgText,
-      files: pendingFiles.length > 0 ? [...pendingFiles] : undefined,
-    };
+    const allFiles = pendingFiles.length > 0 ? [...pendingFiles] : [];
+    const userMessage: Message = { role: "user", text: msgText, files: allFiles.length > 0 ? allFiles : undefined };
 
     const updatedHistory = [...messages, userMessage];
     setMessages(updatedHistory);
@@ -158,25 +179,60 @@ export default function AgentChatClient({
     setThinking(true);
     setError(null);
 
-    // Build the conversation history payload (omit file blobs for prior messages)
-    const conversationHistory = updatedHistory.map((m) => ({
-      role: m.role,
-      text: m.text,
-      ...(m.files ? { files: m.files } : {}),
-    }));
+    // Large file batch: split into chunks so each request stays under Workers body limits.
+    // Each chunk is sent as a continuation so Angie sees the conversation context.
+    if (allFiles.length > FILE_BATCH) {
+      const chunks: AttachedFile[][] = [];
+      for (let i = 0; i < allFiles.length; i += FILE_BATCH) {
+        chunks.push(allFiles.slice(i, i + FILE_BATCH));
+      }
 
+      let history = updatedHistory;
+      let allRunIds: string[] = [];
+      let firstReply = "";
+
+      for (let i = 0; i < chunks.length; i++) {
+        setBatchProgress({ current: i + 1, total: chunks.length });
+        const isFirst = i === 0;
+        const batchHistory = isFirst
+          ? history
+          : [
+              ...history,
+              {
+                role: "user" as const,
+                text: `Batch ${i + 1}/${chunks.length}: score these additional résumés using the same job description as before.`,
+              },
+            ];
+
+        try {
+          const data = await callAgentChat(batchHistory, chunks[i]!);
+          if (isFirst) firstReply = data.reply;
+          allRunIds = [...allRunIds, ...(data.runIds ?? [])];
+          history = [...batchHistory, { role: "assistant" as const, text: data.reply, runIds: data.runIds ?? [] }];
+        } catch (err) {
+          setError(`Batch ${i + 1}/${chunks.length} failed: ${err instanceof Error ? err.message : "network error"}`);
+          setThinking(false);
+          setBatchProgress(null);
+          return;
+        }
+      }
+
+      setBatchProgress(null);
+      setThinking(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: firstReply + (chunks.length > 1 ? `\n\n*All ${allFiles.length} files submitted across ${chunks.length} batches.*` : ""),
+          runIds: allRunIds,
+        },
+      ]);
+      return;
+    }
+
+    // Single-batch path (normal case).
     try {
-      const res = await fetch(`${RUNTIME_URL}/api/agents/${slug}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: conversationHistory,
-          files: userMessage.files ?? [],
-        }),
-      });
-      const data = await res.json() as ChatResponse & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-
+      const data = await callAgentChat(updatedHistory, allFiles);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", text: data.reply, runIds: data.runIds ?? [] },
@@ -251,7 +307,11 @@ export default function AgentChatClient({
             <div className="msg-row assistant">
               <div className="msg-bubble thinking">
                 <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                <span>Thinking…</span>
+                <span>
+                  {batchProgress
+                    ? `Processing batch ${batchProgress.current} of ${batchProgress.total}…`
+                    : "Thinking…"}
+                </span>
               </div>
             </div>
           )}
