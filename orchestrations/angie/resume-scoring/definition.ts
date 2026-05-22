@@ -25,12 +25,26 @@ export default defineOrchestration({
     visibleTo: ["role:ops"],
   },
   async run(ctx, input) {
-    return step(ctx, "n8n-resume-scorer", () =>
-      resumeScorer(ctx, {
-        jobDescription: input.jobDescription,
-        pdfBase64s: input.pdfBase64s,
-        ...(input.jobId !== undefined ? { jobId: input.jobId } : {}),
-      }),
-    );
+    // Split large batches into chunks so each n8n webhook call stays under ~20MB.
+    // Subsequent chunks reuse the jobId returned by the first call so all résumés
+    // land in the same scoring job.
+    const CHUNK = 25;
+    let jobId = input.jobId;
+    let totalSubmitted = 0;
+
+    for (let i = 0; i < input.pdfBase64s.length; i += CHUNK) {
+      const chunk = input.pdfBase64s.slice(i, i + CHUNK);
+      const result = await step(ctx, `n8n-resume-scorer-${Math.floor(i / CHUNK)}`, () =>
+        resumeScorer(ctx, {
+          jobDescription: input.jobDescription,
+          pdfBase64s: chunk,
+          ...(jobId !== undefined ? { jobId } : {}),
+        }),
+      );
+      jobId = result.jobId;
+      totalSubmitted += result.submitted;
+    }
+
+    return { jobId: jobId!, submitted: totalSubmitted };
   },
 });

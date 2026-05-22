@@ -129,10 +129,21 @@ export async function runAgentChat(
   const messages: Anthropic.MessageParam[] = request.messages.map((m, i) => {
     const isLast = i === request.messages.length - 1;
     if (isLast && m.role === "user" && request.files?.length) {
-      const fileContextParts: Anthropic.TextBlockParam[] = request.files.map((f) => ({
-        type: "text",
-        text: `\n\n---\n**File: ${f.name}** (${f.mimeType})\n\`\`\`\n${f.content}\n\`\`\``,
-      }));
+      // For binary files (PDF, images, docx) only tell the LLM what's attached — the
+      // actual bytes live in request.files and are injected at tool-dispatch time.
+      // Embedding raw base64 in the message context wastes the entire context window.
+      const fileContextParts: Anthropic.TextBlockParam[] = request.files.map((f) => {
+        const isBinary = f.mimeType === "application/pdf" ||
+          f.mimeType.startsWith("image/") ||
+          f.mimeType.includes("word") ||
+          f.mimeType.includes("octet-stream") ||
+          f.name.match(/\.(pdf|docx?|pptx?|xlsx?)$/i) !== null;
+        if (isBinary) {
+          const kb = Math.round(f.content.length * 3 / 4 / 1024);
+          return { type: "text" as const, text: `📎 ${f.name} (${f.mimeType}, ~${kb}KB)` };
+        }
+        return { type: "text" as const, text: `\n\n---\n**File: ${f.name}**\n\`\`\`\n${f.content}\n\`\`\`` };
+      });
       return {
         role: "user",
         content: [{ type: "text", text: m.content }, ...fileContextParts],
