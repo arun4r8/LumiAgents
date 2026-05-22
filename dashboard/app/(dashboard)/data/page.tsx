@@ -18,6 +18,8 @@ export default async function DataPage() {
     opportunitiesRes,
     candidatesRes,
     staffRequestsRes,
+    resumeJobsRes,
+    resumeResultsRes,
   ] = await Promise.all([
     supabase.from("contracts").select("*").order("created_at", { ascending: false }).limit(100),
     supabase.from("invoices").select("*").order("invoice_date", { ascending: false }).limit(100),
@@ -35,6 +37,12 @@ export default async function DataPage() {
     supabase.from("staff_requests")
       .select("id, title, request_type, urgency, status, requested_by, jira_key, contract_id, created_at")
       .order("created_at", { ascending: false }).limit(100),
+    supabase.from("resume_jobs")
+      .select("id, job, status, total, processed, created_at")
+      .order("created_at", { ascending: false }).limit(50),
+    supabase.from("resume_results")
+      .select("id, job_id, status, name, email, mobile_number, location, school, field_of_study, gpa, grad_year, role, technical_skills_score, work_experience_score, academics_score, projects_and_research_score, leadership_and_inititative_score, overall_score, rationale, error, created_at")
+      .order("overall_score", { ascending: false }).limit(2000),
   ]);
 
   return (
@@ -49,6 +57,8 @@ export default async function DataPage() {
       opportunities={(opportunitiesRes.data ?? []) as Record<string, unknown>[]}
       candidates={(candidatesRes.data ?? []) as Record<string, unknown>[]}
       staffRequests={(staffRequestsRes.data ?? []) as Record<string, unknown>[]}
+      resumeJobs={(resumeJobsRes.data ?? []) as Record<string, unknown>[]}
+      resumeResults={(resumeResultsRes.data ?? []) as Record<string, unknown>[]}
       insertRow={insertRow}
       bulkInsert={bulkInsert}
       deleteRow={deleteRow}

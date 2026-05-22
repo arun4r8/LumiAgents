@@ -4,8 +4,9 @@ import { useState, useRef } from "react";
 import {
   Plus, Upload, Plug, X, ChevronDown, ChevronUp,
   Check, Loader2, AlertTriangle, ExternalLink, Star,
-  User, Briefcase, Send,
+  User, Send, Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // ─── Field config ─────────────────────────────────────────────────────────────
 
@@ -161,6 +162,8 @@ interface DataClientProps {
   opportunities: Record<string, unknown>[];
   candidates: Record<string, unknown>[];
   staffRequests: Record<string, unknown>[];
+  resumeJobs: Record<string, unknown>[];
+  resumeResults: Record<string, unknown>[];
   insertRow: (table: string, data: Record<string, unknown>) => Promise<{ error?: string }>;
   bulkInsert: (table: string, rows: Record<string, unknown>[]) => Promise<{ inserted: number; error?: string }>;
   deleteRow: (table: string, id: string) => Promise<{ error?: string }>;
@@ -171,6 +174,7 @@ interface DataClientProps {
 export function DataClient({
   contracts, invoices, budgetLines, laborRecords, indirectRates,
   employees, pastPerformance, opportunities, candidates, staffRequests,
+  resumeJobs, resumeResults,
   insertRow, bulkInsert, deleteRow,
 }: DataClientProps) {
   const [tab, setTab] = useState<"govcon" | "finance" | "people">("govcon");
@@ -257,13 +261,14 @@ export function DataClient({
         </button>
         <button className={tab === "people" ? "active" : ""} onClick={() => setTab("people")}>
           People
-          <span className="count" style={{ marginLeft: 6 }}>{candidates.length + staffRequests.length + employees.length}</span>
+          <span className="count" style={{ marginLeft: 6 }}>{candidates.length + staffRequests.length + employees.length + resumeResults.length}</span>
         </button>
       </div>
 
       {tab === "govcon" && <OpportunitiesPanel opportunities={opportunities} />}
       {tab === "people" && (
         <>
+          <ResumeResultsPanel resumeJobs={resumeJobs} resumeResults={resumeResults} />
           <CandidatesPanel candidates={candidates} />
           <StaffRequestsPanel staffRequests={staffRequests} />
         </>
@@ -384,6 +389,116 @@ function OpportunitiesPanel({ opportunities }: { opportunities: Record<string, u
                     </div>
                   </div>
                 )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Resume results panel ─────────────────────────────────────────────────────
+
+function downloadJobXlsx(job: Record<string, unknown>, results: Record<string, unknown>[]) {
+  const rows = results.map((r) => ({
+    "Name":                      r.name ?? "",
+    "Email":                     r.email ?? "",
+    "Phone":                     r.mobile_number ?? "",
+    "Location":                  r.location ?? "",
+    "School":                    r.school ?? "",
+    "Field of Study":            r.field_of_study ?? "",
+    "GPA":                       r.gpa ?? "",
+    "Grad Year":                 r.grad_year ?? "",
+    "Role":                      r.role ?? "",
+    "Technical Skills":          r.technical_skills_score ?? "",
+    "Work Experience":           r.work_experience_score ?? "",
+    "Academics":                 r.academics_score ?? "",
+    "Projects & Research":       r.projects_and_research_score ?? "",
+    "Leadership & Initiative":   r.leadership_and_inititative_score ?? "",
+    "Overall Score":             r.overall_score ?? "",
+    "Rationale":                 r.rationale ?? "",
+    "Status":                    r.status ?? "",
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  // Auto-width columns
+  const colWidths = Object.keys(rows[0] ?? {}).map((k) => ({
+    wch: Math.max(k.length, ...rows.map((r) => String(r[k as keyof typeof r] ?? "").length).slice(0, 50)) + 2,
+  }));
+  ws["!cols"] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  const jobLabel = String(job.job ?? "results").slice(0, 28).replace(/[^\w\s-]/g, "");
+  XLSX.utils.book_append_sheet(wb, ws, "Results");
+  XLSX.writeFile(wb, `resume-results-${jobLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+function ResumeResultsPanel({
+  resumeJobs, resumeResults,
+}: { resumeJobs: Record<string, unknown>[]; resumeResults: Record<string, unknown>[] }) {
+  const resultsByJob = new Map<string, Record<string, unknown>[]>();
+  for (const r of resumeResults) {
+    const jid = r.job_id as string;
+    if (!resultsByJob.has(jid)) resultsByJob.set(jid, []);
+    resultsByJob.get(jid)!.push(r);
+  }
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div className="section-h">
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h3>Resume Scoring Results</h3>
+          <span className="chip muted" style={{ fontSize: 11 }}>{resumeResults.length}</span>
+          <span className="chip accent" style={{ fontSize: 11 }}>angie</span>
+        </div>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by n8n resume-scoring workflow</span>
+      </div>
+
+      {resumeJobs.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
+          No scoring jobs yet — ask Angie to score résumés to populate.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {resumeJobs.map((job) => {
+            const jid = job.id as string;
+            const jobResults = resultsByJob.get(jid) ?? [];
+            const total = job.total as number ?? 0;
+            const processed = job.processed as number ?? 0;
+            const status = job.status as string ?? "queued";
+            const statusColor = status === "done" ? "ok" : status === "queued" ? "muted" : "warn";
+            const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+            const jobDesc = String(job.job ?? "").slice(0, 80);
+            const createdAt = job.created_at as string;
+
+            return (
+              <div key={jid} className="card" style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {jobDesc || "Untitled job"}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--ink-3)" }}>
+                      <span className={`chip ${statusColor}`} style={{ fontSize: 11 }}>{status}</span>
+                      <span>{processed}/{total} scored ({pct}%)</span>
+                      {jobResults.length > 0 && (
+                        <span>{jobResults.length} result{jobResults.length !== 1 ? "s" : ""} loaded</span>
+                      )}
+                      {createdAt && <span>{new Date(createdAt).toLocaleDateString()}</span>}
+                    </div>
+                  </div>
+                  <button
+                    className="btn sm"
+                    style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5 }}
+                    disabled={jobResults.length === 0}
+                    onClick={() => downloadJobXlsx(job, jobResults)}
+                    title={jobResults.length === 0 ? "No results loaded for this job yet" : `Download ${jobResults.length} results as XLSX`}
+                  >
+                    <Download style={{ width: 12, height: 12 }} />
+                    Download XLSX
+                  </button>
+                </div>
               </div>
             );
           })}
