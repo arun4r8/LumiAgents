@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Send, Loader2, Paperclip, X, ArrowRight } from "lucide-react";
+import mammoth from "mammoth";
+import { jsPDF } from "jspdf";
 import Link from "next/link";
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
@@ -41,19 +43,49 @@ interface AgentChatClientProps {
 const TEXT_TYPES = new Set(["text/plain", "text/csv", "text/markdown", "application/json"]);
 const TEXT_EXTS  = /\.(txt|csv|md|json)$/i;
 
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+async function docxToPdf(file: File): Promise<AttachedFile> {
+  const arrayBuffer = await file.arrayBuffer();
+  const { value: text } = await mammoth.extractRawText({ arrayBuffer });
+
+  const doc = new jsPDF();
+  const margin = 15;
+  const maxWidth = doc.internal.pageSize.getWidth() - margin * 2;
+  const lineHeight = 7;
+  let y = margin;
+
+  const lines: string[] = doc.splitTextToSize(text || "(empty document)", maxWidth) as string[];
+  for (const line of lines) {
+    if (y > doc.internal.pageSize.getHeight() - margin) {
+      doc.addPage();
+      y = margin;
+    }
+    doc.text(line, margin, y);
+    y += lineHeight;
+  }
+
+  const pdfName = file.name.replace(/\.docx$/i, ".pdf");
+  return { name: pdfName, mimeType: "application/pdf", content: arrayBufferToBase64(doc.output("arraybuffer")) };
+}
+
 async function readFile(file: File): Promise<AttachedFile> {
+  if (/\.docx$/i.test(file.name)) return docxToPdf(file);
+  if (/\.doc$/i.test(file.name)) {
+    throw new Error(`"${file.name}" is a legacy .doc file — please save it as .docx or PDF first`);
+  }
   const isText = TEXT_TYPES.has(file.type) || TEXT_EXTS.test(file.name);
   if (isText) {
     const content = await file.text();
     return { name: file.name, mimeType: file.type || "text/plain", content };
   }
   // Binary → base64
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  const content = btoa(binary);
-  return { name: file.name, mimeType: file.type || "application/octet-stream", content };
+  return { name: file.name, mimeType: file.type || "application/octet-stream", content: arrayBufferToBase64(await file.arrayBuffer()) };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -85,12 +117,16 @@ export default function AgentChatClient({
 
   const attachFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
-    const read = await Promise.all(files.map(readFile));
-    setPendingFiles((prev) => {
-      // Avoid duplicates by name
-      const existing = new Set(prev.map((f) => f.name));
-      return [...prev, ...read.filter((f) => !existing.has(f.name))];
-    });
+    try {
+      const read = await Promise.all(files.map(readFile));
+      setPendingFiles((prev) => {
+        // Avoid duplicates by name
+        const existing = new Set(prev.map((f) => f.name));
+        return [...prev, ...read.filter((f) => !existing.has(f.name))];
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to read file");
+    }
   }, []);
 
   function removeFile(name: string) {
@@ -268,7 +304,7 @@ export default function AgentChatClient({
             {/* File upload */}
             <label
               className="btn sm"
-              title="Attach file (.txt, .csv, .pdf, .md, .json)"
+              title="Attach file (.txt, .csv, .pdf, .md, .json, .docx — .docx auto-converts to PDF)"
               style={{ cursor: "pointer" }}
             >
               <Paperclip style={{ width: 12, height: 12 }} />
@@ -276,7 +312,7 @@ export default function AgentChatClient({
               <input
                 ref={fileRef}
                 type="file"
-                accept=".txt,.csv,.pdf,.md,.json"
+                accept=".txt,.csv,.pdf,.md,.json,.docx,.doc"
                 multiple
                 style={{ display: "none" }}
                 onChange={(e) => {

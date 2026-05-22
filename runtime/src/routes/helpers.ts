@@ -74,7 +74,17 @@ export async function requireOpsToken(
       return { userId: user.id };
     }
   } catch {
-    // network error — fall through to HMAC path
+    // network error — fall through
+  }
+
+  // Secondary: internally-minted dispatch tokens (agent → orchestration calls).
+  // Signed with SUPABASE_JWT_SECRET; must carry sub: "agent-dispatch" so external
+  // JWTs with the same key cannot be misused as service tokens.
+  if (env.SUPABASE_JWT_SECRET) {
+    const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
+    if (payload?.["sub"] === "agent-dispatch") {
+      return { userId: "agent-dispatch" };
+    }
   }
 
   return json({ error: "Invalid token" }, 401);
