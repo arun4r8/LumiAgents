@@ -5,7 +5,6 @@ import { callN8nWebhook } from "./base";
 export const resumeScorerInputSchema = z.object({
   jobDescription: z.string().describe("Role title and requirements to score against"),
   pdfBase64s: z.array(z.string()).min(1).describe("Base64-encoded PDF résumés (batch)"),
-  jobId: z.string().uuid().optional().describe("Existing resume_jobs row to append results to"),
 });
 
 export const resumeScorerOutputSchema = z.object({
@@ -23,7 +22,9 @@ export const resumeScorer = defineTool({
   inputSchema: resumeScorerInputSchema,
   outputSchema: resumeScorerOutputSchema,
   async run(ctx, input) {
-    const jobId = input.jobId ?? crypto.randomUUID();
+    // Always generate a fresh UUID — n8n's Create Job node always INSERTs (no upsert),
+    // so reusing a jobId across retries or continuation batches causes a duplicate-key error.
+    const jobId = crypto.randomUUID();
     await callN8nWebhook(
       ctx,
       RESUME_SCORER_WEBHOOK,
