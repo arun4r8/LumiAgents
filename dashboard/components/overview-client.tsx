@@ -562,29 +562,51 @@ function ThroughputChart({ runs }: { runs: Run[] }) {
   );
 }
 
-// ── Spend placeholder ─────────────────────────────────────────────────
+// ── Spend by agent ────────────────────────────────────────────────────
+
+// Add a row here when a new agent goes live. The key must match the
+// prefix of its orchestration names (e.g. "angie/resume-scoring" → "angie").
+const AGENTS: { key: string; label: string }[] = [
+  { key: "angie", label: "Angie" },
+  { key: "beady", label: "Beady" },
+];
 
 function SpendPlaceholder({ orchestrations }: { orchestrations: Orchestration[] }) {
-  const active = orchestrations.filter((o) => o.is_active).slice(0, 6);
+  // Count active orchestrations per agent so we can show the sub-label.
+  const countByAgent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const o of orchestrations) {
+      if (!o.is_active) continue;
+      const prefix = o.name.split("/")[0] ?? o.name;
+      map.set(prefix, (map.get(prefix) ?? 0) + 1);
+    }
+    return map;
+  }, [orchestrations]);
+
   return (
     <div className="spend">
-      {active.map((o) => (
-        <div key={o.id} className="spend-row">
-          <div className="spend-name">{o.name}</div>
-          <div className="spend-bar">
-            <div className="fill" style={{ width: 0 }} />
+      {AGENTS.map(({ key, label }) => {
+        const count = countByAgent.get(key) ?? 0;
+        return (
+          <div key={key} className="spend-row">
+            <div className="spend-name">
+              {label}
+              {count > 0 && (
+                <span className="muted mono" style={{ fontSize: 10, marginLeft: 6 }}>
+                  {count} flow{count !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            <div className="spend-bar">
+              <div className="fill" style={{ width: 0 }} />
+            </div>
+            <div className="spend-tok" style={{ color: "var(--ink-3)" }}>—</div>
+            <div className="spend-cost" style={{ color: "var(--ink-3)" }}>—</div>
           </div>
-          <div className="spend-tok" style={{ color: "var(--ink-3)" }}>—</div>
-          <div className="spend-cost" style={{ color: "var(--ink-3)" }}>—</div>
-        </div>
-      ))}
-      {active.length === 0 && (
-        <div className="muted" style={{ fontSize: 12, padding: "8px 0" }}>
-          No active orchestrations.
-        </div>
-      )}
+        );
+      })}
       <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-        Per-agent token spend tracked in run_steps · aggregated view coming soon
+        Token spend tracked in run_steps · aggregated view coming soon
       </div>
     </div>
   );
