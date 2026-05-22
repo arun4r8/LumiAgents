@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../../runtime/src";
-import { callN8nWebhook } from "./base";
+import { callN8nWebhookMultipart } from "./base";
 
 export const resumeScorerInputSchema = z.object({
   jobDescription: z.string().describe("Role title and requirements to score against"),
@@ -25,15 +25,19 @@ export const resumeScorer = defineTool({
     // Always generate a fresh UUID — n8n's Create Job node always INSERTs (no upsert),
     // so reusing a jobId across retries or continuation batches causes a duplicate-key error.
     const jobId = crypto.randomUUID();
-    await callN8nWebhook(
+    await callN8nWebhookMultipart(
       ctx,
       RESUME_SCORER_WEBHOOK,
       {
         task_id: jobId,
         roleKey: input.jobDescription,
-        fileCount: input.pdfBase64s.length,
-        pdfBase64s: input.pdfBase64s,
+        fileCount: String(input.pdfBase64s.length),
       },
+      input.pdfBase64s.map((b64, i) => ({
+        fieldName: `resume_${i}`,
+        filename: `resume_${i}.pdf`,
+        base64: b64,
+      })),
       ctx.idempotencyKey("resume-scorer", jobId),
     );
     return { jobId, submitted: input.pdfBase64s.length };
