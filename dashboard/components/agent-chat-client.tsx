@@ -190,25 +190,46 @@ export default function AgentChatClient({
       let history = updatedHistory;
       let allRunIds: string[] = [];
       let firstReply = "";
+      let missedBatches = 0;
 
       for (let i = 0; i < chunks.length; i++) {
         setBatchProgress({ current: i + 1, total: chunks.length });
         const isFirst = i === 0;
+        // Include the original user message explicitly in batch 2+ so the LLM
+        // has the full job description without relying on conversation recall.
         const batchHistory = isFirst
           ? history
           : [
               ...history,
               {
                 role: "user" as const,
-                text: `Batch ${i + 1}/${chunks.length}: score these additional résumés using the same job description as before.`,
+                text: `Batch ${i + 1}/${chunks.length}: Score these ${chunks[i]!.length} additional résumés. Use the same job description from my original request: "${msgText}". Call score_resumes with the attached files now.`,
               },
             ];
 
         try {
           const data = await callAgentChat(batchHistory, chunks[i]!);
           if (isFirst) firstReply = data.reply;
-          allRunIds = [...allRunIds, ...(data.runIds ?? [])];
-          history = [...batchHistory, { role: "assistant" as const, text: data.reply, runIds: data.runIds ?? [] }];
+          const batchRunIds = data.runIds ?? [];
+          if (!isFirst && batchRunIds.length === 0) {
+            // LLM responded but didn't call the tool — retry once with a stronger prompt.
+            const retryHistory = [
+              ...batchHistory,
+              { role: "assistant" as const, text: data.reply },
+              {
+                role: "user" as const,
+                text: `You did not submit the résumés. Please call score_resumes now with jobDescription="${msgText}" and the ${chunks[i]!.length} attached files.`,
+              },
+            ];
+            const retry = await callAgentChat(retryHistory, chunks[i]!);
+            const retryRunIds = retry.runIds ?? [];
+            if (retryRunIds.length === 0) missedBatches++;
+            allRunIds = [...allRunIds, ...retryRunIds];
+            history = [...retryHistory, { role: "assistant" as const, text: retry.reply, runIds: retryRunIds }];
+          } else {
+            allRunIds = [...allRunIds, ...batchRunIds];
+            history = [...batchHistory, { role: "assistant" as const, text: data.reply, runIds: batchRunIds }];
+          }
         } catch (err) {
           setError(`Batch ${i + 1}/${chunks.length} failed: ${err instanceof Error ? err.message : "network error"}`);
           setThinking(false);
@@ -219,11 +240,14 @@ export default function AgentChatClient({
 
       setBatchProgress(null);
       setThinking(false);
+      const missedNote = missedBatches > 0
+        ? `\n\n⚠️ ${missedBatches} batch(es) could not be submitted — please re-upload those files.`
+        : "";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          text: firstReply + (chunks.length > 1 ? `\n\n*All ${allFiles.length} files submitted across ${chunks.length} batches.*` : ""),
+          text: firstReply + (chunks.length > 1 ? `\n\n*All ${allFiles.length} files submitted across ${chunks.length} batches.*` : "") + missedNote,
           runIds: allRunIds,
         },
       ]);

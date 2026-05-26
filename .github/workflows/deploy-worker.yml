@@ -9,6 +9,7 @@ on:
       - "integrations/**"
       - "agents/**"
       - "workers/**"
+      - "supabase/migrations/**"
       - ".github/workflows/deploy-worker.yml"
 
 jobs:
@@ -35,9 +36,35 @@ jobs:
       - name: Typecheck (runtime + shared)
         run: pnpm typecheck
 
+  migrate:
+    name: Apply DB Migrations
+    needs: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Push migrations
+        run: pnpm exec supabase db push --project-ref jlljpgdqqxljvznjslmb --yes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
   deploy:
     name: Deploy Workers
-    needs: typecheck
+    needs: migrate
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

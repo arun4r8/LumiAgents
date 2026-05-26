@@ -2,6 +2,7 @@ import type { Env } from "./types";
 import { orchestrations } from "./registry";
 import { SupabaseClient } from "./db/client";
 import { scheduleDue } from "./utils/cron-match";
+import { drainN8nCallQueue } from "./utils/n8n-queue-drainer";
 import { handleOrchestrations } from "./routes/orchestrations";
 import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
@@ -125,6 +126,9 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    await dispatchCron(controller.cron, env);
+    await Promise.all([
+      dispatchCron(controller.cron, env),
+      drainN8nCallQueue(env),
+    ]);
   },
 } satisfies ExportedHandler<Env>;
