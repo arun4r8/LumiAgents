@@ -122,12 +122,12 @@ When using Claude Code: plan mode (Shift+Tab) for schema changes, runtime/engine
 
 Push to `main` — everything deploys automatically via GitHub Actions.
 
-| Workflow | Triggers on | Deploys |
+| Workflow | Triggers on | Steps |
 |---|---|---|
-| `deploy-worker.yml` | `runtime/`, `orchestrations/`, `integrations/`, `agents/` | Runtime + 4 agent Workers |
-| `deploy-dashboard.yml` | `dashboard/` | Dashboard (Cloudflare Pages) |
+| `deploy-worker.yml` | `runtime/`, `orchestrations/`, `integrations/`, `agents/`, `supabase/migrations/` | Typecheck → Apply DB migrations → Deploy Runtime + 4 agent Workers → Smoke test → E2E |
+| `deploy-dashboard.yml` | `dashboard/` | Typecheck → Build (opennextjs-cloudflare) → Deploy to Cloudflare Workers → Smoke test |
 
-Both workflows run typecheck before deploying and smoke-test after.
+Both workflows run typecheck before deploying. Migrations always run before Workers deploy so the schema is never behind the code.
 
 ### GitHub Actions secrets required
 
@@ -135,10 +135,12 @@ Both workflows run typecheck before deploying and smoke-test after.
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | Both deploy workflows |
 | `CLOUDFLARE_ACCOUNT_ID` | Both deploy workflows |
+| `SUPABASE_ACCESS_TOKEN` | Migration step in `deploy-worker.yml` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Dashboard build |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Dashboard build |
 | `NEXT_PUBLIC_RUNTIME_URL` | Dashboard build + runtime smoke tests |
 | `DASHBOARD_URL` | Dashboard smoke test |
+| `E2E_OPS_EMAIL` / `E2E_OPS_PASSWORD` | E2E test suite |
 
 ### Secrets on the deployed workers
 
