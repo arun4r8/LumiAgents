@@ -37,6 +37,10 @@ export async function handleVault(
 
   // POST /api/vault/webhook — GitHub push event → patch/vault-sync
   if (pathname === "/api/vault/webhook" && request.method === "POST") {
+    // GitHub sends a ping event when a webhook is first created or tested — acknowledge it.
+    if (request.headers.get("X-GitHub-Event") === "ping") {
+      return new Response(JSON.stringify({ status: "pong" }), { status: 200 });
+    }
     type PushPayload = {
       repository: { owner: { login: string }; name: string };
       ref: string;
