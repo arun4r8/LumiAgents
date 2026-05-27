@@ -10,6 +10,7 @@ import angieResumeScoring        from "../../orchestrations/angie/resume-scoring
 import beadyOpportunitySearch    from "../../orchestrations/beady/opportunity-search/definition";
 import beadyGovconAssessment     from "../../orchestrations/beady/govcon-assessment/definition";
 import beadyPastPerformanceSeed  from "../../orchestrations/beady/past-performance-seed/definition";
+import beadySbirTopicSearch      from "../../orchestrations/beady/sbir-topic-search/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -30,6 +31,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyOpportunitySearch   as unknown as AnyOrch),
   reg(beadyGovconAssessment    as unknown as AnyOrch),
   reg(beadyPastPerformanceSeed as unknown as AnyOrch),
+  reg(beadySbirTopicSearch     as unknown as AnyOrch),
   reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),
