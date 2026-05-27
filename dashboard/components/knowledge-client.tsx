@@ -490,7 +490,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
           "Content-Type": "application/json",
           ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ repoOwner: "arun4r8", repoName: "LumiKnowledge" }),
+        body: JSON.stringify({ repoOwner: "LumitureLabs", repoName: "LumiKnowledge" }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setSyncResult(await res.json() as { runId: string });

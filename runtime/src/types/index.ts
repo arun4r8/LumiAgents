@@ -34,8 +34,10 @@ export interface Env {
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   TEAMS_BOT_APP_ID?: string;
   TEAMS_BOT_APP_SECRET?: string;
-  // GitHub integration — Obsidian vault sync (set via `wrangler secret put`)
-  GITHUB_API_TOKEN: string;
+  // GitHub integration — Obsidian vault sync
+  VAULT_OWNER: string;           // set in wrangler.toml [vars] — org/user that owns LumiKnowledge
+  VAULT_REPO: string;            // set in wrangler.toml [vars]
+  GITHUB_API_TOKEN: string;      // set via `wrangler secret put`
   GITHUB_WEBHOOK_SECRET?: string;
 }
 

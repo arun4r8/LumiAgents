@@ -2,8 +2,6 @@ import type { Env } from "../types";
 import { SupabaseClient } from "../db/client";
 import { json, requireOpsToken } from "./helpers";
 
-const VAULT_OWNER  = "arun4r8";
-const VAULT_REPO   = "LumiKnowledge";
 const VAULT_BRANCH = "main";
 
 async function ghFetch<T>(
@@ -104,7 +102,7 @@ export async function handleVault(
 
     const tree = await ghFetch<{
       tree: Array<{ path: string; type: string; sha: string; size?: number }>;
-    }>(env, `/repos/${VAULT_OWNER}/${VAULT_REPO}/git/trees/${VAULT_BRANCH}?recursive=1`);
+    }>(env, `/repos/${env.VAULT_OWNER}/${env.VAULT_REPO}/git/trees/${VAULT_BRANCH}?recursive=1`);
 
     const files = tree.tree
       .filter((e) => e.type === "blob" && e.path.endsWith(".md") && !e.path.startsWith(".obsidian/"))
@@ -123,7 +121,7 @@ export async function handleVault(
 
     const data = await ghFetch<{ content: string; sha: string; encoding: string }>(
       env,
-      `/repos/${VAULT_OWNER}/${VAULT_REPO}/contents/${encodeURIComponent(filePath)}?ref=${VAULT_BRANCH}`,
+      `/repos/${env.VAULT_OWNER}/${env.VAULT_REPO}/contents/${encodeURIComponent(filePath)}?ref=${VAULT_BRANCH}`,
     );
 
     if (data.encoding !== "base64") return json({ error: "unexpected encoding" }, 500);
@@ -155,7 +153,7 @@ export async function handleVault(
 
     const result = await ghFetch<{ content: { path: string; sha: string } }>(
       env,
-      `/repos/${VAULT_OWNER}/${VAULT_REPO}/contents/${encodeURIComponent(body.path)}`,
+      `/repos/${env.VAULT_OWNER}/${env.VAULT_REPO}/contents/${encodeURIComponent(body.path)}`,
       { method: "PUT", body: reqBody },
     );
 
@@ -172,7 +170,7 @@ export async function handleVault(
 
     await ghFetch<unknown>(
       env,
-      `/repos/${VAULT_OWNER}/${VAULT_REPO}/contents/${encodeURIComponent(body.path)}`,
+      `/repos/${env.VAULT_OWNER}/${env.VAULT_REPO}/contents/${encodeURIComponent(body.path)}`,
       {
         method: "DELETE",
         body: {

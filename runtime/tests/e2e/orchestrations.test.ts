@@ -248,7 +248,7 @@ describe.skip("patch/staff-request", () => {
 describe.skip("patch/vault-sync", () => {
   it("syncs Obsidian vault markdown into the RAG index", async () => {
     const runId = await triggerRun("patch/vault-sync", {
-      repoOwner: "arun4r8",
+      repoOwner: "LumitureLabs",
       repoName:  "LumiKnowledge",
       branch: "main",
     });

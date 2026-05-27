@@ -7,6 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
 JIRA_BASE_URL = "https://lumiture.atlassian.net"
 ENVIRONMENT = "production"
+VAULT_OWNER = "LumitureLabs"
+VAULT_REPO  = "LumiKnowledge"
 
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_SERVICE_ROLE_KEY
