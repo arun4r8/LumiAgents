@@ -53,23 +53,41 @@ in the database. Be analytical and concise. Cite specific evaluation factors whe
     },
     {
       name: "search_sbir_topics",
-      description: "Search DoD SBIR/STTR topics from dodsbirsttr.mil. Fetches open (or pre-release) R&D solicitations, scores them against Lumiture's profile, and saves shortlisted topics as opportunities for govcon-assessment. Use when the user wants to explore SBIR/STTR funding opportunities or wants a broader sweep beyond SAM.gov.",
+      description: "Search DoD SBIR/STTR topics only (dodsbirsttr.mil). Use search_all_opportunities instead when you want both SAM.gov and SBIR in one pass.",
       inputSchema: {
         type: "object",
         properties: {
           keyword:     { type: "string", description: "Keywords to filter topics (e.g. 'data management AI cloud')" },
           component:   { type: "array", items: { type: "string" }, description: "DoD branch filter — e.g. ['ARMY', 'USAF', 'NAVY']. Omit for all branches." },
           topicStatus: { type: "string", enum: ["Open", "Closed", "Pre-Release"], description: "Default: Open" },
-          minScore:    { type: "number", description: "Min Beady fit score to include (1-10). Default 4 — low threshold since we want candidates for the assessment pipeline." },
+          minScore:    { type: "number", description: "Min Beady fit score to include (1-10). Default 4." },
           limit:       { type: "number", description: "Max topics to fetch (default 50, max 200)" },
+        },
+      },
+    },
+    {
+      name: "search_all_opportunities",
+      description: "Parallel sweep of SAM.gov AND DoD SBIR/STTR topics in one shot. Scores everything together and saves the shortlist. Prefer this over calling the two search tools separately.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          keywords:        { type: "string", description: "Keywords applied to both sources" },
+          naicsCodes:      { type: "array", items: { type: "string" }, description: "NAICS codes for SAM.gov filter (default: IT/engineering codes)" },
+          agencies:        { type: "array", items: { type: "string" }, description: "Agency name filter for SAM.gov (e.g. ['Department of Defense'])" },
+          sbirComponents:  { type: "array", items: { type: "string" }, description: "DoD branch filter for SBIR (e.g. ['ARMY', 'USAF']). Omit for all." },
+          postedWithinDays:{ type: "number", description: "SAM.gov: only opportunities posted in the last N days (default 30)" },
+          minScore:        { type: "number", description: "Min Beady fit score to include (1-10, default 5)" },
+          samLimit:        { type: "number", description: "Max SAM.gov results (default 25)" },
+          sbirLimit:       { type: "number", description: "Max SBIR results (default 50)" },
         },
       },
     },
   ],
   toolMap: {
-    assess_opportunity:    { orchestration: "beady/govcon-assessment" },
-    search_opportunities:  { orchestration: "beady/opportunity-search" },
-    seed_past_performance: { orchestration: "beady/past-performance-seed" },
-    search_sbir_topics:    { orchestration: "beady/sbir-topic-search" },
+    assess_opportunity:      { orchestration: "beady/govcon-assessment" },
+    search_opportunities:    { orchestration: "beady/opportunity-search" },
+    seed_past_performance:   { orchestration: "beady/past-performance-seed" },
+    search_sbir_topics:      { orchestration: "beady/sbir-topic-search" },
+    search_all_opportunities: { orchestration: "beady/opportunity-sweep" },
   },
 };
