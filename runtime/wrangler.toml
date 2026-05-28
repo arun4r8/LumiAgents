@@ -4,7 +4,7 @@ compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-SUPABASE_URL = "https://jlljpgdqqxljvznjslmb.supabase.co"
+SUPABASE_URL = "https://cuaknazkpmwvnkmwtamp.supabase.co"
 JIRA_BASE_URL = "https://lumiture.atlassian.net"
 ENVIRONMENT = "production"
 VAULT_OWNER = "LumitureLabs"
