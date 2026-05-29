@@ -101,7 +101,7 @@ Non-secret vars (`SUPABASE_URL`, `JIRA_BASE_URL`, `ENVIRONMENT`) are already set
 
 | Key | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://jlljpgdqqxljvznjslmb.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://cuaknazkpmwvnkmwtamp.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
 | `NEXT_PUBLIC_RUNTIME_URL` | `http://localhost:8787` (local) or prod URL (staging) |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → right sidebar |

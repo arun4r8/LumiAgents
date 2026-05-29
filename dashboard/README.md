@@ -38,7 +38,7 @@ Dashboard runs at `http://localhost:3000`. You also need the runtime running at 
 
 | Key | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://jlljpgdqqxljvznjslmb.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://cuaknazkpmwvnkmwtamp.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
 | `NEXT_PUBLIC_RUNTIME_URL` | `http://localhost:8787` for local; prod URL for staging |
 
@@ -53,7 +53,7 @@ cd dashboard
 
 # Build for Cloudflare Workers:
 NEXT_PUBLIC_RUNTIME_URL=https://lumiagents-runtime.lumiture.workers.dev \
-NEXT_PUBLIC_SUPABASE_URL=https://jlljpgdqqxljvznjslmb.supabase.co \
+NEXT_PUBLIC_SUPABASE_URL=https://cuaknazkpmwvnkmwtamp.supabase.co \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key> \
 npx @opennextjs/cloudflare build
 

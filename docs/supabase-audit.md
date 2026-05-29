@@ -2,7 +2,7 @@
 
 Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 
-**Project:** Lumiture (`jlljpgdqqxljvznjslmb`) — East US (North Virginia)  
+**Project:** Lumiture (`cuaknazkpmwvnkmwtamp`) — East US (North Virginia)  
 **Postgres:** 17.6  
 **pgvector:** Enabled — embeddings at 3072 dimensions (Gemini text-embedding models)
 
@@ -106,7 +106,7 @@ Extension enabled. All vector columns are 3072 dimensions, consistent with Gemin
 
 ## IPv6 / direct Postgres access
 
-The Supabase CLI `db dump` and `db diff` commands require direct Postgres connection. This machine's network does not support IPv6, which the direct connection host (`db.jlljpgdqqxljvznjslmb.supabase.co`) resolves to. **Workaround:** use the Supabase Management API for schema introspection (done above), and run migrations via `supabase db push` which uses the HTTP API rather than a direct socket.
+The Supabase CLI `db dump` and `db diff` commands require direct Postgres connection. This machine's network does not support IPv6, which the direct connection host (`db.cuaknazkpmwvnkmwtamp.supabase.co`) resolves to. **Workaround:** use the Supabase Management API for schema introspection (done above), and run migrations via `supabase db push` which uses the HTTP API rather than a direct socket.
 
 ---
 

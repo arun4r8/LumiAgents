@@ -333,7 +333,7 @@ The key env vars for the dashboard locally:
 
 | Key | Value |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://jlljpgdqqxljvznjslmb.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://cuaknazkpmwvnkmwtamp.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
 | `NEXT_PUBLIC_RUNTIME_URL` | `http://localhost:8787` |
 

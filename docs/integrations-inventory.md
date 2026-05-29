@@ -31,7 +31,7 @@ All external systems touched by the orchestration layer or existing n8n workflow
 **Used by:** GovCon Assessment, Resume Scoring, LumiAnalysis, LinkedIn Outreach, Inbound Email  
 **Usage:** Postgres reads/writes, vector store (pgvector), file storage  
 **Auth model:** Service role key (in n8n), anon key + JWT (dashboard)  
-**Project:** `jlljpgdqqxljvznjslmb` (Lumiture, East US - North Virginia)  
+**Project:** `cuaknazkpmwvnkmwtamp` (Lumiture, East US - North Virginia)  
 **Sandbox:** Separate project (`bbvfjykxxgwlkpnggkup`, "Test") exists — use for dev  
 **Rate limits:** Database connection pooling via Supabase — watch for connection exhaustion from Workers  
 **Credential owner:** Arun  
