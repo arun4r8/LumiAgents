@@ -1,17 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { RUNTIME_URL } from "./helpers";
+import { RUNTIME_URL, authHeaders } from "./helpers";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 async function chat(slug: string, content: string) {
   const res = await fetch(`${RUNTIME_URL}/api/agents/${slug}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders(),
     body: JSON.stringify({ messages: [{ role: "user", content }] }),
   });
   const body = (await res.json()) as { reply: string; runIds: string[] };
   return { status: res.status, body };
 }
+
+// ── Auth ───────────────────────────────────────────────────────────────────────
+
+describe("Agent chat auth", () => {
+  it("rejects unauthenticated chat requests", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/agents/patch/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

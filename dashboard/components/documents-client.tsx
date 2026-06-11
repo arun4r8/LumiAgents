@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { Search, Sparkles, Check, Loader2, Trash2, FileText, FileSpreadsheet, File, Upload, ScanText } from "lucide-react";
+import { runtimeAuthHeader } from "@/lib/runtime-auth";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -101,7 +102,7 @@ function DocsQuery() {
     try {
       const res = await fetch(`${RUNTIME}/api/documents/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await runtimeAuthHeader()) },
         body: JSON.stringify({ question: q }),
       });
       const data = await res.json() as QueryResult & { error?: string };
@@ -249,7 +250,11 @@ function FileIngest() {
       fd.append("sourceName", name);
       // Switch label after a moment so user knows OCR finished and embedding is running
       const ocrTimer = setTimeout(() => setPhase("embedding"), 8000);
-      const res = await fetch(`${RUNTIME}/api/documents/ingest-file`, { method: "POST", body: fd });
+      const res = await fetch(`${RUNTIME}/api/documents/ingest-file`, {
+        method: "POST",
+        headers: await runtimeAuthHeader(),
+        body: fd,
+      });
       clearTimeout(ocrTimer);
       const data = await res.json() as IngestResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
@@ -387,7 +392,7 @@ function TextIngest() {
     try {
       const res = await fetch(`${RUNTIME}/api/documents/ingest`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await runtimeAuthHeader()) },
         body: JSON.stringify({ sourceName: name, sourceKind: kind, content }),
       });
       const data = await res.json() as IngestResult & { error?: string };

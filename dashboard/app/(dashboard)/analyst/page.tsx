@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Send, Loader2, Upload, X, Table, ChevronDown, ChevronUp } from "lucide-react";
+import { runtimeAuthHeader } from "@/lib/runtime-auth";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -73,7 +74,7 @@ export default function AnalystPage() {
     try {
       const res = await fetch(`${RUNTIME}/api/analyst/query`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await runtimeAuthHeader()) },
         body: JSON.stringify({
           question: question.trim(),
           maxRows,
@@ -97,7 +98,7 @@ export default function AnalystPage() {
       const text = await file.text();
       const res = await fetch(`${RUNTIME}/api/analyst/upload-csv`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await runtimeAuthHeader()) },
         body: JSON.stringify({
           sessionKey,
           sourceName: file.name,

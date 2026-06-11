@@ -1,5 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { triggerRun, pollRun, authHeaders, RUNTIME_URL } from "./helpers";
+
+// Remove documents this suite ingested so the RAG corpus doesn't accumulate
+// test residue across CI runs.
+afterAll(async () => {
+  const headers = await authHeaders();
+  const res = await fetch(`${RUNTIME_URL}/api/documents`, { headers });
+  if (!res.ok) {
+    console.warn(`[e2e cleanup] list documents failed: ${res.status}`);
+    return;
+  }
+  const docs = await res.json() as Array<{ id: string; source_name: string }>;
+  const testDocs = docs.filter((d) => d.source_name.startsWith("[E2E TEST]"));
+  for (const doc of testDocs) {
+    const del = await fetch(`${RUNTIME_URL}/api/documents/${doc.id}`, { method: "DELETE", headers });
+    if (!del.ok) console.warn(`[e2e cleanup] delete ${doc.id} failed: ${del.status}`);
+  }
+  if (testDocs.length > 0) console.log(`[e2e cleanup] removed ${testDocs.length} test document(s)`);
+});
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@ import { Send, Loader2, Paperclip, X, ArrowRight } from "lucide-react";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
 import Link from "next/link";
+import { runtimeAuthHeader } from "@/lib/runtime-auth";
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -157,7 +158,7 @@ export default function AgentChatClient({
   ): Promise<ChatResponse> {
     const res = await fetch(`${RUNTIME_URL}/api/agents/${slug}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await runtimeAuthHeader()) },
       body: JSON.stringify({ messages: toApiMessages(history), files }),
     });
     const data = await res.json() as ChatResponse & { error?: string };

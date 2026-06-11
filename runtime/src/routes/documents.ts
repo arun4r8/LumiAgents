@@ -75,6 +75,9 @@ export async function handleDocuments(
 
   // POST /api/documents/ingest-file  (multipart — OCR via Claude then embed)
   if (pathname === "/api/documents/ingest-file" && request.method === "POST") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
     let formData: FormData;
     try {
       formData = await request.formData();
@@ -143,6 +146,9 @@ export async function handleDocuments(
 
   // POST /api/documents/ingest
   if (pathname === "/api/documents/ingest" && request.method === "POST") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
     const body = await request.json() as {
       sourceName: string;
       sourceKind: "pdf" | "text" | "csv" | "url";
@@ -184,6 +190,9 @@ export async function handleDocuments(
 
   // POST /api/documents/query
   if (pathname === "/api/documents/query" && request.method === "POST") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
     const body = await request.json() as {
       question: string;
       minSimilarity?: number;
@@ -200,6 +209,9 @@ export async function handleDocuments(
 
   // POST /api/analyst/query
   if (pathname === "/api/analyst/query" && request.method === "POST") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
     const body = await request.json() as {
       question: string;
       tables?: string[];
@@ -217,6 +229,9 @@ export async function handleDocuments(
 
   // POST /api/analyst/upload-csv
   if (pathname === "/api/analyst/upload-csv" && request.method === "POST") {
+    const authResult = await requireOpsToken(request, env);
+    if (authResult instanceof Response) return authResult;
+
     const body = await request.json() as {
       sessionKey: string;
       sourceName: string;
