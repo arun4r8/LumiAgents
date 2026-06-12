@@ -148,15 +148,15 @@ describe.skip("angie/resume-scoring", () => {
   }, 130_000);
 });
 
-// ─── Beady: govcon-assessment (n8n) ───────────────────────────────────────────
-// Skipped in automated CI — requires n8n webhook (N8N_WEBHOOK_SECRET) and the
-// govcon-assessment-intake n8n flow to be active. Also needs a real opportunity row.
+// ─── Beady: govcon-assessment (native) ────────────────────────────────────────
+// Skipped in automated CI — runs ~7 live Claude calls + Tavily, writes to
+// assessments/incumbent_research. Needs a real opportunity row (or intake text).
 
 describe.skip("beady/govcon-assessment", () => {
-  it("runs a govcon assessment via n8n", async () => {
+  it("runs a native govcon assessment end to end", async () => {
     const runId = await triggerRun("beady/govcon-assessment", {
       opportunityId: "00000000-0000-0000-0000-000000000001", // replace with real ID
-      sourceUrl: "https://sam.gov/opp/test/view",
+      summaryText: "Test solicitation for IT modernization services.",
     });
     expect(runId).toBeTruthy();
 

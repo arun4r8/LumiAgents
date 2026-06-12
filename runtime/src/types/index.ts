@@ -39,6 +39,8 @@ export interface Env {
   VAULT_REPO: string;            // set in wrangler.toml [vars]
   GITHUB_API_TOKEN: string;      // set via `wrangler secret put`
   GITHUB_WEBHOOK_SECRET?: string;
+  // Tavily web-search (GovCon incumbent research) — set via `wrangler secret put`
+  TAVILY_API_KEY?: string;
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────
