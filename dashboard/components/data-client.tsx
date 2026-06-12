@@ -415,7 +415,7 @@ function downloadJobXlsx(job: Record<string, unknown>, results: Record<string, u
     "Work Experience":           r.work_experience_score ?? "",
     "Academics":                 r.academics_score ?? "",
     "Projects & Research":       r.projects_and_research_score ?? "",
-    "Leadership & Initiative":   r.leadership_and_inititative_score ?? "",
+    "Leadership & Initiative":   r.leadership_and_initiative_score ?? "",
     "Overall Score":             r.overall_score ?? "",
     "Rationale":                 r.rationale ?? "",
     "Status":                    r.status ?? "",

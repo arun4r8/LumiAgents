@@ -41,7 +41,7 @@ export default async function DataPage() {
       .select("id, job, status, total, processed, created_at")
       .order("created_at", { ascending: false }).limit(50),
     supabase.from("resume_results")
-      .select("id, job_id, status, name, email, mobile_number, location, school, field_of_study, gpa, grad_year, role, technical_skills_score, work_experience_score, academics_score, projects_and_research_score, leadership_and_inititative_score, overall_score, rationale, error, created_at")
+      .select("id, job_id, status, name, email, mobile_number, location, school, field_of_study, gpa, grad_year, role, technical_skills_score, work_experience_score, academics_score, projects_and_research_score, leadership_and_initiative_score, overall_score, rationale, error, created_at")
       .order("overall_score", { ascending: false }).limit(2000),
   ]);
 

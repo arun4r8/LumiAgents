@@ -41,7 +41,7 @@ const TABLE_SCHEMAS: Record<string, string> = {
 
   "public.candidates": `candidates(id bigint, name text, email text, linkedin_url text, status text, role text, date_contacted timestamptz, resume_received timestamptz, created_at timestamptz)`,
 
-  "public.resume_results": `resume_results(id uuid, job_id uuid FK→resume_jobs, name text, email text, role text, technical_skills_score int, work_experience_score int, academics_score int, projects_and_research_score int, leadership_and_inititative_score int, overall_score int, rationale text, status text, created_at timestamptz)`,
+  "public.resume_results": `resume_results(id uuid, job_id uuid FK→resume_jobs, name text, email text, role text, technical_skills_score int, work_experience_score int, academics_score int, projects_and_research_score int, leadership_and_initiative_score int, overall_score int, rationale text, status text, created_at timestamptz)`,
 
   "public.resume_jobs": `resume_jobs(id uuid, job text, status text, total int, processed int, created_at timestamptz)`,
 

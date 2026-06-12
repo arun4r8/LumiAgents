@@ -1,1 +1,1 @@
-export { resumeScorer } from "../../../integrations/n8n/resume-scorer";
+export { scoreResume } from "../../../integrations/anthropic/score-resume";

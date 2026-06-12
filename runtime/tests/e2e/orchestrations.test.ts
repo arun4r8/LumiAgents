@@ -129,13 +129,13 @@ describe.skip("angie/candidate-sourcing", () => {
   }, 130_000);
 });
 
-// ─── Angie: resume-scoring (n8n) ──────────────────────────────────────────────
-// Skipped in automated CI — requires n8n webhook (N8N_WEBHOOK_SECRET) and the
-// resume-scorer n8n flow to be active.
+// ─── Angie: resume-scoring (native) ───────────────────────────────────────────
+// Skipped in automated CI — runs a live Claude call (ANTHROPIC_API_KEY) and writes
+// resume_results directly. The minimal PDF below has no real content, so scores are nominal.
 
 describe.skip("angie/resume-scoring", () => {
   it("scores a resume against a job description", async () => {
-    // Minimal 1-page PDF (bare valid PDF header — n8n flow handles extraction)
+    // Minimal 1-page PDF (bare valid PDF header)
     const minimalPdfBase64 = "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPJ4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQo+PgplbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAp0cmFpbGVyCjw8Ci9TaXplIDQKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjE5MAolJUVPRgo=";
     const runId = await triggerRun("angie/resume-scoring", {
       jobDescription: "Senior PostgreSQL DBA for government contract. Requires clearance eligibility and 5+ years experience.",
