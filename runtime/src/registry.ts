@@ -12,6 +12,7 @@ import beadyGovconAssessment     from "../../orchestrations/beady/govcon-assessm
 import beadyPastPerformanceSeed  from "../../orchestrations/beady/past-performance-seed/definition";
 import beadySbirTopicSearch      from "../../orchestrations/beady/sbir-topic-search/definition";
 import beadyOpportunitySweep    from "../../orchestrations/beady/opportunity-sweep/definition";
+import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-report/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -34,6 +35,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyPastPerformanceSeed as unknown as AnyOrch),
   reg(beadySbirTopicSearch     as unknown as AnyOrch),
   reg(beadyOpportunitySweep   as unknown as AnyOrch),
+  reg(beadyOpportunityReport  as unknown as AnyOrch),
   reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),

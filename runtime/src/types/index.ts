@@ -43,6 +43,9 @@ export interface Env {
   GITHUB_WEBHOOK_SECRET?: string;
   // Tavily web-search (GovCon incumbent research) — set via `wrangler secret put`
   TAVILY_API_KEY?: string;
+  // Resend transactional email (opportunity report dispatch) — set via `wrangler secret put`
+  RESEND_API_KEY?: string;
+  RESEND_FROM?: string;  // e.g. "Beady <reports@lumiture.com>"
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────
