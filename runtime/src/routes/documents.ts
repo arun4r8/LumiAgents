@@ -3,7 +3,7 @@ import type { Env } from "../types";
 import { ingestDocument, queryDocuments } from "../agents/document-rag";
 import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
-import { json, parseCsvLine, requireOpsToken } from "./helpers";
+import { json, parseCsvLine, requireOpsToken, rateLimited } from "./helpers";
 
 // ─── OCR helpers ──────────────────────────────────────────────────────────────
 
@@ -78,6 +78,9 @@ export async function handleDocuments(
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
+    const rl = await rateLimited(env, authResult.userId, "documents", 20);
+    if (rl) return rl;
+
     let formData: FormData;
     try {
       formData = await request.formData();
@@ -149,6 +152,9 @@ export async function handleDocuments(
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
+    const rl = await rateLimited(env, authResult.userId, "documents", 20);
+    if (rl) return rl;
+
     const body = await request.json() as {
       sourceName: string;
       sourceKind: "pdf" | "text" | "csv" | "url";
@@ -193,6 +199,9 @@ export async function handleDocuments(
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
 
+    const rl = await rateLimited(env, authResult.userId, "documents", 20);
+    if (rl) return rl;
+
     const body = await request.json() as {
       question: string;
       minSimilarity?: number;
@@ -211,6 +220,9 @@ export async function handleDocuments(
   if (pathname === "/api/analyst/query" && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
+
+    const rl = await rateLimited(env, authResult.userId, "analyst", 20);
+    if (rl) return rl;
 
     const body = await request.json() as {
       question: string;
@@ -231,6 +243,9 @@ export async function handleDocuments(
   if (pathname === "/api/analyst/upload-csv" && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
+
+    const rl = await rateLimited(env, authResult.userId, "analyst", 20);
+    if (rl) return rl;
 
     const body = await request.json() as {
       sessionKey: string;

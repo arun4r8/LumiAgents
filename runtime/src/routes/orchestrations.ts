@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
-import { json, schemaToJsonSchema, requireOpsToken } from "./helpers";
+import { json, schemaToJsonSchema, requireOpsToken, rateLimited } from "./helpers";
 
 export async function handleOrchestrations(
   request: Request,
@@ -16,6 +16,9 @@ export async function handleOrchestrations(
   if (runMatch && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
+
+    const rl = await rateLimited(env, authResult.userId, "orchestration-run", 30);
+    if (rl) return rl;
 
     const name = decodeURIComponent(runMatch[1] ?? "");
     const orch = orchestrations.get(name);

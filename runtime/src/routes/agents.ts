@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { runAgentChat } from "../agents/agent-chat";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
-import { json, requireOpsToken } from "./helpers";
+import { json, requireOpsToken, rateLimited } from "./helpers";
 
 async function mintDispatchToken(jwtSecret: string): Promise<string> {
   const enc = (s: string) =>
@@ -40,6 +40,9 @@ export async function handleAgents(
   if (agentMatch && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
+
+    const rl = await rateLimited(env, authResult.userId, "agent-chat", 20);
+    if (rl) return rl;
 
     const slug = agentMatch[1] as "angie" | "beady" | "patch" | "money";
     const runtimeUrl = `${url.protocol}//${url.host}`;

@@ -132,3 +132,35 @@ export function schemaToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown
   if (schema instanceof z.ZodDiscriminatedUnion) return { type: "object" };
   return {};
 }
+
+// ─── Per-user rate limiting (fixed window via claim_rate_limit RPC) ─────────────
+// Fails OPEN — a metrics/db outage must not lock users out. Internal
+// agent-dispatch calls are bounded by MAX_TOOL_ROUNDS, so they're never throttled.
+export async function claimRateLimit(
+  env: Env, userId: string, bucket: string, limit: number, windowSeconds = 60,
+): Promise<boolean> {
+  if (userId === "agent-dispatch") return true;
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/claim_rate_limit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ p_user: userId, p_bucket: bucket, p_limit: limit, p_window_seconds: windowSeconds }),
+    });
+    if (!res.ok) return true;
+    return (await res.json()) as boolean;
+  } catch {
+    return true;
+  }
+}
+
+// Returns a 429 Response if the caller is over the limit, else null.
+export async function rateLimited(
+  env: Env, userId: string, bucket: string, limit: number, windowSeconds = 60,
+): Promise<Response | null> {
+  const ok = await claimRateLimit(env, userId, bucket, limit, windowSeconds);
+  return ok ? null : json({ error: `Rate limit exceeded — max ${limit} ${bucket} requests per ${windowSeconds}s.` }, 429);
+}
