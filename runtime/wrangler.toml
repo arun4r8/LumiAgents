@@ -25,6 +25,9 @@ VAULT_REPO  = "LumiKnowledge"
 # TEAMS_BOT_APP_SECRET         ← Azure Bot registration client secret
 # GITHUB_API_TOKEN             ← GitHub PAT with repo scope (vault read/write)
 # GITHUB_WEBHOOK_SECRET        ← Secret set in the GitHub push webhook config
+# RESEND_API_KEY               ← Resend API key (email reports)
+# RESEND_FROM                  ← optional sender, e.g. "Beady <reports@domain>"; needs a verified domain.
+#                                Defaults to "Beady <onboarding@resend.dev>" (only delivers to the Resend account owner).
 
 [[workflows]]
 name = "orchestration-workflow"
