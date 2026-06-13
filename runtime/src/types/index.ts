@@ -13,6 +13,8 @@ export interface Env {
   JIRA_API_TOKEN: string;
   SAM_GOV_API_KEY: string;
   ENVIRONMENT: string;
+  // Comma-separated CORS allowlist (dashboard origin). Unset → CORS stays "*".
+  ALLOWED_ORIGINS?: string;
   // CRM integration (Salesforce / HubSpot / Deltek Costpoint / …)
   CRM_API_URL?: string;
   CRM_API_KEY?: string;

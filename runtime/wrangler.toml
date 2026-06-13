@@ -7,6 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 SUPABASE_URL = "https://cuaknazkpmwvnkmwtamp.supabase.co"
 JIRA_BASE_URL = "https://lumiture.atlassian.net"
 ENVIRONMENT = "production"
+ALLOWED_ORIGINS = "https://lumiagents-dashboard.lumiture.workers.dev"
 VAULT_OWNER = "LumitureLabs"
 VAULT_REPO  = "LumiKnowledge"
 

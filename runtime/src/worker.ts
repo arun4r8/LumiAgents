@@ -76,6 +76,22 @@ async function dispatchCron(_cronExpr: string, env: Env): Promise<void> {
   }
 }
 
+// Resolve the CORS origin: reflect the request Origin if it's allowlisted,
+// otherwise the primary allowed origin. Unset ALLOWED_ORIGINS preserves "*".
+function corsOrigin(request: Request, env: Env): string {
+  const allowed = (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (allowed.length === 0) return "*";
+  const origin = request.headers.get("Origin") ?? "";
+  return origin && allowed.includes(origin) ? origin : (allowed[0] as string);
+}
+
+function withCors(res: Response, request: Request, env: Env): Response {
+  const r = new Response(res.body, res);
+  r.headers.set("Access-Control-Allow-Origin", corsOrigin(request, env));
+  r.headers.set("Vary", "Origin");
+  return r;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -83,9 +99,10 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": corsOrigin(request, env),
           "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Vary": "Origin",
         },
       });
     }
@@ -102,26 +119,26 @@ export default {
 
       for (const handler of handlers) {
         const res = await handler(request, env, ctx, url);
-        if (res !== null) return res;
+        if (res !== null) return withCors(res, request, env);
       }
 
       if (url.pathname === "/health") {
-        return new Response(
+        return withCors(new Response(
           JSON.stringify({ status: "ok", environment: env.ENVIRONMENT, orchestrations: orchestrations.size }),
-          { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
-        );
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ), request, env);
       }
 
-      return new Response(JSON.stringify({ error: "Not found" }), {
+      return withCors(new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-      });
+        headers: { "Content-Type": "application/json" },
+      }), request, env);
     } catch (err) {
       console.error("Worker error:", err);
-      return new Response(
+      return withCors(new Response(
         JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
-      );
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      ), request, env);
     }
   },
 
