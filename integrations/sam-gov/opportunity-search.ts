@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../../runtime/src";
+import { claimBudget, DAILY_BUDGET } from "../budget";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,9 @@ export const samGovOpportunitySearch = defineTool({
   inputSchema: samSearchInputSchema,
   outputSchema: samSearchOutputSchema,
   async run(ctx, input) {
+    if (!(await claimBudget(ctx.env, "sam_gov", DAILY_BUDGET.sam_gov))) {
+      throw new Error(`SAM.gov daily budget reached (${DAILY_BUDGET.sam_gov}/day). Try again tomorrow or raise the cap in DAILY_BUDGET.`);
+    }
     // Build date range
     const toDate = new Date();
     const fromDate = new Date();

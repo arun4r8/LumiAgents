@@ -1,4 +1,5 @@
 import type { Env } from "../../runtime/src/types";
+import { claimBudget, DAILY_BUDGET } from "../budget";
 
 export interface TavilyResult {
   url: string;
@@ -14,6 +15,7 @@ export async function tavilySearch(
   opts: { query: string; includeDomains?: string[]; maxResults?: number },
 ): Promise<TavilyResult[]> {
   if (!env.TAVILY_API_KEY) return [];
+  if (!(await claimBudget(env, "tavily", DAILY_BUDGET.tavily))) return [];
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",

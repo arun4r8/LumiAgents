@@ -65,9 +65,11 @@ export default defineOrchestration({
   },
 
   async run(ctx, input) {
-    // Step 1: Fetch both sources in parallel inside a single step
+    // Step 1: Fetch both sources (resilient — one source failing or hitting its
+    // budget cap doesn't kill the other), then drop opportunities we've already
+    // scored so only net-new items reach the LLM.
     const { samResults, sbirResults } = await step(ctx, "fetch-both-sources", async () => {
-      const [samResults, sbirResults] = await Promise.all([
+      const [samR, sbirR] = await Promise.allSettled([
         samGovOpportunitySearch(ctx, {
           keywords: input.keywords,
           naicsCodes: input.naicsCodes,
@@ -83,7 +85,30 @@ export default defineOrchestration({
           limit: input.sbirLimit,
         }),
       ]);
-      return { samResults, sbirResults };
+      const samResults = samR.status === "fulfilled" ? samR.value : { totalRecords: 0, opportunities: [] };
+      const sbirResults = sbirR.status === "fulfilled" ? sbirR.value : { totalElements: 0, topics: [] };
+      if (samR.status === "rejected") console.warn("[sweep] SAM.gov fetch skipped:", samR.reason);
+      if (sbirR.status === "rejected") console.warn("[sweep] SBIR fetch skipped:", sbirR.reason);
+
+      // Dedupe: external ids already in the opportunities table (sam_notice_id is
+      // the unique key; SBIR rows store `sbir_<topicNumber>` there).
+      const seen = new Set<string>();
+      try {
+        const res = await ctx.fetch(
+          `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?select=sam_notice_id`,
+          { headers: { apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}` } },
+        );
+        if (res.ok) for (const row of (await res.json()) as Array<{ sam_notice_id: string | null }>) {
+          if (row.sam_notice_id) seen.add(row.sam_notice_id);
+        }
+      } catch (e) {
+        console.warn("[sweep] dedupe lookup failed, scoring all results:", e);
+      }
+
+      return {
+        samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => !seen.has(o.noticeId)) },
+        sbirResults: { ...sbirResults, topics: sbirResults.topics.filter((t) => !seen.has(`sbir_${t.topicNumber}`)) },
+      };
     });
 
     const totalFound = samResults.opportunities.length + sbirResults.topics.length;

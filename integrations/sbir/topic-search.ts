@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../../runtime/src";
+import { claimBudget, DAILY_BUDGET } from "../budget";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,10 @@ export const sbirTopicSearch = defineTool({
   inputSchema: sbirSearchInputSchema,
   outputSchema: sbirSearchOutputSchema,
   async run(ctx, input) {
+    // Over the daily budget → return empty (SBIR has no hard key limit; tracked for visibility).
+    if (!(await claimBudget(ctx.env, "sbir", DAILY_BUDGET.sbir))) {
+      return { totalElements: 0, topics: [] };
+    }
     // Fetch up to `limit` topics in one page — the portal has ~100-200 open at any time
     const params = new URLSearchParams({
       page: "0",
