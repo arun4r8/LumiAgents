@@ -4,6 +4,12 @@ import { OrchestrationsClient } from "@/components/orchestrations-client";
 
 export const dynamic = "force-dynamic";
 
+// Orchestrations that have a dedicated dashboard surface and shouldn't also appear
+// in the raw catalogue. beady/opportunity-report is managed entirely from the
+// Reports page (subscriptions + "Send now"); triggering it here with raw input
+// would just be a confusing duplicate.
+const HIDDEN_FROM_CATALOGUE = ["beady/opportunity-report"];
+
 export default async function OrchestrationsPage() {
   const supabase = await createClient();
 
@@ -14,7 +20,7 @@ export default async function OrchestrationsPage() {
     .neq("trigger_mode", "webhook")
     .order("name");
 
-  const orcList = (orchestrations ?? []) as {
+  const orcList = ((orchestrations ?? []) as {
     id: string;
     name: string;
     version: string | number;
@@ -22,7 +28,7 @@ export default async function OrchestrationsPage() {
     is_active: boolean;
     cron: string | null;
     trigger_mode: string;
-  }[];
+  }[]).filter((o) => !HIDDEN_FROM_CATALOGUE.includes(o.name));
 
   async function toggleOrchestration(formData: FormData) {
     "use server";
