@@ -50,7 +50,10 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned (not "latest"): resolving "latest" hits the GitHub releases API at
+          # job time and intermittently 504s, which fails the whole deploy. Bump
+          # deliberately.
+          version: 2.106.0
 
       - name: Link project
         run: supabase link --project-ref cuaknazkpmwvnkmwtamp
