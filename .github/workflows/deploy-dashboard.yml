@@ -63,6 +63,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_RUNTIME_URL: ${{ secrets.NEXT_PUBLIC_RUNTIME_URL }}
+          # Resend is configured (verified domain + RESEND_API_KEY/RESEND_FROM on the runtime),
+          # so clear the "email not configured" banner on /reports.
+          NEXT_PUBLIC_EMAIL_CONFIGURED: "true"
 
       - name: Deploy to Cloudflare Workers
         working-directory: dashboard
