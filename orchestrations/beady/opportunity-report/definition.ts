@@ -5,9 +5,18 @@ import { sendEmail } from "../../../integrations/resend/send";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
-// Cron-driven: no caller input. The daily meta-cron fires this; each subscription's
-// own cadence (daily/weekly) decides whether it is actually due this run.
-export const inputSchema = z.object({});
+// Cron-driven by default: the daily meta-cron fires this with no input and each
+// subscription's own cadence (daily/weekly) decides whether it is due. When a
+// subscriptionId is supplied (the dashboard "Send now" button), only that
+// subscription is processed, the cadence check is bypassed, and the full current
+// digest is sent (not just items new since the last send).
+export const inputSchema = z.object({
+  subscriptionId: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("Manual trigger: send this one subscription now, ignoring cadence."),
+});
 
 export const outputSchema = z.object({
   subscriptionsDue: z.number(),
@@ -24,7 +33,13 @@ interface Subscription {
   recipients: string[];
   min_fit_score: number;
   last_sent_at: string | null;
+  sources: string[] | null;
+  agencies: string[] | null;
+  set_asides: string[] | null;
 }
+
+const SUB_COLUMNS =
+  "id,label,cadence,recipients,min_fit_score,last_sent_at,sources,agencies,set_asides";
 
 interface Opportunity {
   title: string;
@@ -54,11 +69,22 @@ function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string,
 // Accept-Profile / Content-Profile headers to reach it.
 async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?is_active=eq.true&select=id,label,cadence,recipients,min_fit_score,last_sent_at`,
+    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?is_active=eq.true&select=${SUB_COLUMNS}`,
     { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load subscriptions → ${res.status}: ${await res.text()}`);
   return (await res.json()) as Subscription[];
+}
+
+// One subscription by id (for the manual "Send now" path; active or not).
+async function loadSubscriptionById(env: Env, id: string): Promise<Subscription | null> {
+  const res = await fetch(
+    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?id=eq.${id}&select=${SUB_COLUMNS}`,
+    { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
+  );
+  if (!res.ok) throw new Error(`load subscription ${id} → ${res.status}: ${await res.text()}`);
+  const rows = (await res.json()) as Subscription[];
+  return rows[0] ?? null;
 }
 
 async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
@@ -73,23 +99,51 @@ async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
   if (!res.ok) throw new Error(`mark sent ${id} → ${res.status}: ${await res.text()}`);
 }
 
-// New pursue-rated opportunities scored since the subscription last fired.
-async function loadNewPursueOpps(env: Env, sub: Subscription): Promise<Opportunity[]> {
+const MAX_DIGEST = 50;
+
+// Pursue-rated opportunities for a subscription, with its filters applied.
+//   sinceLastSent=true  (cron path)   → only items scored since the last send.
+//   sinceLastSent=false (manual path) → the full current digest.
+// `source` is filtered server-side; agency / set-aside are case-insensitive
+// substring matches applied in JS (agency names are free text, so `in.()` is
+// too strict), so we over-fetch then trim to MAX_DIGEST.
+async function loadPursueOpps(
+  env: Env,
+  sub: Subscription,
+  opts: { sinceLastSent: boolean },
+): Promise<Opportunity[]> {
+  const hasTextFilter =
+    (sub.agencies?.length ?? 0) > 0 || (sub.set_asides?.length ?? 0) > 0;
+
   const params = new URLSearchParams({
     select: "title,agency,set_aside,response_deadline,source,source_url,fit_score,fit_reason,recommendation,last_scored_at",
     recommendation: "eq.pursue",
     fit_score: `gte.${sub.min_fit_score}`,
     order: "fit_score.desc,last_scored_at.desc",
-    limit: "50",
+    limit: hasTextFilter ? "200" : String(MAX_DIGEST),
   });
-  // Only items scored since this subscription was last emailed (first run → all current).
-  if (sub.last_sent_at) params.append("last_scored_at", `gt.${sub.last_sent_at}`);
+  if (opts.sinceLastSent && sub.last_sent_at) {
+    params.append("last_scored_at", `gt.${sub.last_sent_at}`);
+  }
+  if (sub.sources?.length) {
+    params.append("source", `in.(${sub.sources.join(",")})`);
+  }
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/opportunities?${params.toString()}`, {
     headers: sbHeaders(env),
   });
   if (!res.ok) throw new Error(`load opportunities → ${res.status}: ${await res.text()}`);
-  return (await res.json()) as Opportunity[];
+  let rows = (await res.json()) as Opportunity[];
+
+  const matchesAny = (value: string | null, needles: string[]): boolean => {
+    if (!value) return false;
+    const hay = value.toLowerCase();
+    return needles.some((n) => hay.includes(n.toLowerCase()));
+  };
+  if (sub.agencies?.length) rows = rows.filter((o) => matchesAny(o.agency, sub.agencies!));
+  if (sub.set_asides?.length) rows = rows.filter((o) => matchesAny(o.set_aside, sub.set_asides!));
+
+  return rows.slice(0, MAX_DIGEST);
 }
 
 // ─── Cadence ──────────────────────────────────────────────────────────────────
@@ -127,8 +181,20 @@ function sourceLabel(source: string | null): string {
   return escapeHtml(source ?? "—");
 }
 
-function renderEmail(sub: Subscription, opps: Opportunity[]): { subject: string; html: string } {
-  const subject = `Beady: ${opps.length} new pursue-rated ${opps.length === 1 ? "opportunity" : "opportunities"}`;
+function renderEmail(
+  sub: Subscription,
+  opps: Opportunity[],
+  opts: { manual: boolean },
+): { subject: string; html: string } {
+  const adj = opts.manual ? "" : "new ";
+  const heading = opts.manual ? "Pursue-rated opportunities" : "New pursue-rated opportunities";
+  const subject = `Beady: ${opps.length} ${adj}pursue-rated ${opps.length === 1 ? "opportunity" : "opportunities"}`;
+
+  // Compact summary of any active filters, shown under the heading.
+  const filterBits: string[] = [`fit ≥ ${sub.min_fit_score}`];
+  if (sub.sources?.length) filterBits.push(sub.sources.map(sourceLabel).join(" / "));
+  if (sub.agencies?.length) filterBits.push(`agency: ${sub.agencies.join(", ")}`);
+  if (sub.set_asides?.length) filterBits.push(`set-aside: ${sub.set_asides.join(", ")}`);
 
   const rows = opps
     .map((o) => {
@@ -154,9 +220,9 @@ function renderEmail(sub: Subscription, opps: Opportunity[]): { subject: string;
 <html>
 <body style="margin:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <div style="max-width:720px;margin:0 auto;padding:24px;">
-    <h1 style="font-size:20px;color:#111827;margin:0 0 4px;">New pursue-rated opportunities</h1>
+    <h1 style="font-size:20px;color:#111827;margin:0 0 4px;">${heading}</h1>
     <p style="color:#6b7280;margin:0 0 20px;font-size:14px;">
-      ${escapeHtml(sub.label ?? "Opportunity report")} · ${sub.cadence} · fit ≥ ${sub.min_fit_score}
+      ${escapeHtml(sub.label ?? "Opportunity report")} · ${sub.cadence} · ${escapeHtml(filterBits.join(" · "))}
     </p>
     <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       <thead>
@@ -195,8 +261,15 @@ export default defineOrchestration({
     visibleTo: ["role:ops"],
   },
 
-  async run(ctx): Promise<z.infer<typeof outputSchema>> {
+  async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
+    const manual = Boolean(input.subscriptionId);
+
     const subscriptions = await step(ctx, "load-subscriptions", async () => {
+      if (manual) {
+        const sub = await loadSubscriptionById(ctx.env, input.subscriptionId!);
+        if (!sub) return [];
+        return Array.isArray(sub.recipients) && sub.recipients.length > 0 ? [sub] : [];
+      }
       const all = await loadActiveSubscriptions(ctx.env);
       const now = Date.now();
       return all.filter((s) => Array.isArray(s.recipients) && s.recipients.length > 0 && isDue(s, now));
@@ -206,19 +279,21 @@ export default defineOrchestration({
     let emailsSkipped = 0;
 
     // One checkpointed step per subscription: query → render → send → stamp.
-    // A subscription with no new pursue-rated items is stamped (so weekly cadence
-    // advances) but no empty email is sent.
+    // Cron: only items new since last send; a subscription with nothing new is
+    // stamped (so weekly cadence advances) but no empty email is sent.
+    // Manual ("Send now"): the full current digest, cadence bypassed; nothing is
+    // stamped when there's nothing to send (the regular schedule is untouched).
     for (const sub of subscriptions) {
       const outcome = await step(ctx, `report-${sub.id}`, async () => {
         const sentAt = new Date().toISOString();
-        const opps = await loadNewPursueOpps(ctx.env, sub);
+        const opps = await loadPursueOpps(ctx.env, sub, { sinceLastSent: !manual });
 
         if (opps.length === 0) {
-          await markSent(ctx.env, sub.id, sentAt);
-          return { sent: false as const, reason: "no-new-opportunities" };
+          if (!manual) await markSent(ctx.env, sub.id, sentAt);
+          return { sent: false as const, reason: manual ? "no-matching-opportunities" : "no-new-opportunities" };
         }
 
-        const { subject, html } = renderEmail(sub, opps);
+        const { subject, html } = renderEmail(sub, opps, { manual });
         const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html });
 
         // Only advance last_sent_at on a real send — a failed/disabled send is

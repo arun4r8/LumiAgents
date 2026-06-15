@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition, useRef, useState } from "react";
-import { Mail, Plus, Trash2, Power, PowerOff, Loader2, X, Pencil, Check } from "lucide-react";
+import { Mail, Plus, Trash2, Power, PowerOff, Loader2, X, Pencil, Check, Send } from "lucide-react";
 
 interface Subscription {
   id: string;
@@ -11,7 +11,9 @@ interface Subscription {
   min_fit_score: number;
   is_active: boolean;
   last_sent_at: string | null;
-  created_at: string;
+  sources: string[] | null;
+  agencies: string[] | null;
+  set_asides: string[] | null;
 }
 
 interface Props {
@@ -21,7 +23,13 @@ interface Props {
   toggleSubscription: (formData: FormData) => Promise<void>;
   deleteSubscription: (formData: FormData) => Promise<void>;
   updateSubscription: (formData: FormData) => Promise<void>;
+  sendNow: (formData: FormData) => Promise<void>;
 }
+
+const SOURCE_OPTIONS = [
+  { value: "sam_gov", label: "SAM.gov" },
+  { value: "sbir", label: "SBIR/STTR" },
+];
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -33,6 +41,16 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function filterChips(s: Subscription): string[] {
+  const chips: string[] = [];
+  if (s.sources?.length) {
+    chips.push(s.sources.map((x) => SOURCE_OPTIONS.find((o) => o.value === x)?.label ?? x).join(" / "));
+  }
+  if (s.agencies?.length) chips.push(`agency: ${s.agencies.join(", ")}`);
+  if (s.set_asides?.length) chips.push(`set-aside: ${s.set_asides.join(", ")}`);
+  return chips;
+}
+
 export function ReportsClient({
   subscriptions,
   emailConfigured,
@@ -40,6 +58,7 @@ export function ReportsClient({
   toggleSubscription,
   deleteSubscription,
   updateSubscription,
+  sendNow,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
 
@@ -75,9 +94,10 @@ export function ReportsClient({
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 720 }}>
         Beady emails the latest <strong>pursue-rated</strong> opportunities (fit score at or above
-        your threshold) to the recipients below. A daily driver runs at 13:00 UTC; daily reports
-        send every run, weekly reports send once every 7 days. Only opportunities scored since the
-        last send are included.
+        your threshold, narrowed by any filters) to the recipients below. A daily driver runs at
+        13:00 UTC; daily reports send every run, weekly reports send once every 7 days. Only
+        opportunities scored since the last send are included. Use <strong>Send now</strong> to
+        dispatch the full current digest immediately.
       </p>
 
       {showCreate && (
@@ -110,6 +130,7 @@ export function ReportsClient({
                   toggleSubscription={toggleSubscription}
                   deleteSubscription={deleteSubscription}
                   updateSubscription={updateSubscription}
+                  sendNow={sendNow}
                 />
               ))}
             </tbody>
@@ -117,6 +138,38 @@ export function ReportsClient({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// Shared filter inputs for create + edit. `s` pre-fills values in the edit form.
+function FilterFields({ s, compact }: { s?: Subscription; compact?: boolean }) {
+  const labelSize = compact ? 11 : undefined;
+  const inputStyle = compact ? { height: 30, fontSize: 13 } : undefined;
+  return (
+    <>
+      <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
+        <label style={{ fontSize: labelSize }}>Sources <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", height: compact ? 30 : undefined }}>
+          {SOURCE_OPTIONS.map((o) => (
+            <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
+              <input type="checkbox" name="sources" value={o.value} defaultChecked={s?.sources?.includes(o.value) ?? false} />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        {!compact && <span className="hint">Leave both unchecked to include all sources.</span>}
+      </div>
+      <div className="field">
+        <label style={{ fontSize: labelSize }}>Agencies <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+        <input className="input" name="agencies" defaultValue={s?.agencies?.join(", ") ?? ""} placeholder="e.g. Navy, DARPA" style={inputStyle} />
+        {!compact && <span className="hint">Comma-separated; matches agency name (substring).</span>}
+      </div>
+      <div className="field">
+        <label style={{ fontSize: labelSize }}>Set-asides <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+        <input className="input" name="set_asides" defaultValue={s?.set_asides?.join(", ") ?? ""} placeholder="e.g. SDVOSB, 8(a)" style={inputStyle} />
+        {!compact && <span className="hint">Comma-separated; matches set-aside (substring).</span>}
+      </div>
+    </>
   );
 }
 
@@ -179,7 +232,8 @@ function CreateForm({
         />
         <span className="hint">Only include opportunities at or above this (1–10).</span>
       </div>
-      <div className="field">
+      <FilterFields />
+      <div className="field" style={{ gridColumn: "1 / -1" }}>
         <label>Label <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
         <input
           className="input"
@@ -187,7 +241,7 @@ function CreateForm({
           placeholder="e.g. Leadership weekly digest"
         />
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, gridColumn: "1 / -1" }}>
         {error && (
           <span style={{ fontSize: 12.5, color: "var(--err)", flex: 1 }}>{error}</span>
         )}
@@ -207,16 +261,20 @@ function SubscriptionRow({
   toggleSubscription,
   deleteSubscription,
   updateSubscription,
+  sendNow,
 }: {
   subscription: Subscription;
   toggleSubscription: (fd: FormData) => Promise<void>;
   deleteSubscription: (fd: FormData) => Promise<void>;
   updateSubscription: (fd: FormData) => Promise<void>;
+  sendNow: (fd: FormData) => Promise<void>;
 }) {
   const [togglePending, startToggle] = useTransition();
   const [deletePending, startDelete] = useTransition();
   const [editPending, startEdit] = useTransition();
+  const [sendPending, startSend] = useTransition();
   const [editing, setEditing] = useState(false);
+  const [sentFlash, setSentFlash] = useState(false);
 
   function handleEditSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -227,32 +285,35 @@ function SubscriptionRow({
     });
   }
 
+  const chips = filterChips(s);
+
   if (editing) {
     return (
       <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
         <td colSpan={7} style={{ padding: "12px 16px" }}>
-          <form onSubmit={handleEditSubmit} style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+          <form onSubmit={handleEditSubmit} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, alignItems: "start" }}>
             <input type="hidden" name="id" value={s.id} />
-            <div className="field" style={{ margin: 0, flex: "2 1 240px" }}>
+            <div className="field" style={{ margin: 0 }}>
               <label style={{ fontSize: 11 }}>Recipients</label>
               <input className="input" name="recipients" defaultValue={s.recipients.join(", ")} required style={{ height: 30, fontSize: 13 }} />
             </div>
-            <div className="field" style={{ margin: 0, flex: "1 1 120px" }}>
+            <div className="field" style={{ margin: 0 }}>
               <label style={{ fontSize: 11 }}>Cadence</label>
               <select className="input" name="cadence" defaultValue={s.cadence} style={{ height: 30, fontSize: 13 }}>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
               </select>
             </div>
-            <div className="field" style={{ margin: 0, flex: "0 1 90px" }}>
+            <div className="field" style={{ margin: 0 }}>
               <label style={{ fontSize: 11 }}>Min fit</label>
               <input className="input mono" name="min_fit_score" type="number" min={1} max={10} defaultValue={s.min_fit_score} required style={{ height: 30, fontSize: 13 }} />
             </div>
-            <div className="field" style={{ margin: 0, flex: "1 1 140px" }}>
+            <div className="field" style={{ margin: 0 }}>
               <label style={{ fontSize: 11 }}>Label</label>
               <input className="input" name="label" defaultValue={s.label ?? ""} placeholder="Optional" style={{ height: 30, fontSize: 13 }} />
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "flex-end", paddingBottom: 2 }}>
+            <FilterFields s={s} compact />
+            <div style={{ display: "flex", gap: 6, alignItems: "flex-end", gridColumn: "1 / -1" }}>
               <button type="submit" className="btn accent sm" disabled={editPending}>
                 {editPending
                   ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
@@ -275,6 +336,13 @@ function SubscriptionRow({
         <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
           {s.label ?? <span style={{ color: "var(--ink-3)" }}>—</span>}
         </div>
+        {chips.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 5 }}>
+            {chips.map((c, i) => (
+              <span key={i} className="chip" style={{ fontSize: 11, color: "var(--ink-2)" }}>{c}</span>
+            ))}
+          </div>
+        )}
       </td>
       <td style={{ padding: "12px 16px" }}>
         <span style={{ fontSize: 12.5, color: "var(--ink-1)" }}>
@@ -298,6 +366,19 @@ function SubscriptionRow({
         </span>
       </td>
       <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+        <form
+          style={{ display: "inline" }}
+          action={(fd) => startSend(async () => { await sendNow(fd); setSentFlash(true); setTimeout(() => setSentFlash(false), 2500); })}
+        >
+          <input type="hidden" name="id" value={s.id} />
+          <button type="submit" className="btn ghost sm" disabled={sendPending} title="Send the current digest now">
+            {sendPending
+              ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+              : sentFlash
+                ? <Check style={{ width: 13, height: 13, color: "var(--ok, #16a34a)" }} />
+                : <Send style={{ width: 13, height: 13 }} />}
+          </button>
+        </form>
         <button className="btn ghost sm" onClick={() => setEditing(true)} title="Edit">
           <Pencil style={{ width: 13, height: 13 }} />
         </button>
