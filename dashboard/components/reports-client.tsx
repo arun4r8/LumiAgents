@@ -92,12 +92,14 @@ export function ReportsClient({
         </div>
       )}
 
-      <p className="sub" style={{ marginBottom: 16, maxWidth: 720 }}>
-        Beady emails the latest <strong>pursue-rated</strong> opportunities (fit score at or above
-        your threshold, narrowed by any filters) to the recipients below. A daily driver runs at
-        13:00 UTC; daily reports send every run, weekly reports send once every 7 days. Only
-        opportunities scored since the last send are included. Use <strong>Send now</strong> to
-        dispatch the full current digest immediately.
+      <p className="sub" style={{ marginBottom: 16, maxWidth: 760 }}>
+        Beady emails opportunities scoring at or above each report&apos;s <strong>minimum fit score</strong>
+        {" "}(matching any filters) to its recipients. The fit threshold sets the range:{" "}
+        <strong>7+</strong> is pursue-grade only, <strong>5–6</strong> also includes monitor-grade
+        leads (5 is the lowest the sweep keeps). A daily driver runs at 13:00 UTC — daily reports
+        send every run, weekly once every 7 days — and each includes only opportunities scored
+        since its last send. Use <strong>Send now</strong> to dispatch the full current digest
+        immediately, regardless of cadence.
       </p>
 
       {showCreate && (
@@ -108,7 +110,7 @@ export function ReportsClient({
         <div className="empty">
           <div className="ico"><Mail /></div>
           <h4>No reports yet.</h4>
-          <p>Create a report to have Beady email new pursue-rated opportunities on a cadence.</p>
+          <p>Create a report to have Beady email new matching opportunities on a cadence.</p>
         </div>
       ) : subscriptions.length > 0 ? (
         <div className="card" style={{ overflow: "hidden" }}>
@@ -230,7 +232,7 @@ function CreateForm({
           defaultValue={7}
           required
         />
-        <span className="hint">Only include opportunities at or above this (1–10).</span>
+        <span className="hint">Gate for what&apos;s included (1–10): 7+ = pursue only, 5–6 also includes monitor.</span>
       </div>
       <FilterFields />
       <div className="field" style={{ gridColumn: "1 / -1" }}>

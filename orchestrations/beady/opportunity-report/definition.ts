@@ -101,13 +101,13 @@ async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
 
 const MAX_DIGEST = 50;
 
-// Pursue-rated opportunities for a subscription, with its filters applied.
+// Opportunities for a subscription at or above its fit threshold, with filters applied.
 //   sinceLastSent=true  (cron path)   → only items scored since the last send.
 //   sinceLastSent=false (manual path) → the full current digest.
 // `source` is filtered server-side; agency / set-aside are case-insensitive
 // substring matches applied in JS (agency names are free text, so `in.()` is
 // too strict), so we over-fetch then trim to MAX_DIGEST.
-async function loadPursueOpps(
+async function loadDigestOpps(
   env: Env,
   sub: Subscription,
   opts: { sinceLastSent: boolean },
@@ -115,9 +115,12 @@ async function loadPursueOpps(
   const hasTextFilter =
     (sub.agencies?.length ?? 0) > 0 || (sub.set_asides?.length ?? 0) > 0;
 
+  // The fit-score threshold is the gate: fit >= 7 is pursue-only, fit 5-6 pulls in
+  // monitor-rated items too (the sweep only persists opportunities scoring >= 5,
+  // so that's the floor). No hard recommendation filter — the subscriber's
+  // min_fit_score decides their range.
   const params = new URLSearchParams({
     select: "title,agency,set_aside,response_deadline,source,source_url,fit_score,fit_reason,recommendation,last_scored_at",
-    recommendation: "eq.pursue",
     fit_score: `gte.${sub.min_fit_score}`,
     order: "fit_score.desc,last_scored_at.desc",
     limit: hasTextFilter ? "200" : String(MAX_DIGEST),
@@ -175,6 +178,13 @@ function fmtDeadline(iso: string | null): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Fit-badge colors by tier: pursue = green, monitor = amber, else neutral.
+function tierColor(recommendation: string | null): { bg: string; fg: string } {
+  if (recommendation === "pursue") return { bg: "#dcfce7", fg: "#166534" };
+  if (recommendation === "monitor") return { bg: "#fef9c3", fg: "#854d0e" };
+  return { bg: "#f3f4f6", fg: "#374151" };
+}
+
 function sourceLabel(source: string | null): string {
   if (source === "sam_gov") return "SAM.gov";
   if (source === "sbir") return "SBIR/STTR";
@@ -187,8 +197,8 @@ function renderEmail(
   opts: { manual: boolean },
 ): { subject: string; html: string } {
   const adj = opts.manual ? "" : "new ";
-  const heading = opts.manual ? "Pursue-rated opportunities" : "New pursue-rated opportunities";
-  const subject = `Beady: ${opps.length} ${adj}pursue-rated ${opps.length === 1 ? "opportunity" : "opportunities"}`;
+  const heading = opts.manual ? "Matching opportunities" : "New matching opportunities";
+  const subject = `Beady: ${opps.length} ${adj}${opps.length === 1 ? "opportunity" : "opportunities"} (fit ≥ ${sub.min_fit_score})`;
 
   // Compact summary of any active filters, shown under the heading.
   const filterBits: string[] = [`fit ≥ ${sub.min_fit_score}`];
@@ -207,8 +217,9 @@ function renderEmail(
             <div style="font-weight:400;color:#6b7280;font-size:13px;margin-top:4px;">${escapeHtml(o.fit_reason ?? "")}</div>
           </td>
           <td style="padding:12px 8px;vertical-align:top;color:#374151;white-space:nowrap;">${escapeHtml(o.agency ?? "—")}</td>
-          <td style="padding:12px 8px;vertical-align:top;text-align:center;">
-            <span style="display:inline-block;background:#dcfce7;color:#166534;border-radius:9999px;padding:2px 10px;font-weight:700;">${o.fit_score}</span>
+          <td style="padding:12px 8px;vertical-align:top;text-align:center;white-space:nowrap;">
+            <span style="display:inline-block;background:${tierColor(o.recommendation).bg};color:${tierColor(o.recommendation).fg};border-radius:9999px;padding:2px 10px;font-weight:700;">${o.fit_score}</span>
+            ${o.recommendation ? `<div style="font-size:11px;color:#6b7280;margin-top:3px;text-transform:capitalize;">${escapeHtml(o.recommendation)}</div>` : ""}
           </td>
           <td style="padding:12px 8px;vertical-align:top;color:#374151;white-space:nowrap;">${fmtDeadline(o.response_deadline)}</td>
           <td style="padding:12px 8px;vertical-align:top;color:#6b7280;white-space:nowrap;">${sourceLabel(o.source)}</td>
@@ -252,7 +263,7 @@ export default defineOrchestration({
   name: "beady/opportunity-report",
   version: 1,
   description:
-    "Email the latest pursue-rated opportunities to report subscribers. Driven by a daily meta-cron; each subscription's cadence (daily/weekly) and min fit score are honored.",
+    "Email matching opportunities (at or above each subscription's fit threshold) to report subscribers. Driven by a daily meta-cron; each subscription's cadence (daily/weekly), fit threshold and filters are honored.",
   cron: "0 13 * * *",
   inputSchema,
   outputSchema,
@@ -286,7 +297,7 @@ export default defineOrchestration({
     for (const sub of subscriptions) {
       const outcome = await step(ctx, `report-${sub.id}`, async () => {
         const sentAt = new Date().toISOString();
-        const opps = await loadPursueOpps(ctx.env, sub, { sinceLastSent: !manual });
+        const opps = await loadDigestOpps(ctx.env, sub, { sinceLastSent: !manual });
 
         if (opps.length === 0) {
           if (!manual) await markSent(ctx.env, sub.id, sentAt);
