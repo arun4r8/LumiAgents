@@ -90,16 +90,17 @@ export default defineOrchestration({
       if (samR.status === "rejected") console.warn("[sweep] SAM.gov fetch skipped:", samR.reason);
       if (sbirR.status === "rejected") console.warn("[sweep] SBIR fetch skipped:", sbirR.reason);
 
-      // Dedupe: external ids already in the opportunities table (sam_notice_id is
-      // the unique key; SBIR rows store `sbir_<topicNumber>` there).
+      // Dedupe against the scored_notices ledger — every notice ever scored (pass
+      // or pursue), so nothing is re-scored on a later run. notice_id is the raw
+      // SAM.gov noticeId, or `sbir_<topicNumber>` for SBIR/STTR topics.
       const seen = new Set<string>();
       try {
         const res = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?select=sam_notice_id`,
-          { headers: { apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}` } },
+          `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?select=notice_id`,
+          { headers: { apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`, "Accept-Profile": "orchestration" } },
         );
-        if (res.ok) for (const row of (await res.json()) as Array<{ sam_notice_id: string | null }>) {
-          if (row.sam_notice_id) seen.add(row.sam_notice_id);
+        if (res.ok) for (const row of (await res.json()) as Array<{ notice_id: string | null }>) {
+          if (row.notice_id) seen.add(row.notice_id);
         }
       } catch (e) {
         console.warn("[sweep] dedupe lookup failed, scoring all results:", e);
@@ -184,6 +185,40 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
     });
 
     const scoreMap = new Map(scored.scored.map((s) => [s.id, s]));
+
+    // Record every notice we just scored (pass or pursue) in the dedup ledger so it
+    // is never re-scored on a later run. Items below minScore aren't in scoreMap
+    // (the model only returns the shortlist), so they're logged as recommendation
+    // 'pass' with a null score — they were still evaluated.
+    await step(ctx, "record-scored-notices", async () => {
+      const scoredAt = new Date().toISOString();
+      const rows = [
+        ...samResults.opportunities.map((o) => {
+          const s = scoreMap.get(`sam_${o.noticeId}`);
+          return { notice_id: o.noticeId, source: "sam_gov", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", scored_at: scoredAt };
+        }),
+        ...sbirResults.topics.map((t) => {
+          const s = scoreMap.get(`sbir_${t.topicNumber}`);
+          return { notice_id: `sbir_${t.topicNumber}`, source: "sbir", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", scored_at: scoredAt };
+        }),
+      ];
+      if (rows.length === 0) return;
+      const res = await ctx.fetch(
+        `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?on_conflict=notice_id`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Profile": "orchestration",
+            Prefer: "resolution=ignore-duplicates,return=minimal",
+          },
+          body: JSON.stringify(rows),
+        },
+      );
+      if (!res.ok) console.warn(`[sweep] scored_notices insert → ${res.status}: ${await res.text()}`);
+    });
 
     // Build the shortlist, resolving back to source-specific fields
     type ScoredOpportunity = z.infer<typeof scoredOpportunitySchema>;
