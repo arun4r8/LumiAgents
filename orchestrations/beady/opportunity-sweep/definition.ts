@@ -2,6 +2,27 @@ import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { samGovOpportunitySearch, sbirTopicSearch } from "./tools";
 
+// ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
+// A notice is re-scored only when the fields that drive its fit score change. We
+// hash those fields; if the hash differs from what's in scored_notices, the notice
+// was materially amended and is scored again (so monitor → pursue can happen when
+// the government actually changes the solicitation). FNV-1a is plenty for change
+// detection — this isn't security-sensitive.
+function fnv1a(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+function samContentHash(o: { title: string; naicsCode: string | null; setAside: string | null; responseDeadline: string | null; description: string | null }): string {
+  return fnv1a([o.title, o.naicsCode, o.setAside, o.responseDeadline, o.description].join(""));
+}
+function sbirContentHash(t: { title: string; program: string; phase: string; closeDate: string | null; abstract: string | null }): string {
+  return fnv1a([t.title, t.program, t.phase, t.closeDate, t.abstract].join(""));
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const inputSchema = z.object({
@@ -90,25 +111,29 @@ export default defineOrchestration({
       if (samR.status === "rejected") console.warn("[sweep] SAM.gov fetch skipped:", samR.reason);
       if (sbirR.status === "rejected") console.warn("[sweep] SBIR fetch skipped:", sbirR.reason);
 
-      // Dedupe against the scored_notices ledger — every notice ever scored (pass
-      // or pursue), so nothing is re-scored on a later run. notice_id is the raw
-      // SAM.gov noticeId, or `sbir_<topicNumber>` for SBIR/STTR topics.
-      const seen = new Set<string>();
+      // Dedupe against the scored_notices ledger. A notice is skipped only if we've
+      // already scored it AND its content fingerprint is unchanged. If the hash
+      // differs the solicitation was amended, so we re-score it. notice_id is the
+      // raw SAM.gov noticeId, or `sbir_<topicNumber>` for SBIR/STTR topics.
+      const ledger = new Map<string, string | null>(); // notice_id → last content_hash
       try {
         const res = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?select=notice_id`,
+          `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?select=notice_id,content_hash`,
           { headers: { apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`, "Accept-Profile": "orchestration" } },
         );
-        if (res.ok) for (const row of (await res.json()) as Array<{ notice_id: string | null }>) {
-          if (row.notice_id) seen.add(row.notice_id);
+        if (res.ok) for (const row of (await res.json()) as Array<{ notice_id: string | null; content_hash: string | null }>) {
+          if (row.notice_id) ledger.set(row.notice_id, row.content_hash);
         }
       } catch (e) {
         console.warn("[sweep] dedupe lookup failed, scoring all results:", e);
       }
 
+      // Score a notice if it's new, or if its content hash changed (amended).
+      const changed = (id: string, hash: string) => !ledger.has(id) || ledger.get(id) !== hash;
+
       return {
-        samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => !seen.has(o.noticeId)) },
-        sbirResults: { ...sbirResults, topics: sbirResults.topics.filter((t) => !seen.has(`sbir_${t.topicNumber}`)) },
+        samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => changed(o.noticeId, samContentHash(o))) },
+        sbirResults: { ...sbirResults, topics: sbirResults.topics.filter((t) => changed(`sbir_${t.topicNumber}`, sbirContentHash(t))) },
       };
     });
 
@@ -195,14 +220,16 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
       const rows = [
         ...samResults.opportunities.map((o) => {
           const s = scoreMap.get(`sam_${o.noticeId}`);
-          return { notice_id: o.noticeId, source: "sam_gov", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", scored_at: scoredAt };
+          return { notice_id: o.noticeId, source: "sam_gov", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", content_hash: samContentHash(o), scored_at: scoredAt };
         }),
         ...sbirResults.topics.map((t) => {
           const s = scoreMap.get(`sbir_${t.topicNumber}`);
-          return { notice_id: `sbir_${t.topicNumber}`, source: "sbir", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", scored_at: scoredAt };
+          return { notice_id: `sbir_${t.topicNumber}`, source: "sbir", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", content_hash: sbirContentHash(t), scored_at: scoredAt };
         }),
       ];
       if (rows.length === 0) return;
+      // merge-duplicates: a re-scored (amended) notice updates its existing row with
+      // the new score, recommendation, hash and timestamp.
       const res = await ctx.fetch(
         `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?on_conflict=notice_id`,
         {
@@ -212,7 +239,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
             apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
             Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
             "Content-Profile": "orchestration",
-            Prefer: "resolution=ignore-duplicates,return=minimal",
+            Prefer: "resolution=merge-duplicates,return=minimal",
           },
           body: JSON.stringify(rows),
         },

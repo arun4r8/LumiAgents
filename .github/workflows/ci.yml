@@ -79,4 +79,8 @@ jobs:
 
       - name: Run tests
         working-directory: runtime
-        run: pnpm test --run
+        # `pnpm test --run` failed: pnpm parses `--run` as its own (unknown) flag.
+        # Run vitest directly. Exclude tests/e2e — those hit the live deployment and
+        # need secrets; they run post-deploy in the Deploy Worker workflow's E2E job.
+        # passWithNoTests keeps this green until unit tests are added.
+        run: pnpm exec vitest run --passWithNoTests --exclude "**/tests/e2e/**"
