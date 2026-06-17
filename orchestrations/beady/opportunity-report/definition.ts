@@ -122,6 +122,9 @@ async function loadDigestOpps(
   const params = new URLSearchParams({
     select: "title,agency,set_aside,response_deadline,source,source_url,fit_score,fit_reason,recommendation,last_scored_at",
     fit_score: `gte.${sub.min_fit_score}`,
+    // Never surface 'pass' — an opportunity re-scored down to pass (an amendment
+    // narrowed its fit) is out of scope regardless of the fit threshold.
+    recommendation: "neq.pass",
     order: "fit_score.desc,last_scored_at.desc",
     limit: hasTextFilter ? "200" : String(MAX_DIGEST),
   });

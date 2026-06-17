@@ -357,6 +357,38 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
       });
     }
 
+    // Step 4: Demote anything that was re-scored down to pass. Re-scored notices not
+    // in scoreMap fell below the save floor (the model only returns fitScore >= minScore).
+    // For any that already exist in opportunities (a prior pursue/monitor whose
+    // amendment narrowed its fit), flip them to recommendation='pass' so reports drop
+    // them — symmetric to a monitor climbing to pursue. New sub-floor notices that were
+    // never saved simply match nothing here. We mark rather than delete: assessments,
+    // incumbent_research and documents FK to opportunities (ON DELETE CASCADE), so a
+    // delete would wipe analyst work; a demoted row is preserved but excluded from reports.
+    const demotedIds = [
+      ...samResults.opportunities.filter((o) => !scoreMap.has(`sam_${o.noticeId}`)).map((o) => o.noticeId),
+      ...sbirResults.topics.filter((t) => !scoreMap.has(`sbir_${t.topicNumber}`)).map((t) => `sbir_${t.topicNumber}`),
+    ];
+    if (demotedIds.length > 0) {
+      await step(ctx, "demote-rescored-to-pass", async () => {
+        const inList = demotedIds.map((id) => `"${id}"`).join(",");
+        const res = await ctx.fetch(
+          `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=in.(${inList})`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
+              Prefer: "return=minimal",
+            },
+            body: JSON.stringify({ recommendation: "pass", last_scored_at: new Date().toISOString() }),
+          },
+        );
+        if (!res.ok) console.warn(`[sweep] demote re-scored → ${res.status}: ${await res.text()}`);
+      });
+    }
+
     return {
       samFound: samResults.totalRecords,
       sbirFound: sbirResults.totalElements,
