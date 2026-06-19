@@ -5,7 +5,7 @@ import { claimBudget, DAILY_BUDGET } from "../budget";
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const samSearchInputSchema = z.object({
-  keywords: z.string().optional().describe("Free-text search (e.g. 'database management cloud')"),
+  keywords: z.string().optional().describe("Title search (matches the SAM notice title, e.g. 'artificial intelligence governance')"),
   naicsCodes: z
     .array(z.string())
     .optional()
@@ -96,7 +96,9 @@ export const samGovOpportunitySearch = defineTool({
     });
 
     if (input.activeOnly) params.set("status", "active");
-    if (input.keywords) params.set("keywords", input.keywords);
+    // SAM v2 has no free-text "keywords" param (it was silently ignored) — `title`
+    // is the supported text search, matching against the notice title.
+    if (input.keywords) params.set("title", input.keywords);
     if (input.naicsCodes && input.naicsCodes.length > 0) {
       params.set("naicsCode", input.naicsCodes.join(","));
     }

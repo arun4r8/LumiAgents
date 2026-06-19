@@ -44,7 +44,7 @@ export const inputSchema = z.object({
     .describe("DoD branch filter for SBIR (e.g. ['ARMY', 'USAF']). Omit for all."),
   postedWithinDays: z.number().int().min(1).max(90).default(30),
   minScore: z.number().int().min(1).max(10).default(5),
-  samLimit: z.number().int().min(1).max(50).default(25),
+  samLimit: z.number().int().min(1).max(50).default(50),
   sbirLimit: z.number().int().min(1).max(200).default(50),
   samNoticeTypes: z
     .array(z.string())
