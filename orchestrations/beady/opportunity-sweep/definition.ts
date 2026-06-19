@@ -46,6 +46,10 @@ export const inputSchema = z.object({
   minScore: z.number().int().min(1).max(10).default(5),
   samLimit: z.number().int().min(1).max(50).default(25),
   sbirLimit: z.number().int().min(1).max(200).default(50),
+  samNoticeTypes: z
+    .array(z.string())
+    .default(["o", "p", "r"])
+    .describe("SAM notice types to sweep: o=Solicitation, p=Presolicitation, r=Sources Sought (RFIs). Capturing p+r surfaces RFIs/market-research notices, not just full solicitations."),
 });
 
 const scoredOpportunitySchema = z.object({
@@ -56,6 +60,7 @@ const scoredOpportunitySchema = z.object({
   setAside: z.string().nullable(),
   responseDeadline: z.string().nullable(),
   sourceUrl: z.string(),
+  noticeType: z.string().nullable(),
   fitScore: z.number().int().min(1).max(10),
   fitReason: z.string(),
   redFlags: z.string().nullable(),
@@ -98,6 +103,7 @@ export default defineOrchestration({
           postedWithinDays: input.postedWithinDays,
           limit: input.samLimit,
           activeOnly: true,
+          ptypes: input.samNoticeTypes,
         }),
         sbirTopicSearch(ctx, {
           keyword: input.keywords,
@@ -262,6 +268,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
         setAside: opp.setAside,
         responseDeadline: opp.responseDeadline,
         sourceUrl: opp.sourceUrl,
+        noticeType: opp.noticeType,
         ...score,
       });
     }
@@ -277,6 +284,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
         setAside: `${topic.program} ${topic.phase}`,
         responseDeadline: topic.closeDate,
         sourceUrl: topic.sourceUrl,
+        noticeType: "SBIR/STTR Topic",
         ...score,
       });
     }
@@ -306,6 +314,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
               posted_date:        sam.postedDate,
               source:             "sam_gov",
               source_url:         o.sourceUrl,
+              notice_type:        o.noticeType,
               status:             "open",
               fit_score:          o.fitScore,
               fit_reason:         o.fitReason,
@@ -326,6 +335,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
               posted_date:        sbir.openDate,
               source:             "sbir",
               source_url:         o.sourceUrl,
+              notice_type:        o.noticeType,
               status:             "open",
               fit_score:          o.fitScore,
               fit_reason:         o.fitReason,

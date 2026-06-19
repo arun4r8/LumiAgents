@@ -48,6 +48,7 @@ interface Opportunity {
   response_deadline: string | null;
   source: string | null;
   source_url: string | null;
+  notice_type: string | null;
   fit_score: number;
   fit_reason: string | null;
   recommendation: string | null;
@@ -120,7 +121,7 @@ async function loadDigestOpps(
   // so that's the floor). No hard recommendation filter — the subscriber's
   // min_fit_score decides their range.
   const params = new URLSearchParams({
-    select: "title,agency,set_aside,response_deadline,source,source_url,fit_score,fit_reason,recommendation,last_scored_at",
+    select: "title,agency,set_aside,response_deadline,source,source_url,notice_type,fit_score,fit_reason,recommendation,last_scored_at",
     fit_score: `gte.${sub.min_fit_score}`,
     // Never surface 'pass' — an opportunity re-scored down to pass (an amendment
     // narrowed its fit) is out of scope regardless of the fit threshold.
@@ -188,6 +189,23 @@ function tierColor(recommendation: string | null): { bg: string; fg: string } {
   return { bg: "#f3f4f6", fg: "#374151" };
 }
 
+// Notice-type badge. Market-research notices (Sources Sought / Presolicitation /
+// RFI) are highlighted amber — they take a capability statement, not a bid — while
+// full solicitations get a neutral indigo tag.
+function noticeTag(noticeType: string | null): string {
+  if (!noticeType) return "";
+  const t = noticeType.toLowerCase();
+  const isRfi =
+    t.includes("sources sought") ||
+    t.includes("presolicitation") ||
+    t.includes("special notice") ||
+    t.includes("information") ||
+    t.includes("rfi");
+  const bg = isRfi ? "#fef3c7" : "#e0e7ff";
+  const fg = isRfi ? "#92400e" : "#3730a3";
+  return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-right:6px;text-transform:uppercase;letter-spacing:.03em;vertical-align:middle;">${escapeHtml(noticeType)}</span>`;
+}
+
 function sourceLabel(source: string | null): string {
   if (source === "sam_gov") return "SAM.gov";
   if (source === "sbir") return "SBIR/STTR";
@@ -216,7 +234,7 @@ function renderEmail(
         : escapeHtml(o.title);
       return `
         <tr style="border-bottom:1px solid #e5e7eb;">
-          <td style="padding:12px 8px;vertical-align:top;font-weight:600;color:#111827;">${titleCell}
+          <td style="padding:12px 8px;vertical-align:top;font-weight:600;color:#111827;">${noticeTag(o.notice_type)}${titleCell}
             <div style="font-weight:400;color:#6b7280;font-size:13px;margin-top:4px;">${escapeHtml(o.fit_reason ?? "")}</div>
           </td>
           <td style="padding:12px 8px;vertical-align:top;color:#374151;white-space:nowrap;">${escapeHtml(o.agency ?? "—")}</td>

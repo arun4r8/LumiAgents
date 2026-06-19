@@ -20,6 +20,10 @@ export const samSearchInputSchema = z.object({
     .describe("Only return opportunities posted in the last N days"),
   limit: z.number().int().min(1).max(100).default(25),
   activeOnly: z.boolean().default(true),
+  ptypes: z
+    .array(z.string())
+    .optional()
+    .describe("SAM procurement types to include: o=Solicitation, p=Presolicitation, r=Sources Sought, k=Combined Synopsis/Solicitation. Joined comma-separated in the API call. Defaults to Solicitations only."),
 });
 
 export const samOpportunitySchema = z.object({
@@ -34,6 +38,7 @@ export const samOpportunitySchema = z.object({
   postedDate: z.string().nullable().describe("ISO date string"),
   description: z.string().nullable().describe("Truncated opportunity description"),
   sourceUrl: z.string().describe("SAM.gov browse URL for this notice"),
+  noticeType: z.string().nullable().describe("SAM notice type, e.g. 'Solicitation', 'Sources Sought', 'Presolicitation'"),
 });
 
 export const samSearchOutputSchema = z.object({
@@ -56,6 +61,7 @@ interface RawSamOpportunity {
   postedDate?: string;
   description?: string;
   uiLink?: string;
+  type?: string;                    // "Solicitation", "Sources Sought", "Presolicitation", ...
 }
 
 interface RawSamResponse {
@@ -86,7 +92,7 @@ export const samGovOpportunitySearch = defineTool({
       limit: String(input.limit),
       postedFrom: fmt(fromDate),
       postedTo: fmt(toDate),
-      ptype: "o",                    // 'o' = solicitation
+      ptype: (input.ptypes && input.ptypes.length > 0 ? input.ptypes : ["o"]).join(","),
     });
 
     if (input.activeOnly) params.set("status", "active");
@@ -135,6 +141,7 @@ export const samGovOpportunitySearch = defineTool({
         postedDate: o.postedDate ?? null,
         description: o.description ? o.description.slice(0, 800) : null,
         sourceUrl: o.uiLink ?? `https://sam.gov/opp/${o.noticeId ?? ""}/view`,
+        noticeType: o.type ?? null,
       };
     });
 
