@@ -227,49 +227,49 @@ function renderEmail(
   if (sub.agencies?.length) filterBits.push(`agency: ${sub.agencies.join(", ")}`);
   if (sub.set_asides?.length) filterBits.push(`set-aside: ${sub.set_asides.join(", ")}`);
 
-  const rows = opps
+  // Single-column stacked cards — render cleanly on phone and desktop (a wide
+  // multi-column table overflowed narrow mobile clients). One card per opportunity.
+  const kv = (label: string, value: string): string =>
+    `<tr><td style="color:#6b7280;font-size:12px;padding:2px 14px 2px 0;white-space:nowrap;vertical-align:top;">${label}</td><td style="color:#374151;font-size:13px;padding:2px 0;vertical-align:top;">${value}</td></tr>`;
+
+  const cards = opps
     .map((o) => {
-      const titleCell = o.source_url
+      const c = tierColor(o.recommendation);
+      const titleHtml = o.source_url
         ? `<a href="${escapeHtml(o.source_url)}" style="color:#2563eb;text-decoration:none;">${escapeHtml(o.title)}</a>`
         : escapeHtml(o.title);
       return `
-        <tr style="border-bottom:1px solid #e5e7eb;">
-          <td style="padding:12px 8px;vertical-align:top;font-weight:600;color:#111827;">${noticeTag(o.notice_type)}${titleCell}
-            <div style="font-weight:400;color:#6b7280;font-size:13px;margin-top:4px;">${escapeHtml(o.fit_reason ?? "")}</div>
+      <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:12px;">
+        <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:8px;"><tr>
+          <td style="vertical-align:top;">${noticeTag(o.notice_type)}</td>
+          <td style="vertical-align:top;text-align:right;white-space:nowrap;">
+            <span style="display:inline-block;background:${c.bg};color:${c.fg};border-radius:9999px;padding:2px 10px;font-weight:700;font-size:14px;">${o.fit_score}</span>
+            ${o.recommendation ? `<span style="color:#6b7280;font-size:11px;text-transform:capitalize;margin-left:6px;">${escapeHtml(o.recommendation)}</span>` : ""}
           </td>
-          <td style="padding:12px 8px;vertical-align:top;color:#374151;white-space:nowrap;">${escapeHtml(o.agency ?? "—")}</td>
-          <td style="padding:12px 8px;vertical-align:top;text-align:center;white-space:nowrap;">
-            <span style="display:inline-block;background:${tierColor(o.recommendation).bg};color:${tierColor(o.recommendation).fg};border-radius:9999px;padding:2px 10px;font-weight:700;">${o.fit_score}</span>
-            ${o.recommendation ? `<div style="font-size:11px;color:#6b7280;margin-top:3px;text-transform:capitalize;">${escapeHtml(o.recommendation)}</div>` : ""}
-          </td>
-          <td style="padding:12px 8px;vertical-align:top;color:#374151;white-space:nowrap;">${fmtDeadline(o.response_deadline)}</td>
-          <td style="padding:12px 8px;vertical-align:top;color:#6b7280;white-space:nowrap;">${sourceLabel(o.source)}</td>
-        </tr>`;
+        </tr></table>
+        <div style="font-size:16px;font-weight:700;line-height:1.3;margin-bottom:6px;color:#111827;">${titleHtml}</div>
+        <div style="color:#6b7280;font-size:13px;line-height:1.5;margin-bottom:12px;">${escapeHtml(o.fit_reason ?? "")}</div>
+        <table role="presentation" style="border-collapse:collapse;margin-bottom:10px;">
+          ${kv("Agency", escapeHtml(o.agency ?? "—"))}
+          ${kv("Deadline", fmtDeadline(o.response_deadline))}
+          ${kv("Source", sourceLabel(o.source))}
+        </table>
+        ${o.source_url ? `<a href="${escapeHtml(o.source_url)}" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600;">View on ${sourceLabel(o.source)} &rarr;</a>` : ""}
+      </div>`;
     })
     .join("");
 
   const html = `<!doctype html>
 <html>
 <body style="margin:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:720px;margin:0 auto;padding:24px;">
+  <div style="max-width:600px;margin:0 auto;padding:20px;">
     <h1 style="font-size:20px;color:#111827;margin:0 0 4px;">${heading}</h1>
-    <p style="color:#6b7280;margin:0 0 20px;font-size:14px;">
+    <p style="color:#6b7280;margin:0 0 16px;font-size:14px;">
       ${escapeHtml(sub.label ?? "Opportunity report")} · ${sub.cadence} · ${escapeHtml(filterBits.join(" · "))}
     </p>
-    <table style="width:100%;border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
-      <thead>
-        <tr style="background:#f3f4f6;text-align:left;">
-          <th style="padding:10px 8px;font-size:12px;color:#6b7280;text-transform:uppercase;">Opportunity</th>
-          <th style="padding:10px 8px;font-size:12px;color:#6b7280;text-transform:uppercase;">Agency</th>
-          <th style="padding:10px 8px;font-size:12px;color:#6b7280;text-transform:uppercase;text-align:center;">Fit</th>
-          <th style="padding:10px 8px;font-size:12px;color:#6b7280;text-transform:uppercase;">Deadline</th>
-          <th style="padding:10px 8px;font-size:12px;color:#6b7280;text-transform:uppercase;">Source</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p style="color:#9ca3af;font-size:12px;margin-top:20px;">
-      Sent by Beady · manage this report from the LumiAgents dashboard → Reports.
+    ${cards}
+    <p style="color:#9ca3af;font-size:12px;margin-top:16px;">
+      Sent by Beady · manage this report from the LumiAgents dashboard &rarr; Reports.
     </p>
   </div>
 </body>
