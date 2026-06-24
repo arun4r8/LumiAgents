@@ -36,7 +36,7 @@ export function makeAgentWorker(slug: "angie" | "beady" | "patch" | "money") {
       const runtimeUrl = request.headers.get("X-Runtime-Url") ?? "";
       const dispatchToken = request.headers.get("X-Dispatch-Token") ?? undefined;
 
-      let body: { messages?: unknown; files?: unknown };
+      let body: { messages?: unknown; files?: unknown; memoryPreamble?: unknown };
       try { body = await request.json() as typeof body; }
       catch { return json({ error: "Invalid JSON body" }, 400); }
 
@@ -46,6 +46,7 @@ export function makeAgentWorker(slug: "angie" | "beady" | "patch" | "money") {
       };
       const rawFiles = body.files as AgentChatRequest["files"];
       if (rawFiles?.length) chatReq.files = rawFiles;
+      if (typeof body.memoryPreamble === "string") chatReq.memoryPreamble = body.memoryPreamble;
 
       try {
         const result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);

@@ -40,6 +40,8 @@ export interface AgentChatRequest {
   agentSlug: "angie" | "beady" | "patch" | "money";
   messages: ChatMessage[];
   files?: FileAttachment[];
+  /** Recalled long-term memory, injected into the system prompt (reference, not instructions). */
+  memoryPreamble?: string;
 }
 
 export interface AgentChatResponse {
@@ -165,7 +167,7 @@ export async function runAgentChat(
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 2048,
-      system: agent.systemPrompt + INJECTION_GUARD,
+      system: agent.systemPrompt + (request.memoryPreamble ? `\n\n${request.memoryPreamble}` : "") + INJECTION_GUARD,
       tools: agent.tools.map((t) => ({
         name: t.name,
         description: t.description,
