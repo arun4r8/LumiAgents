@@ -2,6 +2,7 @@
 // All helpers fail open — a memory problem must never break the chat itself.
 // Runs in the runtime worker (has Supabase creds); the route orchestrates recall
 // and persistence around the agent Service-Binding forward.
+import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import type { ChatMessage } from "./agent-chat";
 
@@ -174,5 +175,78 @@ export async function persistTurn(
     }
   } catch (e) {
     console.warn("[memory] persistTurn failed:", e);
+  }
+}
+
+const SUMMARY_MODEL = "claude-haiku-4-5"; // cheap; summarization isn't the hard part
+const SUMMARIZE_EVERY = 12;               // messages (≈6 turns)
+
+async function insertMemoryChunk(
+  env: Env,
+  row: { user_id: string; agent_slug: string; conversation_id: string; kind: "summary" | "fact"; content: string },
+): Promise<void> {
+  const vec = await embed(env, row.content);
+  if (!vec) return;
+  await fetch(rest(env, "memory_chunks"), {
+    method: "POST",
+    headers: sbHeaders(env, { Prefer: "return=minimal" }),
+    body: JSON.stringify({ ...row, embedding: `[${vec.join(",")}]` }),
+  });
+}
+
+// Rolling summary + durable facts. Runs every SUMMARIZE_EVERY messages: condenses the
+// recent transcript into one (replaced) 'summary' chunk and appends 'fact' chunks, so
+// long conversations stay coherent without bloating the context window. Fail-open.
+export async function maybeSummarize(
+  env: Env,
+  opts: { conversationId: string; userId?: string | null; agentSlug: string },
+): Promise<void> {
+  if (!opts.userId) return;
+  try {
+    const countRes = await fetch(
+      rest(env, `messages?conversation_id=eq.${opts.conversationId}&select=id`),
+      { headers: sbHeaders(env, { Prefer: "count=exact", "Range-Unit": "items", Range: "0-0" }) },
+    );
+    const total = parseInt(countRes.headers.get("content-range")?.split("/")[1] ?? "0", 10);
+    if (total < SUMMARIZE_EVERY || total % SUMMARIZE_EVERY !== 0) return;
+
+    const transcript = await loadTranscript(env, opts.conversationId, 40);
+    if (!transcript.length) return;
+    const convoText = transcript.map((m) => `${m.role}: ${m.content}`).join("\n").slice(0, 12000);
+
+    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const resp = await client.messages.create({
+      model: SUMMARY_MODEL,
+      max_tokens: 600,
+      system:
+        'Summarize this conversation for an assistant\'s long-term memory. Return ONLY JSON: {"summary": string, "facts": string[]}. ' +
+        "summary = 2-4 sentences capturing what matters for future turns. " +
+        "facts = durable, user-specific facts worth remembering across conversations (preferences, ongoing goals, recurring context), each self-contained. " +
+        "Omit anything ephemeral. No prose outside the JSON.",
+      messages: [{ role: "user", content: convoText }],
+    });
+    const text = resp.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");
+    let parsed: { summary?: string; facts?: string[] };
+    try {
+      parsed = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+    } catch {
+      return;
+    }
+
+    if (parsed.summary) {
+      // Rolling: one current summary per conversation.
+      await fetch(rest(env, `memory_chunks?conversation_id=eq.${opts.conversationId}&kind=eq.summary`), {
+        method: "DELETE",
+        headers: sbHeaders(env, { Prefer: "return=minimal" }),
+      });
+      await insertMemoryChunk(env, { user_id: opts.userId, agent_slug: opts.agentSlug, conversation_id: opts.conversationId, kind: "summary", content: parsed.summary });
+    }
+    for (const fact of (parsed.facts ?? []).slice(0, 8)) {
+      if (typeof fact === "string" && fact.trim()) {
+        await insertMemoryChunk(env, { user_id: opts.userId, agent_slug: opts.agentSlug, conversation_id: opts.conversationId, kind: "fact", content: fact.trim() });
+      }
+    }
+  } catch (e) {
+    console.warn("[memory] maybeSummarize failed:", e);
   }
 }

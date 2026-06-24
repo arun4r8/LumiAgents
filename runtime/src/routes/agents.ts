@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { runAgentChat } from "../agents/agent-chat";
 import type { AgentChatRequest, AgentChatResponse, ChatMessage, FileAttachment } from "../agents/agent-chat";
-import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall } from "../agents/memory";
+import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json, requireOpsToken, rateLimited } from "./helpers";
 
@@ -105,9 +105,14 @@ export async function handleAgents(
       result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
     }
 
-    // Persist the turn (best-effort, off the response path) — also embeds it for recall.
+    // Persist the turn (best-effort, off the response path) — embeds it for recall,
+    // then rolls up a summary + facts on a cadence.
     if (conversationId && lastUser && result.reply) {
-      ctx.waitUntil(persistTurn(env, { conversationId, userId: authResult.userId, agentSlug: slug, userText: lastUser.content, assistantText: result.reply }));
+      const cid = conversationId;
+      ctx.waitUntil(
+        persistTurn(env, { conversationId: cid, userId: authResult.userId, agentSlug: slug, userText: lastUser.content, assistantText: result.reply })
+          .then(() => maybeSummarize(env, { conversationId: cid, userId: authResult.userId, agentSlug: slug })),
+      );
     }
 
     return json({ ...result, conversationId });
@@ -155,6 +160,7 @@ export async function handleAgents(
       );
       if (conversationId && result.reply) {
         await persistTurn(env, { conversationId, userId, agentSlug: slug, userText: parsed.text, assistantText: result.reply });
+        await maybeSummarize(env, { conversationId, userId, agentSlug: slug });
       }
     })().catch((err) => {
       console.error("[teams-bot] reply error:", err);
