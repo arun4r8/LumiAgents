@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import { runAgentChat } from "../agents/agent-chat";
 import type { AgentChatRequest, AgentChatResponse, ChatMessage, FileAttachment } from "../agents/agent-chat";
-import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser } from "../agents/memory";
+import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json, requireOpsToken, rateLimited } from "./helpers";
 
@@ -77,10 +77,13 @@ export async function handleAgents(
     }
     const lastUser = [...clientMessages].reverse().find((m) => m.role === "user");
 
+    // Semantic recall over this user's prior conversations with this agent.
+    const memoryPreamble = await recall(env, { userId: authResult.userId, agentSlug: slug, queryText: lastUser?.content ?? "" });
+
     let result: AgentChatResponse;
     if (workerBinding) {
       // Production: forward to the agent's own CF Worker via Service Binding, with the
-      // (possibly server-rebuilt) messages. X-Runtime-Url + X-Dispatch-Token as before.
+      // (possibly server-rebuilt) messages + recalled memory. Headers as before.
       const forwarded = new Request(request.url, {
         method: "POST",
         headers: {
@@ -89,7 +92,7 @@ export async function handleAgents(
           "X-Runtime-Url": runtimeUrl,
           "X-Dispatch-Token": dispatchToken,
         },
-        body: JSON.stringify({ messages, files: body.files }),
+        body: JSON.stringify({ messages, files: body.files, memoryPreamble: memoryPreamble || undefined }),
       });
       const resp = await workerBinding.fetch(forwarded);
       if (!resp.ok) return resp;
@@ -98,12 +101,13 @@ export async function handleAgents(
       // Development fallback: run the chat loop locally.
       const chatReq: AgentChatRequest = { agentSlug: slug, messages };
       if (body.files?.length) chatReq.files = body.files;
+      if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
       result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
     }
 
-    // Persist the turn (best-effort, off the response path).
+    // Persist the turn (best-effort, off the response path) — also embeds it for recall.
     if (conversationId && lastUser && result.reply) {
-      ctx.waitUntil(persistTurn(env, { conversationId, userText: lastUser.content, assistantText: result.reply }));
+      ctx.waitUntil(persistTurn(env, { conversationId, userId: authResult.userId, agentSlug: slug, userText: lastUser.content, assistantText: result.reply }));
     }
 
     return json({ ...result, conversationId });
@@ -134,8 +138,11 @@ export async function handleAgents(
       });
       const transcript = conversationId ? await loadTranscript(env, conversationId, 10) : [];
       const messages: ChatMessage[] = [...transcript, { role: "user", content: parsed.text }];
+      const memoryPreamble = await recall(env, { userId, agentSlug: slug, queryText: parsed.text });
 
-      const result = await runAgentChat(env, { agentSlug: slug, messages }, runtimeUrl);
+      const chatReq: AgentChatRequest = { agentSlug: slug, messages };
+      if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
+      const result = await runAgentChat(env, chatReq, runtimeUrl);
       const replyText = result.runIds.length > 0
         ? `${result.reply}\n\n*Run IDs: ${result.runIds.join(", ")}*`
         : result.reply;
@@ -147,7 +154,7 @@ export async function handleAgents(
         replyText,
       );
       if (conversationId && result.reply) {
-        await persistTurn(env, { conversationId, userText: parsed.text, assistantText: result.reply });
+        await persistTurn(env, { conversationId, userId, agentSlug: slug, userText: parsed.text, assistantText: result.reply });
       }
     })().catch((err) => {
       console.error("[teams-bot] reply error:", err);
