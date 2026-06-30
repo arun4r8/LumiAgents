@@ -37,7 +37,7 @@ export interface FileAttachment {
 }
 
 export interface AgentChatRequest {
-  agentSlug: "angie" | "beady" | "patch" | "money";
+  agentSlug: "angie" | "beady" | "cleo" | "patch" | "money";
   messages: ChatMessage[];
   files?: FileAttachment[];
   /** Recalled long-term memory, injected into the system prompt (reference, not instructions). */

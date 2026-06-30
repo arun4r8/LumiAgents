@@ -60,6 +60,18 @@ export const AGENTS: AgentMeta[] = [
       "Show me indirect rate trends",
     ],
   },
+  {
+    slug: "cleo",
+    name: "Cleo",
+    emoji: "🏆",
+    category: "Eminence",
+    description: "Award research, recognition programs, and eminence tracking.",
+    suggestedPrompts: [
+      "What awards should Lumiture apply for this quarter?",
+      "Run a fresh award sweep",
+      "Which open government small business awards are high-prestige?",
+    ],
+  },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
