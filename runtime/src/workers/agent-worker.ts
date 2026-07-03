@@ -21,7 +21,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-export function makeAgentWorker(slug: "angie" | "beady" | "patch" | "money") {
+export function makeAgentWorker(slug: "angie" | "beady" | "cleo" | "patch" | "money") {
   return {
     async fetch(request: Request, env: AgentEnv, _ctx: ExecutionContext): Promise<Response> {
       if (request.method === "OPTIONS") {
