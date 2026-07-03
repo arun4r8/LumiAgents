@@ -67,7 +67,7 @@ export const outputSchema = z.object({
 // ─── Orchestration ────────────────────────────────────────────────────────────
 
 export default defineOrchestration({
-  name: "beady/award-sweep",
+  name: "cleo/award-sweep",
   version: 1,
   description:
     "Weekly Tavily sweep for industry recognition awards and government small business award programs. Scores each on fit, prestige, and application effort, then upserts into the awards table.",

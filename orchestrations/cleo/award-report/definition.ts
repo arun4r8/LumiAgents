@@ -240,7 +240,7 @@ function renderEmail(
 // ─── Orchestration ────────────────────────────────────────────────────────────
 
 export default defineOrchestration({
-  name: "beady/award-report",
+  name: "cleo/award-report",
   version: 1,
   description:
     "Email award digest to subscribers (industry recognition + government small business awards). Driven by a daily meta-cron; each subscription's cadence is honored.",
