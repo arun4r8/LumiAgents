@@ -53,7 +53,7 @@ be treated as high-priority action items.`,
     },
   ],
   toolMap: {
-    sweep_awards:       { orchestration: "beady/award-sweep" },
-    send_award_digest:  { orchestration: "beady/award-report" },
+    sweep_awards:       { orchestration: "cleo/award-sweep" },
+    send_award_digest:  { orchestration: "cleo/award-report" },
   },
 };
