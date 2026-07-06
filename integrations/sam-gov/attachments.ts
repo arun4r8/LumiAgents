@@ -23,11 +23,33 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 
 const withKey = (url: string, key: string): string => `${url}${url.includes("?") ? "&" : "?"}api_key=${key}`;
 
-export async function fetchOpportunityAttachmentText(env: Env, noticeId: string, maxChars = 40000): Promise<string> {
+const fmtDate = (d: Date): string =>
+  `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+
+export async function fetchOpportunityAttachmentText(
+  env: Env,
+  noticeId: string,
+  postedDate?: string | null,
+  maxChars = 40000,
+): Promise<string> {
   const parts: string[] = [];
   try {
+    // SAM v2 search REQUIRES a postedFrom/postedTo window (<= 1 year). Center it on
+    // the notice's posted date when known, else use the last ~year.
+    const anchor = postedDate ? new Date(postedDate) : new Date();
+    const from = new Date(isNaN(anchor.getTime()) ? Date.now() : anchor.getTime());
+    from.setDate(from.getDate() - 5);
+    const to = new Date(from);
+    to.setDate(to.getDate() + 360);
+
     // 1. Look the opportunity up to get its description link + resourceLinks.
-    const params = new URLSearchParams({ api_key: env.SAM_GOV_API_KEY, noticeid: noticeId, limit: "1" });
+    const params = new URLSearchParams({
+      api_key: env.SAM_GOV_API_KEY,
+      noticeid: noticeId,
+      postedFrom: fmtDate(from),
+      postedTo: fmtDate(to),
+      limit: "1",
+    });
     const res = await fetch(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
     if (!res.ok) return "";
     const data = (await res.json()) as { opportunitiesData?: Array<{ description?: string; resourceLinks?: string[] }> };
