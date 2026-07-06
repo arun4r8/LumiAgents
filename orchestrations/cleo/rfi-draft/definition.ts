@@ -78,7 +78,7 @@ export default defineOrchestration({
     const attachmentText = await step(ctx, "fetch-attachment", async () => {
       // SBIR ids (sbir_*) aren't SAM notices; only fetch for SAM opportunities.
       if (input.samNoticeId.startsWith("sbir_")) return "";
-      return fetchOpportunityAttachmentText(env, input.samNoticeId).catch(() => "");
+      return fetchOpportunityAttachmentText(env, input.samNoticeId, (opp.posted_date as string | null) ?? null).catch(() => "");
     });
 
     // 4. Draft the response.
