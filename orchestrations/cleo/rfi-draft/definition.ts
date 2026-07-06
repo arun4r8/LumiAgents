@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { draftRfiResponse } from "../../../integrations/anthropic/rfi";
+import { fetchOpportunityAttachmentText } from "../../../integrations/sam-gov/attachments";
 
 export const inputSchema = z.object({
   samNoticeId: z
@@ -72,17 +73,26 @@ export default defineOrchestration({
       return { companyProfile: company?.profile ?? company ?? {}, pastPerformance, capabilityStatements };
     });
 
-    // 3. Draft the response.
+    // 3. Fetch the notice description + PDF attachment text (the RFI's specific
+    //    questions live here). Best-effort — drafting still proceeds without it.
+    const attachmentText = await step(ctx, "fetch-attachment", async () => {
+      // SBIR ids (sbir_*) aren't SAM notices; only fetch for SAM opportunities.
+      if (input.samNoticeId.startsWith("sbir_")) return "";
+      return fetchOpportunityAttachmentText(env, input.samNoticeId).catch(() => "");
+    });
+
+    // 4. Draft the response.
     const draftMarkdown = await step(ctx, "draft-response", async () => {
       return draftRfiResponse(env, {
         opportunity: opp,
         companyProfile: grounding.companyProfile,
         pastPerformance: grounding.pastPerformance,
         capabilityStatements: grounding.capabilityStatements,
+        attachmentText: attachmentText || null,
       }, ctx.model);
     });
 
-    // 4. Store the draft.
+    // 5. Store the draft.
     const draftId = await step(ctx, "store-draft", async () => {
       const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rfi_drafts`, {
         method: "POST",
