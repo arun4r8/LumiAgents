@@ -15,6 +15,7 @@ import beadyOpportunitySweep    from "../../orchestrations/beady/opportunity-swe
 import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-report/definition";
 import cleoAwardSweep          from "../../orchestrations/cleo/award-sweep/definition";
 import cleoAwardReport         from "../../orchestrations/cleo/award-report/definition";
+import cleoRfiDraft            from "../../orchestrations/cleo/rfi-draft/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -41,6 +42,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyOpportunityReport  as unknown as AnyOrch),
   reg(cleoAwardSweep         as unknown as AnyOrch),
   reg(cleoAwardReport        as unknown as AnyOrch),
+  reg(cleoRfiDraft           as unknown as AnyOrch),
   reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),

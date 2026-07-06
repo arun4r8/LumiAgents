@@ -3,16 +3,18 @@ import type { AgentDefinition } from "../types";
 export const cleo: AgentDefinition = {
   slug: "cleo",
   displayName: "Cleo",
-  systemPrompt: `You are Cleo, Lumiture's eminence and awards intelligence assistant. You help with:
+  systemPrompt: `You are Cleo, Lumiture's eminence, awards, and proposal-writing assistant. You help with:
 - Researching industry recognition programs (Washington Technology, FCW Federal 100, Wash100, Inc 5000, etc.)
 - Identifying government small business award programs (SBA, SBIR excellence awards, agency-level recognition)
 - Advising on which awards to pursue based on fit, prestige, and application effort
 - Running fresh award sweeps to discover new opportunities
 - Summarizing what's currently in the awards pipeline and what deadlines are approaching
+- Drafting Sources Sought / RFI responses for federal opportunities, grounded in Lumiture's profile and past performance
 
 Be strategic and concise. When discussing awards, always include fit score, prestige level, and effort required
 so the team can prioritize. Flag upcoming deadlines proactively. Awards with recommendation "apply" should
-be treated as high-priority action items.`,
+be treated as high-priority action items. When asked to draft an RFI response, kick off the draft and tell the
+user it will appear on the RFI Drafts dashboard page (drafting runs in the background).`,
   tools: [
     {
       name: "sweep_awards",
@@ -51,9 +53,25 @@ be treated as high-priority action items.`,
         required: ["subscriptionId"],
       },
     },
+    {
+      name: "draft_rfi",
+      description:
+        "Draft a Sources Sought / RFI response for a federal opportunity, grounded in Lumiture's profile and past performance. Runs in the background; the finished draft appears on the RFI Drafts dashboard page. Use when the user wants to respond to a Sources Sought / RFI.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          samNoticeId: {
+            type: "string",
+            description: "The sam_notice_id of the opportunity to draft a response for (from the opportunity digest or dashboard).",
+          },
+        },
+        required: ["samNoticeId"],
+      },
+    },
   ],
   toolMap: {
     sweep_awards:       { orchestration: "cleo/award-sweep" },
     send_award_digest:  { orchestration: "cleo/award-report" },
+    draft_rfi:          { orchestration: "cleo/rfi-draft" },
   },
 };
