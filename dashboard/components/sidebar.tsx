@@ -19,6 +19,7 @@ import {
   Mail,
   Brain,
   Trophy,
+  FileSignature,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
 
@@ -45,6 +46,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/schedules",      label: "Schedules",       icon: <Clock /> },
     { href: "/reports",        label: "Reports",         icon: <Mail /> },
     { href: "/awards",         label: "Awards",          icon: <Trophy /> },
+    { href: "/rfi-drafts",     label: "RFI Drafts",      icon: <FileSignature /> },
     { href: "/memory",         label: "Memory",          icon: <Brain /> },
     { href: "/approvals",      label: "Approvals",       icon: <CheckSquare />, badge: pendingApprovals || undefined },
     { href: "/analyst",        label: "Data Analyst",    icon: <BarChart2 /> },
