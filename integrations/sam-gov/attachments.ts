@@ -23,6 +23,61 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 
 const withKey = (url: string, key: string): string => `${url}${url.includes("?") ? "&" : "?"}api_key=${key}`;
 
+// ─── .docx → text (no dependency: ZIP parse + built-in DecompressionStream) ─────
+// SAM Sources Sought attachments are usually .docx (the questions live there). We
+// unzip word/document.xml via the central directory and strip the XML to text.
+
+async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
+  const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function findZipEntry(buf: Uint8Array, name: string): { offset: number; compSize: number; method: number } | null {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= 0 && i > buf.length - 22 - 65536; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return null;
+  const cdCount = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  for (let n = 0; n < cdCount; n++) {
+    if (p + 46 > buf.length || dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const fnLen = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const commentLen = dv.getUint16(p + 32, true);
+    const localOffset = dv.getUint32(p + 42, true);
+    const fn = new TextDecoder().decode(buf.subarray(p + 46, p + 46 + fnLen));
+    if (fn === name) return { offset: localOffset, compSize, method };
+    p += 46 + fnLen + extraLen + commentLen;
+  }
+  return null;
+}
+
+function docxXmlToText(xml: string): string {
+  return xml
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<w:tab\b[^>]*\/?>/g, "\t")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function docxToText(buf: Uint8Array): Promise<string> {
+  const entry = findZipEntry(buf, "word/document.xml");
+  if (!entry) return "";
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  if (dv.getUint32(entry.offset, true) !== 0x04034b50) return "";
+  const fnLen = dv.getUint16(entry.offset + 26, true);
+  const extraLen = dv.getUint16(entry.offset + 28, true);
+  const start = entry.offset + 30 + fnLen + extraLen;
+  const comp = buf.subarray(start, start + entry.compSize);
+  const raw = entry.method === 0 ? comp : await inflateRaw(comp);
+  return docxXmlToText(new TextDecoder().decode(raw));
+}
+
 const fmtDate = (d: Date): string =>
   `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
@@ -69,15 +124,19 @@ export async function fetchOpportunityAttachmentText(
       parts.push(`# Notice description\n${opp.description}`);
     }
 
-    // 3. Attachments — PDFs → text via Haiku OCR; other types skipped for now.
+    // 3. Attachments — PDFs → Haiku OCR; .docx → unzip word/document.xml.
     for (const link of (opp.resourceLinks ?? []).slice(0, 4)) {
       try {
         const ares = await fetch(withKey(link, env.SAM_GOV_API_KEY));
         if (!ares.ok) continue;
         const ct = ares.headers.get("content-type") ?? "";
-        if (ct.includes("pdf") || link.toLowerCase().includes(".pdf")) {
+        const lower = link.toLowerCase();
+        if (ct.includes("pdf") || lower.includes(".pdf")) {
           const b64 = arrayBufferToBase64(await ares.arrayBuffer());
           const text = await pdfToText(env, b64);
+          if (text.trim()) parts.push(`# Attachment\n${text.trim()}`);
+        } else if (ct.includes("wordprocessingml") || ct.includes("officedocument.word") || /\.docx(\?|$)/.test(lower)) {
+          const text = await docxToText(new Uint8Array(await ares.arrayBuffer()));
           if (text.trim()) parts.push(`# Attachment\n${text.trim()}`);
         }
       } catch { /* best-effort */ }
