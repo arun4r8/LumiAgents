@@ -75,10 +75,11 @@ export default defineOrchestration({
 
     // 3. Fetch the notice description + PDF attachment text (the RFI's specific
     //    questions live here). Best-effort — drafting still proceeds without it.
-    const attachmentText = await step(ctx, "fetch-attachment", async () => {
+    const attachment = await step(ctx, "fetch-attachment", async () => {
       // SBIR ids (sbir_*) aren't SAM notices; only fetch for SAM opportunities.
-      if (input.samNoticeId.startsWith("sbir_")) return "";
-      return fetchOpportunityAttachmentText(env, input.samNoticeId, (opp.posted_date as string | null) ?? null).catch(() => "");
+      if (input.samNoticeId.startsWith("sbir_")) return { text: "", note: "skipped (SBIR topic)" };
+      return fetchOpportunityAttachmentText(env, input.samNoticeId, (opp.posted_date as string | null) ?? null)
+        .catch((e) => ({ text: "", note: `error: ${e instanceof Error ? e.message : String(e)}` }));
     });
 
     // 4. Draft the response.
@@ -88,7 +89,7 @@ export default defineOrchestration({
         companyProfile: grounding.companyProfile,
         pastPerformance: grounding.pastPerformance,
         capabilityStatements: grounding.capabilityStatements,
-        attachmentText: attachmentText || null,
+        attachmentText: attachment.text || null,
       }, ctx.model);
     });
 

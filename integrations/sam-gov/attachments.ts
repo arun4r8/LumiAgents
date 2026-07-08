@@ -81,13 +81,31 @@ async function docxToText(buf: Uint8Array): Promise<string> {
 const fmtDate = (d: Date): string =>
   `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
+export interface AttachmentResult {
+  text: string;
+  /** Human-readable trace of what happened — surfaced in the run step for observability. */
+  note: string;
+}
+
+// Retry transient SAM failures (429 / 5xx) with linear backoff. Returns the last
+// response either way; the caller inspects .ok / .status.
+async function fetchWithRetry(url: string, init: RequestInit, tries = 3): Promise<Response> {
+  let res = await fetch(url, init);
+  for (let a = 1; a < tries && (res.status === 429 || res.status >= 500); a++) {
+    await new Promise((r) => setTimeout(r, 500 * a));
+    res = await fetch(url, init);
+  }
+  return res;
+}
+
 export async function fetchOpportunityAttachmentText(
   env: Env,
   noticeId: string,
   postedDate?: string | null,
   maxChars = 40000,
-): Promise<string> {
+): Promise<AttachmentResult> {
   const parts: string[] = [];
+  const notes: string[] = [];
   try {
     // SAM v2 search REQUIRES a postedFrom/postedTo window (<= 1 year). Center it on
     // the notice's posted date when known, else use the last ~year.
@@ -105,42 +123,51 @@ export async function fetchOpportunityAttachmentText(
       postedTo: fmtDate(to),
       limit: "1",
     });
-    const res = await fetch(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
-    if (!res.ok) return "";
+    const res = await fetchWithRetry(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
+    if (!res.ok) {
+      return { text: "", note: `SAM search failed: HTTP ${res.status}${res.status === 429 ? " (rate-limited — shares the daily SAM quota with the sweep)" : ""}` };
+    }
     const data = (await res.json()) as { opportunitiesData?: Array<{ description?: string; resourceLinks?: string[] }> };
     const opp = data.opportunitiesData?.[0];
-    if (!opp) return "";
+    if (!opp) return { text: "", note: "notice not found in SAM (may have aged out of the 1-year window)" };
 
     // 2. Notice description (in SAM v2 `description` is usually a URL to the text).
     if (opp.description?.startsWith("http")) {
-      try {
-        const dres = await fetch(withKey(opp.description, env.SAM_GOV_API_KEY), { headers: { Accept: "application/json" } });
-        if (dres.ok) {
-          const dj = (await dres.json()) as { description?: string };
-          if (dj.description) parts.push(`# Notice description\n${stripHtml(dj.description)}`);
-        }
-      } catch { /* best-effort */ }
+      const dres = await fetchWithRetry(withKey(opp.description, env.SAM_GOV_API_KEY), { headers: { Accept: "application/json" } });
+      if (dres.ok) {
+        const dj = (await dres.json()) as { description?: string };
+        if (dj.description) { parts.push(`# Notice description\n${stripHtml(dj.description)}`); notes.push("description"); }
+      } else notes.push(`description HTTP ${dres.status}`);
     } else if (opp.description) {
-      parts.push(`# Notice description\n${opp.description}`);
+      parts.push(`# Notice description\n${opp.description}`); notes.push("description");
     }
 
     // 3. Attachments — PDFs → Haiku OCR; .docx → unzip word/document.xml.
-    for (const link of (opp.resourceLinks ?? []).slice(0, 4)) {
+    const links = opp.resourceLinks ?? [];
+    for (const link of links.slice(0, 4)) {
       try {
-        const ares = await fetch(withKey(link, env.SAM_GOV_API_KEY));
-        if (!ares.ok) continue;
+        const ares = await fetchWithRetry(withKey(link, env.SAM_GOV_API_KEY), {});
+        if (!ares.ok) { notes.push(`attachment HTTP ${ares.status}`); continue; }
         const ct = ares.headers.get("content-type") ?? "";
         const lower = link.toLowerCase();
         if (ct.includes("pdf") || lower.includes(".pdf")) {
           const b64 = arrayBufferToBase64(await ares.arrayBuffer());
           const text = await pdfToText(env, b64);
-          if (text.trim()) parts.push(`# Attachment\n${text.trim()}`);
+          if (text.trim()) { parts.push(`# Attachment\n${text.trim()}`); notes.push("pdf"); }
+          else notes.push("pdf (no text)");
         } else if (ct.includes("wordprocessingml") || ct.includes("officedocument.word") || /\.docx(\?|$)/.test(lower)) {
           const text = await docxToText(new Uint8Array(await ares.arrayBuffer()));
-          if (text.trim()) parts.push(`# Attachment\n${text.trim()}`);
+          if (text.trim()) { parts.push(`# Attachment\n${text.trim()}`); notes.push("docx"); }
+          else notes.push("docx (no text extracted)");
+        } else {
+          notes.push(`attachment skipped (${ct || "unknown type"})`);
         }
-      } catch { /* best-effort */ }
+      } catch (e) { notes.push(`attachment error: ${e instanceof Error ? e.message : String(e)}`); }
     }
-  } catch { /* best-effort */ }
-  return parts.join("\n\n").slice(0, maxChars);
+    if (links.length === 0) notes.push("no attachments listed");
+
+    return { text: parts.join("\n\n").slice(0, maxChars), note: notes.join(", ") || "nothing retrieved" };
+  } catch (e) {
+    return { text: "", note: `error: ${e instanceof Error ? e.message : String(e)}` };
+  }
 }
