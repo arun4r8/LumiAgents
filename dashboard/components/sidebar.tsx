@@ -45,6 +45,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/runs",           label: "Runs",            icon: <Play /> },
     { href: "/orchestrations", label: "Orchestrations",  icon: <GitBranch /> },
     { href: "/schedules",      label: "Schedules",       icon: <Clock /> },
+    { href: "/subscriptions",  label: "Subscriptions",   icon: <Mail /> },
     { href: "/reports",        label: "Reports",         icon: <Mail /> },
     { href: "/awards",         label: "Awards",          icon: <Trophy /> },
     { href: "/rfi-drafts",     label: "RFI Drafts",      icon: <FileSignature /> },
