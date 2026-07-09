@@ -15,6 +15,8 @@ interface IngestRequest {
   storagePath?: string;
   metadata?: Record<string, unknown>;
   ingestedBy?: string;       // auth.users(id)
+  corpus?: string;           // ownership/visibility; defaults to 'shared' in the DB
+  sensitivity?: "internal" | "restricted";  // defaults to 'internal' in the DB
 }
 
 interface IngestResult {
@@ -27,6 +29,10 @@ interface QueryRequest {
   question: string;
   minSimilarity?: number;
   maxChunks?: number;
+  /** Corpora the caller may read. Omit / null = no restriction (ops / dashboard). */
+  allowedCorpora?: string[] | null;
+  /** Allow restricted-sensitivity chunks through. Default false. */
+  includeRestricted?: boolean;
 }
 
 interface QueryResult {
@@ -98,6 +104,8 @@ export async function ingestDocument(env: Env, req: IngestRequest): Promise<Inge
       content: req.content,
       metadata: req.metadata ?? {},
       ingested_by: req.ingestedBy ?? null,
+      corpus: req.corpus ?? "shared",
+      sensitivity: req.sensitivity ?? "internal",
     },
   );
 
@@ -156,6 +164,8 @@ export async function queryDocuments(env: Env, req: QueryRequest): Promise<Query
     query_embedding: `[${questionEmbedding.join(",")}]`,
     match_count: req.maxChunks ?? MAX_CONTEXT_CHUNKS,
     min_similarity: req.minSimilarity ?? 0.4,
+    allowed_corpora: req.allowedCorpora ?? null,
+    include_restricted: req.includeRestricted ?? false,
   });
 
   if (chunks.length === 0) {

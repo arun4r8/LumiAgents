@@ -90,7 +90,8 @@ async function matchChunks(env: Env, queryText: string, k = 5): Promise<Array<{ 
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/match_document_chunks`, {
       method: "POST",
       headers: headers(env, "orchestration"),
-      body: JSON.stringify({ query_embedding: `[${emb.join(",")}]`, match_count: k, min_similarity: 0.3 }),
+      // Beady reads the shared corpus + its own private corpus, internal only.
+      body: JSON.stringify({ query_embedding: `[${emb.join(",")}]`, match_count: k, min_similarity: 0.3, allowed_corpora: ["shared", "beady"], include_restricted: false }),
     });
     if (!res.ok) return [];
     return (await res.json()) as any[];
