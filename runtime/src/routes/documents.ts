@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import { ingestDocument, queryDocuments } from "../agents/document-rag";
+import { OPS_SCOPE } from "../agents/knowledge-access";
 import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
 import { json, parseCsvLine, requireOpsToken, rateLimited } from "./helpers";
@@ -212,7 +213,8 @@ export async function handleDocuments(
       return json({ error: "question is required" }, 400);
     }
 
-    const result = await queryDocuments(env, body);
+    // Dashboard document search is an ops surface — full corpus access, incl. restricted.
+    const result = await queryDocuments(env, { ...body, allowedCorpora: OPS_SCOPE.allowedCorpora, includeRestricted: OPS_SCOPE.includeRestricted });
     return json(result);
   }
 

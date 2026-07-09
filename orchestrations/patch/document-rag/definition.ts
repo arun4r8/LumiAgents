@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import { ingestDocument, queryDocuments } from "@/runtime/agents/document-rag";
+import { scopeForAgent } from "@/runtime/agents/knowledge-access";
 
 // ─── Ingest orchestration ─────────────────────────────────────────────────────
 
@@ -10,6 +11,8 @@ export const ingestInputSchema = z.object({
   content: z.string().min(1).describe("Extracted text content of the document"),
   storagePath: z.string().optional().describe("Supabase Storage path if file-backed"),
   metadata: z.record(z.unknown()).optional(),
+  corpus: z.string().optional().describe("Ownership/visibility corpus. 'shared' (default, every agent) or an agent slug for a private corpus."),
+  sensitivity: z.enum(["internal", "restricted"]).optional().describe("'internal' (default, team-usable) or 'restricted' (ops-only; never surfaces in agent retrieval)."),
 });
 
 export const ingestOutputSchema = z.object({
@@ -36,6 +39,8 @@ export const documentIngest = defineOrchestration({
         content: input.content,
         ...(input.storagePath !== undefined ? { storagePath: input.storagePath } : {}),
         ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+        ...(input.corpus !== undefined ? { corpus: input.corpus } : {}),
+        ...(input.sensitivity !== undefined ? { sensitivity: input.sensitivity } : {}),
       }),
     );
   },
@@ -71,11 +76,14 @@ export const documentQuery = defineOrchestration({
     visibleTo: ["role:ops", "role:enduser"],
   },
   async run(ctx, input) {
+    const scope = scopeForAgent("patch");
     return step(ctx, "retrieve-and-answer", () =>
       queryDocuments(ctx.env, {
         question: input.question,
         minSimilarity: input.minSimilarity,
         maxChunks: input.maxChunks,
+        allowedCorpora: scope.allowedCorpora,
+        includeRestricted: scope.includeRestricted,
       }),
     );
   },
