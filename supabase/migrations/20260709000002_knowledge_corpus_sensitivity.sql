@@ -13,6 +13,10 @@
 -- Backfill is a no-op for behavior: existing rows become shared/internal, so every
 -- agent still reads everything until documents are deliberately re-tagged.
 --
+-- NOTE: the pgvector `vector` type lives in the `extensions` schema, so it is
+-- schema-qualified below — `supabase db push` applies migrations with a search_path
+-- that does not include `extensions`, and a bare `vector` fails to resolve there.
+--
 -- Rollback:
 --   ALTER TABLE orchestration.orch_documents DROP COLUMN corpus, DROP COLUMN sensitivity;
 --   -- and restore the 3-arg match_document_chunks from migration 0003.
@@ -26,12 +30,14 @@ CREATE INDEX IF NOT EXISTS orch_documents_corpus_idx
   ON orchestration.orch_documents (corpus, sensitivity);
 
 -- Recreate the retrieval RPC with corpus/sensitivity filtering. Adding parameters
--- changes the function's identity, so drop the old 3-arg signature first to avoid an
--- ambiguous overload.
-DROP FUNCTION IF EXISTS orchestration.match_document_chunks(vector, integer, float);
+-- changes the function's identity, so drop every prior signature first (the original
+-- 3-arg one, and the 5-arg one this migration may have already installed out-of-band)
+-- to avoid an ambiguous overload or an "already exists" conflict on re-apply.
+DROP FUNCTION IF EXISTS orchestration.match_document_chunks(extensions.vector, integer, float);
+DROP FUNCTION IF EXISTS orchestration.match_document_chunks(extensions.vector, integer, float, text[], boolean);
 
 CREATE FUNCTION orchestration.match_document_chunks(
-  query_embedding    vector(1024),
+  query_embedding    extensions.vector(1024),
   match_count        integer   DEFAULT 6,
   min_similarity     float     DEFAULT 0.5,
   allowed_corpora    text[]    DEFAULT NULL,   -- NULL = no corpus restriction (ops/dashboard)
@@ -48,6 +54,7 @@ RETURNS TABLE (
   similarity  float
 )
 LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = orchestration, public, extensions
 AS $$
 BEGIN
   RETURN QUERY
