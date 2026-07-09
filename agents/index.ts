@@ -2,6 +2,7 @@ import type { AgentDefinition } from "./types";
 import { angie } from "./angie";
 import { beady } from "./beady";
 import { cleo } from "./cleo";
+import { dewey } from "./dewey";
 import { patch } from "./patch";
 import { money } from "./money";
 
@@ -11,6 +12,7 @@ export const AGENTS: Record<string, AgentDefinition> = {
   angie,
   beady,
   cleo,
+  dewey,
   patch,
   money,
 };

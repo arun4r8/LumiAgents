@@ -19,8 +19,10 @@ const MODELS = [
 const AGENT_META: Record<string, { label: string; role: string; color: string }> = {
   angie: { label: "Angie", role: "HR & Recruiting",                color: "oklch(62% 0.18 280)" },
   beady: { label: "Beady", role: "GovCon Business Development",    color: "oklch(58% 0.17 145)" },
+  cleo:  { label: "Cleo",  role: "Eminence, Awards & Proposals",   color: "oklch(62% 0.17 320)" },
+  dewey: { label: "Dewey", role: "Knowledge Librarian",            color: "oklch(60% 0.15 230)" },
   money: { label: "Money", role: "Finance & Analytics",            color: "oklch(62% 0.16 85)"  },
-  patch: { label: "Patch", role: "IT Operations & Knowledge",      color: "oklch(60% 0.16 30)"  },
+  patch: { label: "Patch", role: "IT Operations",                  color: "oklch(60% 0.16 30)"  },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
