@@ -62,16 +62,16 @@ function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string,
 
 async function loadActiveSubscriptions(env: Env): Promise<AwardSubscription[]> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/award_subscriptions?is_active=eq.true&select=${SUB_COLS}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.award&is_active=eq.true&select=${SUB_COLS}`,
     { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
   );
-  if (!res.ok) throw new Error(`load award_subscriptions → ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`load award subscriptions → ${res.status}: ${await res.text()}`);
   return (await res.json()) as AwardSubscription[];
 }
 
 async function loadSubscriptionById(env: Env, id: string): Promise<AwardSubscription | null> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/award_subscriptions?id=eq.${id}&select=${SUB_COLS}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.award&select=${SUB_COLS}`,
     { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load award subscription ${id} → ${res.status}: ${await res.text()}`);
@@ -81,7 +81,7 @@ async function loadSubscriptionById(env: Env, id: string): Promise<AwardSubscrip
 
 async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/award_subscriptions?id=eq.${id}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
     {
       method: "PATCH",
       headers: sbHeaders(env, { "Content-Profile": "orchestration", Prefer: "return=minimal" }),

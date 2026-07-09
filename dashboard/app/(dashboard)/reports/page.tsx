@@ -66,8 +66,9 @@ export default async function ReportsPage() {
 
   const { data: subscriptions } = await supabase
     .schema("orchestration")
-    .from("report_subscriptions")
+    .from("subscriptions")
     .select("*")
+    .eq("kind", "opportunity")
     .order("created_at", { ascending: true });
 
   async function createSubscription(formData: FormData) {
@@ -82,9 +83,10 @@ export default async function ReportsPage() {
 
     const { error } = await supabase
       .schema("orchestration")
-      .from("report_subscriptions")
+      .from("subscriptions")
       .insert({
         user_id: user?.id ?? null,
+        kind: "opportunity",
         label: (formData.get("label") as string)?.trim() || null,
         cadence,
         recipients,
@@ -105,7 +107,7 @@ export default async function ReportsPage() {
     const currentlyActive = formData.get("is_active") === "true";
     const { error } = await supabase
       .schema("orchestration")
-      .from("report_subscriptions")
+      .from("subscriptions")
       .update({ is_active: !currentlyActive, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw new Error(error.message);
@@ -118,7 +120,7 @@ export default async function ReportsPage() {
     const id = formData.get("id") as string;
     const { error } = await supabase
       .schema("orchestration")
-      .from("report_subscriptions")
+      .from("subscriptions")
       .delete()
       .eq("id", id);
     if (error) throw new Error(error.message);
@@ -137,7 +139,7 @@ export default async function ReportsPage() {
 
     const { error } = await supabase
       .schema("orchestration")
-      .from("report_subscriptions")
+      .from("subscriptions")
       .update({
         label: (formData.get("label") as string)?.trim() || null,
         cadence,
