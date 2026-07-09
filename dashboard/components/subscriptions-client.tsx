@@ -1,10 +1,11 @@
 "use client";
 
 import { useTransition, useRef, useState } from "react";
-import { Mail, Plus, Trash2, Power, PowerOff, Loader2, X, Pencil, Check, Send } from "lucide-react";
+import { Mail, Trophy, Plus, Trash2, Power, PowerOff, Loader2, X, Pencil, Check, Send } from "lucide-react";
 
-interface Subscription {
+export interface Subscription {
   id: string;
+  kind: "opportunity" | "award";
   label: string | null;
   cadence: "daily" | "weekly";
   recipients: string[];
@@ -14,11 +15,12 @@ interface Subscription {
   sources: string[] | null;
   agencies: string[] | null;
   set_asides: string[] | null;
+  award_types: string[] | null;
 }
 
-interface Props {
-  subscriptions: Subscription[];
-  emailConfigured: boolean;
+type Kind = "opportunity" | "award";
+
+interface Actions {
   createSubscription: (formData: FormData) => Promise<void>;
   toggleSubscription: (formData: FormData) => Promise<void>;
   deleteSubscription: (formData: FormData) => Promise<void>;
@@ -26,10 +28,23 @@ interface Props {
   sendNow: (formData: FormData) => Promise<void>;
 }
 
+interface Props extends Actions {
+  subscriptions: Subscription[];
+  emailConfigured: boolean;
+  /** When set, this surface manages only one kind (no tabs, create form fixed). */
+  lockedKind?: Kind;
+  title?: string;
+  intro?: string;
+  /** Render without the outer page chrome (for embedding in another page). */
+  embedded?: boolean;
+}
+
 const SOURCE_OPTIONS = [
   { value: "sam_gov", label: "SAM.gov" },
   { value: "sbir", label: "SBIR/STTR" },
 ];
+
+const KIND_LABEL: Record<Kind, string> = { opportunity: "Opportunity", award: "Award" };
 
 function timeAgo(iso: string): string {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -43,81 +58,86 @@ function timeAgo(iso: string): string {
 
 function filterChips(s: Subscription): string[] {
   const chips: string[] = [];
-  if (s.sources?.length) {
-    chips.push(s.sources.map((x) => SOURCE_OPTIONS.find((o) => o.value === x)?.label ?? x).join(" / "));
+  if (s.kind === "award") {
+    if (s.award_types?.length) chips.push(`types: ${s.award_types.join(", ")}`);
+    return chips;
   }
+  if (s.sources?.length) chips.push(s.sources.map((x) => SOURCE_OPTIONS.find((o) => o.value === x)?.label ?? x).join(" / "));
   if (s.agencies?.length) chips.push(`agency: ${s.agencies.join(", ")}`);
   if (s.set_asides?.length) chips.push(`set-aside: ${s.set_asides.join(", ")}`);
   return chips;
 }
 
-export function ReportsClient({
-  subscriptions,
-  emailConfigured,
-  createSubscription,
-  toggleSubscription,
-  deleteSubscription,
-  updateSubscription,
-  sendNow,
-}: Props) {
+export function SubscriptionsClient(props: Props) {
+  const { subscriptions, emailConfigured, lockedKind, title, intro, embedded } = props;
   const [showCreate, setShowCreate] = useState(false);
+  const [tab, setTab] = useState<Kind | "all">(lockedKind ?? "all");
 
-  const active = subscriptions.filter((s) => s.is_active).length;
+  const visible = subscriptions.filter((s) => (lockedKind ? s.kind === lockedKind : tab === "all" ? true : s.kind === tab));
+  const active = visible.filter((s) => s.is_active).length;
 
   return (
-    <div className="page view-fade">
+    <div className={embedded ? "" : "page view-fade"}>
       <div className="page-h">
         <div>
-          <h1>Reports</h1>
+          <h1>{title ?? "Subscriptions"}</h1>
           <div className="sub">
-            {subscriptions.length === 0
-              ? "No email reports configured yet."
-              : `${subscriptions.length} report${subscriptions.length !== 1 ? "s" : ""} · ${active} active`}
+            {visible.length === 0
+              ? "No email subscriptions configured yet."
+              : `${visible.length} subscription${visible.length !== 1 ? "s" : ""} · ${active} active`}
           </div>
         </div>
         <button className="btn accent" onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? <X style={{ width: 13, height: 13 }} /> : <Plus style={{ width: 13, height: 13 }} />}
-          {showCreate ? "Cancel" : "New Report"}
+          {showCreate ? "Cancel" : "New Subscription"}
         </button>
       </div>
 
-      {!emailConfigured && (
-        <div
-          className="card"
-          style={{ padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "var(--ink-2)", borderColor: "var(--warn, #b45309)" }}
-        >
-          ⚠ Email delivery is not configured yet. Reports you create here will be saved and
-          scheduled, but no email is sent until <span className="mono">RESEND_API_KEY</span> and a
-          verified sending domain are set on the runtime.
+      {!lockedKind && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          {(["all", "opportunity", "award"] as const).map((t) => (
+            <button
+              key={t}
+              className={`chip ${tab === t ? "ok" : ""}`}
+              style={{ cursor: "pointer", textTransform: "capitalize", padding: "5px 12px" }}
+              onClick={() => setTab(t)}
+            >
+              {t === "all" ? "All" : `${KIND_LABEL[t]} digests`}
+            </button>
+          ))}
         </div>
       )}
 
-      <p className="sub" style={{ marginBottom: 16, maxWidth: 760 }}>
-        Beady emails opportunities scoring at or above each report&apos;s <strong>minimum fit score</strong>
-        {" "}(matching any filters) to its recipients. The fit threshold sets the range:{" "}
-        <strong>7+</strong> is pursue-grade only, <strong>5–6</strong> also includes monitor-grade
-        leads (5 is the lowest the sweep keeps). A daily driver runs at 13:00 UTC — daily reports
-        send every run, weekly once every 7 days — and each includes only opportunities scored
-        since its last send. Use <strong>Send now</strong> to dispatch the full current digest
-        immediately, regardless of cadence.
-      </p>
+      {!emailConfigured && (
+        <div className="card" style={{ padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "var(--ink-2)", borderColor: "var(--warn, #b45309)" }}>
+          ⚠ Email delivery is not configured yet. Subscriptions are saved and scheduled, but no
+          email is sent until <span className="mono">RESEND_API_KEY</span> and a verified sending
+          domain are set on the runtime.
+        </div>
+      )}
+
+      {intro && <p className="sub" style={{ marginBottom: 16, maxWidth: 760 }}>{intro}</p>}
 
       {showCreate && (
-        <CreateForm createSubscription={createSubscription} onCreated={() => setShowCreate(false)} />
+        <CreateForm
+          createSubscription={props.createSubscription}
+          onCreated={() => setShowCreate(false)}
+          lockedKind={lockedKind}
+        />
       )}
 
-      {subscriptions.length === 0 && !showCreate ? (
+      {visible.length === 0 && !showCreate ? (
         <div className="empty">
-          <div className="ico"><Mail /></div>
-          <h4>No reports yet.</h4>
-          <p>Create a report to have Beady email new matching opportunities on a cadence.</p>
+          <div className="ico">{lockedKind === "award" ? <Trophy /> : <Mail />}</div>
+          <h4>No subscriptions yet.</h4>
+          <p>Create one to have digests emailed on a cadence.</p>
         </div>
-      ) : subscriptions.length > 0 ? (
+      ) : visible.length > 0 ? (
         <div className="card" style={{ overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                {["Report", "Recipients", "Cadence", "Min fit", "Last sent", "Status", ""].map((h) => (
+                {[...(lockedKind ? [] : ["Kind"]), "Subscription", "Recipients", "Cadence", "Min fit", "Last sent", "Status", ""].map((h) => (
                   <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", whiteSpace: "nowrap" }}>
                     {h}
                   </th>
@@ -125,14 +145,15 @@ export function ReportsClient({
               </tr>
             </thead>
             <tbody>
-              {subscriptions.map((s) => (
+              {visible.map((s) => (
                 <SubscriptionRow
                   key={s.id}
                   subscription={s}
-                  toggleSubscription={toggleSubscription}
-                  deleteSubscription={deleteSubscription}
-                  updateSubscription={updateSubscription}
-                  sendNow={sendNow}
+                  showKind={!lockedKind}
+                  toggleSubscription={props.toggleSubscription}
+                  deleteSubscription={props.deleteSubscription}
+                  updateSubscription={props.updateSubscription}
+                  sendNow={props.sendNow}
                 />
               ))}
             </tbody>
@@ -143,10 +164,19 @@ export function ReportsClient({
   );
 }
 
-// Shared filter inputs for create + edit. `s` pre-fills values in the edit form.
-function FilterFields({ s, compact }: { s?: Subscription; compact?: boolean }) {
+// Kind-aware filter inputs for create + edit.
+function FilterFields({ kind, s, compact }: { kind: Kind; s?: Subscription; compact?: boolean }) {
   const labelSize = compact ? 11 : undefined;
   const inputStyle = compact ? { height: 30, fontSize: 13 } : undefined;
+  if (kind === "award") {
+    return (
+      <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
+        <label style={{ fontSize: labelSize }}>Award types <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+        <input className="input" name="award_types" defaultValue={s?.award_types?.join(", ") ?? ""} placeholder="e.g. industry, government" style={inputStyle} />
+        {!compact && <span className="hint">Comma-separated; leave blank to include all award types.</span>}
+      </div>
+    );
+  }
   return (
     <>
       <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
@@ -175,15 +205,10 @@ function FilterFields({ s, compact }: { s?: Subscription; compact?: boolean }) {
   );
 }
 
-function CreateForm({
-  createSubscription,
-  onCreated,
-}: {
-  createSubscription: (fd: FormData) => Promise<void>;
-  onCreated: () => void;
-}) {
+function CreateForm({ createSubscription, onCreated, lockedKind }: { createSubscription: (fd: FormData) => Promise<void>; onCreated: () => void; lockedKind?: Kind }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [kind, setKind] = useState<Kind>(lockedKind ?? "opportunity");
   const formRef = useRef<HTMLFormElement>(null);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -196,24 +221,25 @@ function CreateForm({
         formRef.current?.reset();
         onCreated();
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create report");
+        setError(err instanceof Error ? err.message : "Failed to create subscription");
       }
     });
   }
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="card" style={{ padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-      <div className="field" style={{ gridColumn: "1 / -1" }}>
-        <label>Recipients</label>
-        <input
-          className="input"
-          name="recipients"
-          placeholder="alice@lumiture.com, bob@lumiture.com"
-          required
-        />
-        <span className="hint">Comma-separated email addresses.</span>
-      </div>
-      <div className="field">
+      <input type="hidden" name="kind" value={kind} />
+      {!lockedKind && (
+        <div className="field">
+          <label>Kind</label>
+          <select className="input" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+            <option value="opportunity">Opportunity digest</option>
+            <option value="award">Award digest</option>
+          </select>
+          <span className="hint">Which digest this subscription receives.</span>
+        </div>
+      )}
+      <div className="field" style={{ gridColumn: lockedKind ? "1 / -1" : undefined }}>
         <label>Cadence</label>
         <select className="input" name="cadence" defaultValue="weekly">
           <option value="daily">Daily</option>
@@ -221,51 +247,36 @@ function CreateForm({
         </select>
         <span className="hint">How often to send (daily driver honors this).</span>
       </div>
+      <div className="field" style={{ gridColumn: "1 / -1" }}>
+        <label>Recipients</label>
+        <input className="input" name="recipients" placeholder="alice@lumiture.com, bob@lumiture.com" required />
+        <span className="hint">Comma-separated email addresses.</span>
+      </div>
       <div className="field">
         <label>Minimum fit score</label>
-        <input
-          className="input mono"
-          name="min_fit_score"
-          type="number"
-          min={1}
-          max={10}
-          defaultValue={7}
-          required
-        />
-        <span className="hint">Gate for what&apos;s included (1–10): 7+ = pursue only, 5–6 also includes monitor.</span>
+        <input className="input mono" name="min_fit_score" type="number" min={1} max={10} defaultValue={kind === "award" ? 6 : 7} required />
+        <span className="hint">Gate for what&apos;s included (1–10).</span>
       </div>
-      <FilterFields />
-      <div className="field" style={{ gridColumn: "1 / -1" }}>
+      <div className="field">
         <label>Label <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
-        <input
-          className="input"
-          name="label"
-          placeholder="e.g. Leadership weekly digest"
-        />
+        <input className="input" name="label" placeholder="e.g. Leadership weekly digest" />
       </div>
+      <FilterFields kind={kind} />
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, gridColumn: "1 / -1" }}>
-        {error && (
-          <span style={{ fontSize: 12.5, color: "var(--err)", flex: 1 }}>{error}</span>
-        )}
+        {error && <span style={{ fontSize: 12.5, color: "var(--err)", flex: 1 }}>{error}</span>}
         <button type="submit" className="btn accent" disabled={pending} style={{ marginLeft: "auto" }}>
-          {pending
-            ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Creating…</>
-            : <><Plus style={{ width: 13, height: 13 }} /> Create</>}
+          {pending ? <><Loader2 className="spin" style={{ width: 13, height: 13 }} /> Creating…</> : <><Plus style={{ width: 13, height: 13 }} /> Create</>}
         </button>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </form>
   );
 }
 
 function SubscriptionRow({
-  subscription: s,
-  toggleSubscription,
-  deleteSubscription,
-  updateSubscription,
-  sendNow,
+  subscription: s, showKind, toggleSubscription, deleteSubscription, updateSubscription, sendNow,
 }: {
   subscription: Subscription;
+  showKind: boolean;
   toggleSubscription: (fd: FormData) => Promise<void>;
   deleteSubscription: (fd: FormData) => Promise<void>;
   updateSubscription: (fd: FormData) => Promise<void>;
@@ -277,14 +288,12 @@ function SubscriptionRow({
   const [sendPending, startSend] = useTransition();
   const [editing, setEditing] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
+  const colSpan = showKind ? 8 : 7;
 
   function handleEditSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    startEdit(async () => {
-      await updateSubscription(fd);
-      setEditing(false);
-    });
+    startEdit(async () => { await updateSubscription(fd); setEditing(false); });
   }
 
   const chips = filterChips(s);
@@ -292,9 +301,10 @@ function SubscriptionRow({
   if (editing) {
     return (
       <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--bg-2)" }}>
-        <td colSpan={7} style={{ padding: "12px 16px" }}>
+        <td colSpan={colSpan} style={{ padding: "12px 16px" }}>
           <form onSubmit={handleEditSubmit} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, alignItems: "start" }}>
             <input type="hidden" name="id" value={s.id} />
+            <input type="hidden" name="kind" value={s.kind} />
             <div className="field" style={{ margin: 0 }}>
               <label style={{ fontSize: 11 }}>Recipients</label>
               <input className="input" name="recipients" defaultValue={s.recipients.join(", ")} required style={{ height: 30, fontSize: 13 }} />
@@ -314,17 +324,13 @@ function SubscriptionRow({
               <label style={{ fontSize: 11 }}>Label</label>
               <input className="input" name="label" defaultValue={s.label ?? ""} placeholder="Optional" style={{ height: 30, fontSize: 13 }} />
             </div>
-            <FilterFields s={s} compact />
+            <FilterFields kind={s.kind} s={s} compact />
             <div style={{ display: "flex", gap: 6, alignItems: "flex-end", gridColumn: "1 / -1" }}>
               <button type="submit" className="btn accent sm" disabled={editPending}>
-                {editPending
-                  ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-                  : <Check style={{ width: 12, height: 12 }} />}
+                {editPending ? <Loader2 className="spin" style={{ width: 12, height: 12 }} /> : <Check style={{ width: 12, height: 12 }} />}
                 {editPending ? "Saving…" : "Save"}
               </button>
-              <button type="button" className="btn ghost sm" onClick={() => setEditing(false)}>
-                <X style={{ width: 12, height: 12 }} /> Cancel
-              </button>
+              <button type="button" className="btn ghost sm" onClick={() => setEditing(false)}><X style={{ width: 12, height: 12 }} /> Cancel</button>
             </div>
           </form>
         </td>
@@ -334,15 +340,18 @@ function SubscriptionRow({
 
   return (
     <tr style={{ borderBottom: "1px solid var(--line)" }}>
+      {showKind && (
+        <td style={{ padding: "12px 16px" }}>
+          <span className="chip" style={{ fontSize: 11, textTransform: "capitalize" }}>{s.kind}</span>
+        </td>
+      )}
       <td style={{ padding: "12px 16px" }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
           {s.label ?? <span style={{ color: "var(--ink-3)" }}>—</span>}
         </div>
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 5 }}>
-            {chips.map((c, i) => (
-              <span key={i} className="chip" style={{ fontSize: 11, color: "var(--ink-2)" }}>{c}</span>
-            ))}
+            {chips.map((c, i) => <span key={i} className="chip" style={{ fontSize: 11, color: "var(--ink-2)" }}>{c}</span>)}
           </div>
         )}
       </td>
@@ -351,62 +360,36 @@ function SubscriptionRow({
           {s.recipients.length === 1 ? s.recipients[0] : `${s.recipients.length} recipients`}
         </span>
       </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span className="chip" style={{ fontSize: 12, textTransform: "capitalize" }}>{s.cadence}</span>
-      </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{s.min_fit_score}</span>
-      </td>
+      <td style={{ padding: "12px 16px" }}><span className="chip" style={{ fontSize: 12, textTransform: "capitalize" }}>{s.cadence}</span></td>
+      <td style={{ padding: "12px 16px" }}><span className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{s.min_fit_score}</span></td>
       <td style={{ padding: "12px 16px" }}>
         <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
           {s.last_sent_at ? timeAgo(s.last_sent_at) : <span style={{ color: "var(--ink-3)" }}>Never</span>}
         </span>
       </td>
       <td style={{ padding: "12px 16px" }}>
-        <span className={`chip ${s.is_active ? "ok" : ""}`} style={{ fontSize: 12 }}>
-          {s.is_active ? "Active" : "Paused"}
-        </span>
+        <span className={`chip ${s.is_active ? "ok" : ""}`} style={{ fontSize: 12 }}>{s.is_active ? "Active" : "Paused"}</span>
       </td>
       <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
-        <form
-          style={{ display: "inline" }}
-          action={(fd) => startSend(async () => { await sendNow(fd); setSentFlash(true); setTimeout(() => setSentFlash(false), 2500); })}
-        >
+        <form style={{ display: "inline" }} action={(fd) => startSend(async () => { await sendNow(fd); setSentFlash(true); setTimeout(() => setSentFlash(false), 2500); })}>
           <input type="hidden" name="id" value={s.id} />
+          <input type="hidden" name="kind" value={s.kind} />
           <button type="submit" className="btn ghost sm" disabled={sendPending} title="Send the current digest now">
-            {sendPending
-              ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
-              : sentFlash
-                ? <Check style={{ width: 13, height: 13, color: "var(--ok, #16a34a)" }} />
-                : <Send style={{ width: 13, height: 13 }} />}
+            {sendPending ? <Loader2 className="spin" style={{ width: 13, height: 13 }} /> : sentFlash ? <Check style={{ width: 13, height: 13, color: "var(--ok, #16a34a)" }} /> : <Send style={{ width: 13, height: 13 }} />}
           </button>
         </form>
-        <button className="btn ghost sm" onClick={() => setEditing(true)} title="Edit">
-          <Pencil style={{ width: 13, height: 13 }} />
-        </button>
-        <form
-          style={{ display: "inline" }}
-          action={(fd) => startToggle(async () => { await toggleSubscription(fd); })}
-        >
+        <button className="btn ghost sm" onClick={() => setEditing(true)} title="Edit"><Pencil style={{ width: 13, height: 13 }} /></button>
+        <form style={{ display: "inline" }} action={(fd) => startToggle(async () => { await toggleSubscription(fd); })}>
           <input type="hidden" name="id" value={s.id} />
           <input type="hidden" name="is_active" value={String(s.is_active)} />
           <button type="submit" className="btn ghost sm" disabled={togglePending} title={s.is_active ? "Pause" : "Activate"}>
-            {togglePending
-              ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
-              : s.is_active
-                ? <PowerOff style={{ width: 13, height: 13 }} />
-                : <Power style={{ width: 13, height: 13 }} />}
+            {togglePending ? <Loader2 className="spin" style={{ width: 13, height: 13 }} /> : s.is_active ? <PowerOff style={{ width: 13, height: 13 }} /> : <Power style={{ width: 13, height: 13 }} />}
           </button>
         </form>
-        <form
-          style={{ display: "inline" }}
-          action={(fd) => startDelete(async () => { await deleteSubscription(fd); })}
-        >
+        <form style={{ display: "inline" }} action={(fd) => startDelete(async () => { await deleteSubscription(fd); })}>
           <input type="hidden" name="id" value={s.id} />
           <button type="submit" className="btn ghost sm" disabled={deletePending} title="Delete">
-            {deletePending
-              ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
-              : <Trash2 style={{ width: 13, height: 13 }} />}
+            {deletePending ? <Loader2 className="spin" style={{ width: 13, height: 13 }} /> : <Trash2 style={{ width: 13, height: 13 }} />}
           </button>
         </form>
       </td>

@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { AwardsClient } from "@/components/awards-client";
+import { SubscriptionsClient, type Subscription } from "@/components/subscriptions-client";
+import { createSubscription, updateSubscription, toggleSubscription, deleteSubscription, sendNow } from "../subscriptions/actions";
+
+const EMAIL_CONFIGURED = process.env.NEXT_PUBLIC_EMAIL_CONFIGURED === "true";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +35,12 @@ export default async function AwardsPage() {
     .order("fit_score", { ascending: false, nullsFirst: false })
     .order("last_scored_at", { ascending: false });
 
+  const { data: awardSubs } = await supabase
+    .schema("orchestration")
+    .from("subscriptions")
+    .select("*")
+    .order("created_at", { ascending: true });
+
   // Dismiss = remove from the radar. Safe: the award_scored ledger keeps the sweep
   // from re-adding it unless its content changes.
   async function dismissAward(formData: FormData) {
@@ -42,5 +52,26 @@ export default async function AwardsPage() {
     revalidatePath("/awards");
   }
 
-  return <AwardsClient awards={(data ?? []) as Award[]} dismissAward={dismissAward} />;
+  return (
+    <>
+      <AwardsClient awards={(data ?? []) as Award[]} dismissAward={dismissAward} />
+      <div className="page" style={{ paddingTop: 0 }}>
+        <div style={{ paddingTop: 24, borderTop: "1px solid var(--line)" }}>
+          <SubscriptionsClient
+            subscriptions={(awardSubs ?? []) as Subscription[]}
+            lockedKind="award"
+            title="Award Digest Subscriptions"
+            intro="Email the award digest (industry recognition + government small business awards) to recipients on a cadence. Manage all subscriptions together on the Subscriptions page."
+            emailConfigured={EMAIL_CONFIGURED}
+            embedded
+            createSubscription={createSubscription}
+            toggleSubscription={toggleSubscription}
+            deleteSubscription={deleteSubscription}
+            updateSubscription={updateSubscription}
+            sendNow={sendNow}
+          />
+        </div>
+      </div>
+    </>
+  );
 }
