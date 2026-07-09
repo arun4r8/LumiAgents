@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { samGovOpportunitySearch, sbirTopicSearch } from "./tools";
+import { sendIncomingWebhookMessage } from "../../../integrations/teams/incoming-webhook";
 
 // ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
 // A notice is re-scored only when the fields that drive its fit score change. We
@@ -94,7 +95,7 @@ export default defineOrchestration({
     // Step 1: Fetch both sources (resilient — one source failing or hitting its
     // budget cap doesn't kill the other), then drop opportunities we've already
     // scored so only net-new items reach the LLM.
-    const { samResults, sbirResults } = await step(ctx, "fetch-both-sources", async () => {
+    const { samResults, sbirResults, samError, sbirError } = await step(ctx, "fetch-both-sources", async () => {
       const [samR, sbirR] = await Promise.allSettled([
         samGovOpportunitySearch(ctx, {
           keywords: input.keywords,
@@ -140,7 +141,38 @@ export default defineOrchestration({
       return {
         samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => changed(o.noticeId, samContentHash(o))) },
         sbirResults: { ...sbirResults, topics: sbirResults.topics.filter((t) => changed(`sbir_${t.topicNumber}`, sbirContentHash(t))) },
+        samError: samR.status === "rejected" ? String(samR.reason) : null,
+        sbirError: sbirR.status === "rejected" ? String(sbirR.reason) : null,
       };
+    });
+
+    // Health alert: a source failure or a suspiciously empty sweep (e.g. an expired
+    // SAM key) — otherwise the run silently "completes" with 0 and no one notices.
+    await step(ctx, "sweep-health-alert", async () => {
+      const samCount = samResults.totalRecords;
+      const sbirCount = sbirResults.totalElements;
+      const issues: string[] = [];
+      if (samError) issues.push(`SAM.gov source FAILED: ${samError.slice(0, 300)}`);
+      else if (samCount === 0) issues.push("SAM.gov returned 0 results (normally ~thousands — likely an API/key issue).");
+      if (sbirError) issues.push(`SBIR source failed: ${sbirError.slice(0, 300)}`);
+      if (issues.length === 0) return { alerted: false };
+
+      const authHint = samError && /\b40[13]\b/.test(samError)
+        ? "\n\nA 401/403 from SAM usually means SAM_GOV_API_KEY expired (SAM rotates keys ~every 90 days). Renew it, then: wrangler secret put SAM_GOV_API_KEY."
+        : "";
+      const text = `⚠️ Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run — SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}`;
+
+      if (!ctx.env.TEAMS_INCOMING_WEBHOOK_URL) {
+        console.warn("[sweep] health alert (no Teams webhook configured):", text);
+        return { alerted: false, reason: "TEAMS_INCOMING_WEBHOOK_URL unset", issues };
+      }
+      try {
+        await sendIncomingWebhookMessage(ctx.env, { title: "Beady sweep health alert", text });
+        return { alerted: true, issues };
+      } catch (e) {
+        console.warn("[sweep] health alert send failed:", e);
+        return { alerted: false, reason: e instanceof Error ? e.message : String(e), issues };
+      }
     });
 
     const totalFound = samResults.opportunities.length + sbirResults.topics.length;
