@@ -66,11 +66,12 @@ function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string,
   };
 }
 
-// report_subscriptions lives in the `orchestration` schema → PostgREST needs the
-// Accept-Profile / Content-Profile headers to reach it.
+// subscriptions lives in the `orchestration` schema → PostgREST needs the
+// Accept-Profile / Content-Profile headers to reach it. Opportunity digests are the
+// kind='opportunity' rows of the unified subscriptions table.
 async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?is_active=eq.true&select=${SUB_COLUMNS}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.opportunity&is_active=eq.true&select=${SUB_COLUMNS}`,
     { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load subscriptions → ${res.status}: ${await res.text()}`);
@@ -80,7 +81,7 @@ async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
 // One subscription by id (for the manual "Send now" path; active or not).
 async function loadSubscriptionById(env: Env, id: string): Promise<Subscription | null> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?id=eq.${id}&select=${SUB_COLUMNS}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.opportunity&select=${SUB_COLUMNS}`,
     { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load subscription ${id} → ${res.status}: ${await res.text()}`);
@@ -90,7 +91,7 @@ async function loadSubscriptionById(env: Env, id: string): Promise<Subscription 
 
 async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/report_subscriptions?id=eq.${id}`,
+    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
     {
       method: "PATCH",
       headers: sbHeaders(env, { "Content-Profile": "orchestration", Prefer: "return=minimal" }),
