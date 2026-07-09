@@ -50,14 +50,14 @@ export default async function RfiDraftsPage() {
     .order("response_deadline", { ascending: true, nullsFirst: false })
     .limit(60);
 
-  // Trigger a draft: fires cleo/rfi-draft (async) — it lands in rfi_drafts.
+  // Trigger a draft: fires beady/rfi-draft (async) — it lands in rfi_drafts.
   async function generateDraft(formData: FormData) {
     "use server";
     const samNoticeId = formData.get("samNoticeId") as string;
     if (!samNoticeId) throw new Error("Pick an opportunity first.");
     const token = await getToken();
     const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("cleo/rfi-draft")}/run`,
+      `${RUNTIME}/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
