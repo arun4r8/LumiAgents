@@ -16,6 +16,9 @@ import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-rep
 import beadyRfiDraft           from "../../orchestrations/beady/rfi-draft/definition";
 import cleoAwardSweep          from "../../orchestrations/cleo/award-sweep/definition";
 import cleoAwardReport         from "../../orchestrations/cleo/award-report/definition";
+import cleoContentDraft        from "../../orchestrations/cleo/content-draft/definition";
+import cleoContentPlan         from "../../orchestrations/cleo/content-plan/definition";
+import cleoContentNudge        from "../../orchestrations/cleo/content-nudge/definition";
 import deweyKnowledgeSearch    from "../../orchestrations/dewey/knowledge-search/definition";
 import deweyRetagDocument      from "../../orchestrations/dewey/retag-document/definition";
 import deweyKnowledgeInventory from "../../orchestrations/dewey/knowledge-inventory/definition";
@@ -46,6 +49,9 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyRfiDraft          as unknown as AnyOrch),
   reg(cleoAwardSweep         as unknown as AnyOrch),
   reg(cleoAwardReport        as unknown as AnyOrch),
+  reg(cleoContentDraft       as unknown as AnyOrch),
+  reg(cleoContentPlan        as unknown as AnyOrch),
+  reg(cleoContentNudge       as unknown as AnyOrch),
   reg(deweyKnowledgeSearch   as unknown as AnyOrch),
   reg(deweyRetagDocument     as unknown as AnyOrch),
   reg(deweyKnowledgeInventory as unknown as AnyOrch),

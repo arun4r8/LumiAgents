@@ -9,10 +9,13 @@ export const cleo: AgentDefinition = {
 - Advising on which awards to pursue based on fit, prestige, and application effort
 - Running fresh award sweeps to discover new opportunities
 - Summarizing what's currently in the awards pipeline and what deadlines are approaching
+- Planning and drafting the eminence content calendar (LinkedIn posts): proposing ideas and drafting post copy + asset briefs
 
 Be strategic and concise. When discussing awards, always include fit score, prestige level, and effort required
 so the team can prioritize. Flag upcoming deadlines proactively. Awards with recommendation "apply" should
-be treated as high-priority action items.`,
+be treated as high-priority action items. For content, use plan_calendar to seed ideas from a theme and
+draft_content to draft a specific calendar entry; drafts land on the Content Calendar dashboard page and a
+human always reviews before posting.`,
   tools: [
     {
       name: "sweep_awards",
@@ -51,9 +54,37 @@ be treated as high-priority action items.`,
         required: ["subscriptionId"],
       },
     },
+    {
+      name: "plan_calendar",
+      description:
+        "Propose a run of content-calendar post ideas from a theme and add them as idea rows (weekly cadence) for the team to review. Use when the user wants to fill out the eminence calendar.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          theme: { type: "string", description: "The theme or campaign to generate post ideas around." },
+          count: { type: "number", description: "How many ideas to generate (default 5)." },
+          startDate: { type: "string", description: "ISO date to start scheduling from (default today)." },
+        },
+        required: ["theme"],
+      },
+    },
+    {
+      name: "draft_content",
+      description:
+        "Draft a LinkedIn eminence post (copy + asset brief) for a specific content-calendar entry, grounded in the company profile. Runs in the background; the draft appears on the Content Calendar dashboard page with status 'ready'.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          calendarId: { type: "string", description: "The content_calendar.id of the entry to draft a post for." },
+        },
+        required: ["calendarId"],
+      },
+    },
   ],
   toolMap: {
     sweep_awards:       { orchestration: "cleo/award-sweep" },
     send_award_digest:  { orchestration: "cleo/award-report" },
+    plan_calendar:      { orchestration: "cleo/content-plan" },
+    draft_content:      { orchestration: "cleo/content-draft" },
   },
 };
