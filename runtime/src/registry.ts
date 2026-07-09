@@ -13,9 +13,9 @@ import beadyPastPerformanceSeed  from "../../orchestrations/beady/past-performan
 import beadySbirTopicSearch      from "../../orchestrations/beady/sbir-topic-search/definition";
 import beadyOpportunitySweep    from "../../orchestrations/beady/opportunity-sweep/definition";
 import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-report/definition";
+import beadyRfiDraft           from "../../orchestrations/beady/rfi-draft/definition";
 import cleoAwardSweep          from "../../orchestrations/cleo/award-sweep/definition";
 import cleoAwardReport         from "../../orchestrations/cleo/award-report/definition";
-import cleoRfiDraft            from "../../orchestrations/cleo/rfi-draft/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -40,9 +40,9 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadySbirTopicSearch     as unknown as AnyOrch),
   reg(beadyOpportunitySweep   as unknown as AnyOrch),
   reg(beadyOpportunityReport  as unknown as AnyOrch),
+  reg(beadyRfiDraft          as unknown as AnyOrch),
   reg(cleoAwardSweep         as unknown as AnyOrch),
   reg(cleoAwardReport        as unknown as AnyOrch),
-  reg(cleoRfiDraft           as unknown as AnyOrch),
   reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),

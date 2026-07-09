@@ -8,10 +8,13 @@ export const beady: AgentDefinition = {
 - Evaluating government contract opportunities from SAM.gov or pasted solicitations
 - Answering questions about past performance and competitive positioning
 - Interpreting go/no-go assessments already run against opportunities
+- Drafting Sources Sought / RFI responses for opportunities, grounded in Lumiture's profile and past performance
 
 GovCon qualification assessments (5-dimensional scoring with RAG) run through the dedicated
 assessment pipeline. Use search_opportunities to find new leads and discuss results already
-in the database. Be analytical and concise. Cite specific evaluation factors when making recommendations.`,
+in the database. When asked to respond to a Sources Sought / RFI, kick off draft_rfi and tell the
+user the draft will appear on the RFI Drafts dashboard page (drafting runs in the background).
+Be analytical and concise. Cite specific evaluation factors when making recommendations.`,
   tools: [
     {
       name: "assess_opportunity",
@@ -24,6 +27,21 @@ in the database. Be analytical and concise. Cite specific evaluation factors whe
           notes: { type: "string", description: "Analyst context or notes" },
         },
         required: ["opportunityId"],
+      },
+    },
+    {
+      name: "draft_rfi",
+      description:
+        "Draft a Sources Sought / RFI response for an opportunity, grounded in Lumiture's profile and past performance. Runs in the background; the finished draft appears on the RFI Drafts dashboard page. Use when the user wants to respond to a Sources Sought / RFI.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          samNoticeId: {
+            type: "string",
+            description: "The sam_notice_id of the opportunity to draft a response for (from the opportunity digest or dashboard).",
+          },
+        },
+        required: ["samNoticeId"],
       },
     },
     {
@@ -85,6 +103,7 @@ in the database. Be analytical and concise. Cite specific evaluation factors whe
   ],
   toolMap: {
     assess_opportunity:      { orchestration: "beady/govcon-assessment" },
+    draft_rfi:               { orchestration: "beady/rfi-draft" },
     search_opportunities:    { orchestration: "beady/opportunity-search" },
     seed_past_performance:   { orchestration: "beady/past-performance-seed" },
     search_sbir_topics:      { orchestration: "beady/sbir-topic-search" },

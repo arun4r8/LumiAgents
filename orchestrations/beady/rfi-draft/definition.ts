@@ -36,11 +36,11 @@ async function sbSelect<T = Record<string, unknown>>(env: Env, path: string): Pr
 // ─── Orchestration ─────────────────────────────────────────────────────────────
 
 export default defineOrchestration({
-  name: "cleo/rfi-draft",
+  name: "beady/rfi-draft",
   version: 1,
   triggerMode: "agent",
   description:
-    "Draft a Sources Sought / RFI response for an opportunity, grounded in Lumiture's profile and past performance. Triggered by Cleo or the dashboard; the draft lands in rfi_drafts.",
+    "Draft a Sources Sought / RFI response for an opportunity, grounded in Lumiture's profile and past performance. Triggered by Beady or the dashboard; the draft lands in rfi_drafts.",
   inputSchema,
   outputSchema,
   access: {

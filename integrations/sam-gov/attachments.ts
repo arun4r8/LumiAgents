@@ -3,7 +3,7 @@ import { pdfToText } from "../anthropic/govcon";
 
 // Fetch the full notice text for a SAM opportunity — its description plus the text
 // of any PDF attachments (the RFI itself, where the specific questions live). Used
-// by cleo/rfi-draft so the response can answer the notice's actual questions.
+// by beady/rfi-draft so the response can answer the notice's actual questions.
 // Best-effort: returns "" if nothing is retrievable; non-PDF attachments (e.g. docx)
 // are skipped for now.
 
