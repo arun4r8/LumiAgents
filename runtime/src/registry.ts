@@ -16,6 +16,9 @@ import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-rep
 import beadyRfiDraft           from "../../orchestrations/beady/rfi-draft/definition";
 import cleoAwardSweep          from "../../orchestrations/cleo/award-sweep/definition";
 import cleoAwardReport         from "../../orchestrations/cleo/award-report/definition";
+import deweyKnowledgeSearch    from "../../orchestrations/dewey/knowledge-search/definition";
+import deweyRetagDocument      from "../../orchestrations/dewey/retag-document/definition";
+import deweyKnowledgeInventory from "../../orchestrations/dewey/knowledge-inventory/definition";
 import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/definition";
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
@@ -43,6 +46,9 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyRfiDraft          as unknown as AnyOrch),
   reg(cleoAwardSweep         as unknown as AnyOrch),
   reg(cleoAwardReport        as unknown as AnyOrch),
+  reg(deweyKnowledgeSearch   as unknown as AnyOrch),
+  reg(deweyRetagDocument     as unknown as AnyOrch),
+  reg(deweyKnowledgeInventory as unknown as AnyOrch),
   reg(moneyDataAnalyst         as unknown as AnyOrch),
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),

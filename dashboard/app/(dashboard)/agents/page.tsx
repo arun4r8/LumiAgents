@@ -72,6 +72,18 @@ export const AGENTS: AgentMeta[] = [
       "Which open government small business awards are high-prestige?",
     ],
   },
+  {
+    slug: "dewey",
+    name: "Dewey",
+    emoji: "📚",
+    category: "Knowledge",
+    description: "Steward of the shared knowledge base — cited answers, curation, and sensitivity tagging.",
+    suggestedPrompts: [
+      "What do we know about our past performance on cloud migrations?",
+      "Give me an inventory of the knowledge base",
+      "Lock the FY25 financial model to restricted",
+    ],
+  },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
