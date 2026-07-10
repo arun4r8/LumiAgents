@@ -12,6 +12,10 @@ export interface Env {
   JIRA_EMAIL: string;
   JIRA_API_TOKEN: string;
   SAM_GOV_API_KEY: string;
+  // Override for the DoD SBIR/STTR topics API base. The portal moved from
+  // dodsbirsttr.mil → www.defensesbirsttr.mil; this lets us re-point without a redeploy
+  // if the endpoint shifts again. Unset → the built-in default is used.
+  SBIR_API_BASE?: string;
   ENVIRONMENT: string;
   // Comma-separated CORS allowlist (dashboard origin). Unset → CORS stays "*".
   ALLOWED_ORIGINS?: string;
