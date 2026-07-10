@@ -21,6 +21,7 @@ import {
   Trophy,
   FileSignature,
   CalendarDays,
+  CalendarClock,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
 
@@ -48,6 +49,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/subscriptions",  label: "Subscriptions",   icon: <Mail /> },
     { href: "/reports",        label: "Reports",         icon: <Mail /> },
     { href: "/awards",         label: "Awards",          icon: <Trophy /> },
+    { href: "/industry-days",  label: "Industry Days",   icon: <CalendarClock /> },
     { href: "/rfi-drafts",     label: "RFI Drafts",      icon: <FileSignature /> },
     { href: "/content-calendar", label: "Content Calendar", icon: <CalendarDays /> },
     { href: "/memory",         label: "Memory",          icon: <Brain /> },
