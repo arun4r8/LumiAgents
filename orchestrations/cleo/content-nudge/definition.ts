@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
-import { sendIncomingWebhookMessage } from "../../../integrations/teams/incoming-webhook";
+import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
 
 // Daily nudge: surface content-calendar posts due soon that aren't drafted yet, so the
 // calendar chases the team instead of sitting passive. Posts a Teams alert; degrades
@@ -57,19 +57,12 @@ export default defineOrchestration({
         .slice(0, 15)
         .map((d) => `- ${d.release_date ?? "no date"} · ${d.topic} (${d.status})`)
         .join("\n");
-      const text = `🗓️ Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due within ${withinDays} days still not drafted:\n\n${lines}\n\nDraft them with Cleo from the Content Calendar page.`;
+      const text = `Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due within ${withinDays} days still not drafted:\n\n${lines}\n\nDraft them with Cleo from the Content Calendar page.`;
 
-      if (!env.TEAMS_INCOMING_WEBHOOK_URL) {
-        console.warn("[content-nudge] due posts, no Teams webhook:", text);
-        return false;
-      }
-      try {
-        await sendIncomingWebhookMessage(env, { title: "Content calendar nudge", text });
-        return true;
-      } catch (e) {
-        console.warn("[content-nudge] alert send failed:", e);
-        return false;
-      }
+      // No content-specific subscriber list — notify all active digest subscribers.
+      const to = await subscriptionRecipients(env);
+      const result = await sendAlertEmail(env, { to, subject: `🗓️ Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due soon`, text });
+      return result.sent;
     });
 
     return { dueCount: due.length, alerted };
