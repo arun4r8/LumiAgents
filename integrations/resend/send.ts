@@ -5,7 +5,7 @@ import type { Env } from "../../runtime/src/types";
 // missing key never breaks the report run.
 export async function sendEmail(
   env: Env,
-  opts: { to: string[]; subject: string; html: string },
+  opts: { to: string[]; subject: string; html: string; from?: string },
 ): Promise<{ sent: boolean; id?: string; error?: string }> {
   if (!env.RESEND_API_KEY) return { sent: false, error: "RESEND_API_KEY not set" };
   if (opts.to.length === 0) return { sent: false, error: "no recipients" };
@@ -17,7 +17,7 @@ export async function sendEmail(
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: env.RESEND_FROM ?? "Beady <onboarding@resend.dev>",
+        from: opts.from ?? env.RESEND_FROM ?? "LumiAgents <onboarding@resend.dev>",
         to: opts.to,
         subject: opts.subject,
         html: opts.html,

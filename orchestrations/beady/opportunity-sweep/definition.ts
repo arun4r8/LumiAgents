@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { samGovOpportunitySearch, sbirTopicSearch } from "./tools";
 import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
 // A notice is re-scored only when the fields that drive its fit score change. We
@@ -173,7 +174,7 @@ export default defineOrchestration({
       // Alert the people subscribed to the opportunity digest — they're the ones a
       // broken sweep affects.
       const to = await subscriptionRecipients(ctx.env, "opportunity");
-      const result = await sendAlertEmail(ctx.env, { to, subject: "⚠️ Beady sweep health alert", text });
+      const result = await sendAlertEmail(ctx.env, { to, subject: "⚠️ Beady sweep health alert", text, from: senderFor(ctx.env, "beady") });
       return { alerted: result.sent, recipients: result.recipients, reason: result.error, issues };
     });
 

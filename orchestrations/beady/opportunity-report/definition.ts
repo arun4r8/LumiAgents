@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { sendEmail } from "../../../integrations/resend/send";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -327,7 +328,7 @@ export default defineOrchestration({
         }
 
         const { subject, html } = renderEmail(sub, opps, { manual });
-        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html });
+        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html, from: senderFor(ctx.env, "beady") });
 
         // Only advance last_sent_at on a real send — a failed/disabled send is
         // retried next run rather than silently dropping these opportunities.

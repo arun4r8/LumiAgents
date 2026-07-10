@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { sendEmail } from "./tools";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -280,7 +281,7 @@ export default defineOrchestration({
         }
 
         const { subject, html } = renderEmail(sub, awards, { manual });
-        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html });
+        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html, from: senderFor(ctx.env, "cleo") });
 
         if (result.sent) {
           await markSent(ctx.env, sub.id, sentAt);
