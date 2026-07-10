@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { samGovOpportunitySearch, sbirTopicSearch } from "./tools";
-import { sendIncomingWebhookMessage } from "../../../integrations/teams/incoming-webhook";
+import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
 
 // ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
 // A notice is re-scored only when the fields that drive its fit score change. We
@@ -151,28 +151,30 @@ export default defineOrchestration({
     await step(ctx, "sweep-health-alert", async () => {
       const samCount = samResults.totalRecords;
       const sbirCount = sbirResults.totalElements;
+
+      // Only SAM problems are actionable and alert-worthy. SBIR is a known-degraded
+      // external source (the DoD portal moved behind Akamai bot-protection); we record
+      // its status in this step but don't email about it every run. Re-enable SBIR
+      // alerting once a working SBIR source is restored.
       const issues: string[] = [];
       if (samError) issues.push(`SAM.gov source FAILED: ${samError.slice(0, 300)}`);
       else if (samCount === 0) issues.push("SAM.gov returned 0 results (normally ~thousands — likely an API/key issue).");
-      if (sbirError) issues.push(`SBIR source failed: ${sbirError.slice(0, 300)}`);
-      if (issues.length === 0) return { alerted: false };
+
+      if (issues.length === 0) {
+        return { alerted: false, samCount, sbirCount, sbirError: sbirError ?? null };
+      }
 
       const authHint = samError && /\b40[13]\b/.test(samError)
         ? "\n\nA 401/403 from SAM usually means SAM_GOV_API_KEY expired (SAM rotates keys ~every 90 days). Renew it, then: wrangler secret put SAM_GOV_API_KEY."
         : "";
-      const text = `⚠️ Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run — SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}`;
+      const sbirNote = sbirError ? "\n\n(SBIR is separately unavailable — known external issue; not alerting on it.)" : "";
+      const text = `Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run — SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}${sbirNote}`;
 
-      if (!ctx.env.TEAMS_INCOMING_WEBHOOK_URL) {
-        console.warn("[sweep] health alert (no Teams webhook configured):", text);
-        return { alerted: false, reason: "TEAMS_INCOMING_WEBHOOK_URL unset", issues };
-      }
-      try {
-        await sendIncomingWebhookMessage(ctx.env, { title: "Beady sweep health alert", text });
-        return { alerted: true, issues };
-      } catch (e) {
-        console.warn("[sweep] health alert send failed:", e);
-        return { alerted: false, reason: e instanceof Error ? e.message : String(e), issues };
-      }
+      // Alert the people subscribed to the opportunity digest — they're the ones a
+      // broken sweep affects.
+      const to = await subscriptionRecipients(ctx.env, "opportunity");
+      const result = await sendAlertEmail(ctx.env, { to, subject: "⚠️ Beady sweep health alert", text });
+      return { alerted: result.sent, recipients: result.recipients, reason: result.error, issues };
     });
 
     const totalFound = samResults.opportunities.length + sbirResults.topics.length;

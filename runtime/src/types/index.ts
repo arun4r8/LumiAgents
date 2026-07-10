@@ -16,6 +16,9 @@ export interface Env {
   // dodsbirsttr.mil → www.defensesbirsttr.mil; this lets us re-point without a redeploy
   // if the endpoint shifts again. Unset → the built-in default is used.
   SBIR_API_BASE?: string;
+  // Comma-separated recipients for operational failure alerts (sweep health,
+  // content-calendar nudge). Sent via Resend. Unset → alerts are logged, not emailed.
+  ALERT_EMAIL?: string;
   ENVIRONMENT: string;
   // Comma-separated CORS allowlist (dashboard origin). Unset → CORS stays "*".
   ALLOWED_ORIGINS?: string;
