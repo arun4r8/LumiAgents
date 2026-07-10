@@ -14,6 +14,7 @@ import beadySbirTopicSearch      from "../../orchestrations/beady/sbir-topic-sea
 import beadyOpportunitySweep    from "../../orchestrations/beady/opportunity-sweep/definition";
 import beadyOpportunityReport   from "../../orchestrations/beady/opportunity-report/definition";
 import beadyRfiDraft           from "../../orchestrations/beady/rfi-draft/definition";
+import beadyIndustryDaySweep   from "../../orchestrations/beady/industry-day-sweep/definition";
 import cleoAwardSweep          from "../../orchestrations/cleo/award-sweep/definition";
 import cleoAwardReport         from "../../orchestrations/cleo/award-report/definition";
 import cleoContentDraft        from "../../orchestrations/cleo/content-draft/definition";
@@ -47,6 +48,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyOpportunitySweep   as unknown as AnyOrch),
   reg(beadyOpportunityReport  as unknown as AnyOrch),
   reg(beadyRfiDraft          as unknown as AnyOrch),
+  reg(beadyIndustryDaySweep  as unknown as AnyOrch),
   reg(cleoAwardSweep         as unknown as AnyOrch),
   reg(cleoAwardReport        as unknown as AnyOrch),
   reg(cleoContentDraft       as unknown as AnyOrch),

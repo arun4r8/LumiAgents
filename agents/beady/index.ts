@@ -45,6 +45,18 @@ Be analytical and concise. Cite specific evaluation factors when making recommen
       },
     },
     {
+      name: "find_industry_days",
+      description:
+        "Discover upcoming government agency industry days / vendor-outreach / small-business matchmaking events (SAM.gov Special Notices + web), scored for relevance to Lumiture. Runs in the background; results land on the Industry Days dashboard page. Use when the user wants to find events to attend.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          minScore: { type: "number", description: "Minimum relevance score to keep (1-10, default 4)." },
+          postedWithinDays: { type: "number", description: "SAM: notices posted in the last N days (default 90)." },
+        },
+      },
+    },
+    {
       name: "search_opportunities",
       description: "Search SAM.gov for active contract opportunities.",
       inputSchema: {
@@ -104,6 +116,7 @@ Be analytical and concise. Cite specific evaluation factors when making recommen
   toolMap: {
     assess_opportunity:      { orchestration: "beady/govcon-assessment" },
     draft_rfi:               { orchestration: "beady/rfi-draft" },
+    find_industry_days:      { orchestration: "beady/industry-day-sweep" },
     search_opportunities:    { orchestration: "beady/opportunity-search" },
     seed_past_performance:   { orchestration: "beady/past-performance-seed" },
     search_sbir_topics:      { orchestration: "beady/sbir-topic-search" },
