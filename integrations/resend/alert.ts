@@ -38,7 +38,7 @@ export async function subscriptionRecipients(env: Env, kind?: "opportunity" | "a
 
 export async function sendAlertEmail(
   env: Env,
-  opts: { to: string[]; subject: string; text: string },
+  opts: { to: string[]; subject: string; text: string; from?: string },
 ): Promise<{ sent: boolean; recipients: number; error?: string }> {
   const to = [...new Set([...opts.to.map((e) => e.trim().toLowerCase()), ...envRecipients(env)])].filter(Boolean);
   if (to.length === 0) {
@@ -50,6 +50,6 @@ export async function sendAlertEmail(
 <hr style="border:none;border-top:1px solid #eee;margin:16px 0">
 <p style="font-size:12px;color:#888">Automated alert from LumiAgents.</p>
 </div>`;
-  const r = await sendEmail(env, { to, subject: opts.subject, html });
+  const r = await sendEmail(env, { to, subject: opts.subject, html, ...(opts.from ? { from: opts.from } : {}) });
   return { sent: r.sent, recipients: to.length, ...(r.error ? { error: r.error } : {}) };
 }

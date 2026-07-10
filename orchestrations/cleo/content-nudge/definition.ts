@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // Daily nudge: surface content-calendar posts due soon that aren't drafted yet, so the
 // calendar chases the team instead of sitting passive. Posts a Teams alert; degrades
@@ -61,7 +62,7 @@ export default defineOrchestration({
 
       // No content-specific subscriber list — notify all active digest subscribers.
       const to = await subscriptionRecipients(env);
-      const result = await sendAlertEmail(env, { to, subject: `🗓️ Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due soon`, text });
+      const result = await sendAlertEmail(env, { to, subject: `🗓️ Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due soon`, text, from: senderFor(env, "cleo") });
       return result.sent;
     });
 
