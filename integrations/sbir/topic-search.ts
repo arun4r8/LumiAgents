@@ -66,8 +66,19 @@ interface RawSbirPage {
 }
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
+// The DoD SBIR/STTR Topics portal migrated from dodsbirsttr.mil to
+// www.defensesbirsttr.mil — the old apex's DNS A record was pulled, so requests to it
+// fail to resolve. The new host sits behind Akamai, which blocks non-browser clients,
+// so we send browser-like headers. Overridable via SBIR_API_BASE (no redeploy needed
+// if the endpoint shifts again).
+const DEFAULT_BASE = "https://www.defensesbirsttr.mil/topics-app/api/public";
 
-const BASE = "https://dodsbirsttr.mil/topics-app/api/public";
+const BROWSER_HEADERS: Record<string, string> = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+};
 
 // ─── Tool ─────────────────────────────────────────────────────────────────────
 
@@ -92,9 +103,13 @@ export const sbirTopicSearch = defineTool({
       params.set("component", input.component.join(","));
     }
 
-    const url = `${BASE}/topics?${params.toString()}`;
+    const base = ctx.env.SBIR_API_BASE ?? DEFAULT_BASE;
+    const url = `${base}/topics?${params.toString()}`;
     const res = await ctx.fetch(url, {
-      headers: { Accept: "application/json" },
+      headers: {
+        ...BROWSER_HEADERS,
+        Referer: `${base.replace(/\/topics-app\/.*/, "/topics-app/")}`,
+      },
     });
 
     if (!res.ok) {
@@ -121,8 +136,8 @@ export const sbirTopicSearch = defineTool({
         topicStatus: t.topicStatus ?? input.topicStatus,
         abstract: (t.abstract ?? t.description ?? null)?.slice(0, 800) ?? null,
         sourceUrl: topicNumber
-          ? `https://dodsbirsttr.mil/topics-app/?topiccode=${topicNumber}`
-          : "https://dodsbirsttr.mil/topics-app/",
+          ? `https://www.defensesbirsttr.mil/topics-app/?topiccode=${topicNumber}`
+          : "https://www.defensesbirsttr.mil/topics-app/",
       };
     });
 
