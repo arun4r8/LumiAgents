@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
-import { CalendarDays, Sparkles, Loader2, Trash2, Copy, Check, ChevronDown, ChevronRight, Plus, Wand2, Pencil } from "lucide-react";
+import { Fragment, useRef, useState, useTransition } from "react";
+import { CalendarDays, Sparkles, Loader2, Trash2, Copy, Check, ChevronDown, ChevronRight, Plus, Wand2, Pencil, Upload } from "lucide-react";
 import type { CalendarEntry } from "@/app/(dashboard)/content-calendar/page";
 
 interface Props {
@@ -12,6 +12,7 @@ interface Props {
   deleteEntry: (formData: FormData) => Promise<void>;
   draftWithCleo: (formData: FormData) => Promise<void>;
   planWithCleo: (formData: FormData) => Promise<void>;
+  importCsv: (formData: FormData) => Promise<{ imported: number; skipped: number }>;
 }
 
 const STATUSES = ["idea", "drafting", "ready", "scheduled", "posted"] as const;
@@ -39,7 +40,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function ContentCalendarClient({
-  entries, createEntry, updateEntry, setStatus, deleteEntry, draftWithCleo, planWithCleo,
+  entries, createEntry, updateEntry, setStatus, deleteEntry, draftWithCleo, planWithCleo, importCsv,
 }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
@@ -47,7 +48,28 @@ export function ContentCalendarClient({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.set("file", file);
+    setError(null); setImportMsg(null);
+    startTransition(async () => {
+      try {
+        const r = await importCsv(fd);
+        setImportMsg(`Imported ${r.imported} row${r.imported === 1 ? "" : "s"}${r.skipped ? ` · ${r.skipped} skipped (no topic)` : ""}.`);
+        setTimeout(() => setImportMsg(null), 8000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Import failed");
+      } finally {
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    });
+  }
 
   function run(fd: FormData, action: (f: FormData) => Promise<void>, after?: () => void) {
     setError(null);
@@ -77,6 +99,10 @@ export function ContentCalendarClient({
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleImport} style={{ display: "none" }} />
+          <button className="btn sm" onClick={() => fileRef.current?.click()} disabled={pending} title="Import from a spreadsheet CSV export">
+            {pending ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV
+          </button>
           <button className="btn sm" onClick={() => { setShowPlan((v) => !v); setShowAdd(false); }}>
             <Wand2 size={14} /> Plan with Cleo
           </button>
@@ -90,8 +116,11 @@ export function ContentCalendarClient({
         The eminence plan as a living calendar. Add posts, or have Cleo propose a run of ideas from a theme.
         Cleo drafts the post copy + asset brief for any entry (grounded in the company profile) — the draft lands
         here with status <b>ready</b>. A human always reviews before posting; nothing publishes automatically.
+        Or <b>Import CSV</b> from the team's planning spreadsheet (export to CSV first) — rows sync in and
+        re-importing an edited sheet updates them without touching existing drafts.
       </p>
 
+      {importMsg && <div className="chip ok" style={{ marginBottom: 12 }}>{importMsg}</div>}
       {error && <div className="chip" style={{ color: "var(--danger)", marginBottom: 12 }}>{error}</div>}
 
       {showPlan && (

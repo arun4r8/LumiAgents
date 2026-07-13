@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ContentCalendarClient } from "@/components/content-calendar-client";
+import { mapContentCsv } from "@/lib/content-csv";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +145,24 @@ export default async function ContentCalendarPage() {
     revalidatePath("/content-calendar");
   }
 
+  // Import CSV (from the team's planning spreadsheet). Idempotent via source_key —
+  // re-uploading an edited sheet updates rows; existing drafts/status are preserved
+  // (they aren't in the upsert payload).
+  async function importCsv(formData: FormData): Promise<{ imported: number; skipped: number }> {
+    "use server";
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) throw new Error("Choose a CSV file to import.");
+    const text = await file.text();
+    const { rows, skipped } = mapContentCsv(text, new Date().getFullYear());
+    if (rows.length === 0) throw new Error("No rows found. The CSV needs a header row with at least a Topic column.");
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("content_calendar").upsert(rows, { onConflict: "source_key" });
+    if (error) throw new Error(error.message);
+    revalidatePath("/content-calendar");
+    return { imported: rows.length, skipped };
+  }
+
   return (
     <ContentCalendarClient
       entries={(entries ?? []) as CalendarEntry[]}
@@ -153,6 +172,7 @@ export default async function ContentCalendarPage() {
       deleteEntry={deleteEntry}
       draftWithCleo={draftWithCleo}
       planWithCleo={planWithCleo}
+      importCsv={importCsv}
     />
   );
 }
