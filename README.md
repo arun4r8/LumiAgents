@@ -1,6 +1,6 @@
 # LumiAgents
 
-Agent orchestration platform built on Cloudflare Workers and Supabase. Four AI agents (Angie, Beady, Patch, Money) expose company workflows as typed, auditable, resumable orchestrations through a Next.js dashboard.
+Agent orchestration platform built on Cloudflare Workers and Supabase. Six AI agents (Angie, Beady, Cleo, Dewey, Patch, Money) expose company workflows as typed, auditable, resumable orchestrations through a Next.js dashboard.
 
 ## Architecture
 
@@ -9,23 +9,28 @@ Agent orchestration platform built on Cloudflare Workers and Supabase. Four AI a
 | **Dashboard** | Next.js → Cloudflare Workers | Ops + end-user interface: trigger runs, monitor, approve |
 | **Runtime** | Cloudflare Workers + Workflows | Orchestration engine: step runner, LLM calls, retries, cron |
 | **Data** | Supabase (Postgres + RLS) | Runs, steps, artifacts, domain tables; auth backbone |
-| **Integrations** | n8n webhooks + direct APIs | External systems wrapped as typed, idempotent tools |
+| **Integrations** | Direct API wrappers (legacy n8n webhooks being phased out) | External systems wrapped as typed, idempotent tools |
 
-The runtime routes agent chat requests to per-agent Workers via Cloudflare Service Bindings. Each agent runs as its own Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) so metrics, logs, and deploys are isolated.
+The runtime routes agent chat requests via `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. Four agents — Angie, Beady, Patch, Money — run as their own Cloudflare Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) reached over a Service Binding, so their metrics, logs, and deploys are isolated. Cleo and Dewey have no dedicated Worker: they run inline inside `lumiagents-runtime` via the fallback path (`if (workerBinding) {...} else { runAgentChat(...) }`).
 
 ```
 Dashboard → lumiagents-runtime (gateway + orchestrations + cron)
-                ↓ Service Bindings
-     lumiagents-angie  lumiagents-beady  lumiagents-patch  lumiagents-money
+                ↓ Service Bindings          ↳ inline (fallback path)
+     lumiagents-angie  lumiagents-beady      Cleo  Dewey
+     lumiagents-patch  lumiagents-money
 ```
 
 ## Agents
 
+Angie, Beady, Patch, and Money each run as a dedicated Worker; Cleo and Dewey run inline in the runtime (see Architecture above).
+
 | Agent | Domain | Key orchestrations |
 |---|---|---|
-| **Angie** | HR & Recruiting | candidate-sourcing, resume-format, resume-scoring |
-| **Beady** | GovCon BD | opportunity-search, govcon-assessment, past-performance-seed |
-| **Patch** | IT Ops & Knowledge | ticket-ops, staff-request, document-rag |
+| **Angie** | HR & Recruiting | candidate-sourcing, resume-formatting, resume-scoring |
+| **Beady** | GovCon BD (discovery, scoring & response drafting) | opportunity-search, opportunity-sweep (parallel SAM + SBIR), sbir-topic-search, govcon-assessment, past-performance-seed, rfi-draft, industry-day-sweep |
+| **Cleo** | Eminence, awards & content | award-sweep, award-report, content-plan, content-draft |
+| **Dewey** | Knowledge librarian | knowledge-search, retag-document, knowledge-inventory |
+| **Patch** | IT Ops & Knowledge | ticket-ops, staff-request, document-query |
 | **Money** | Finance & Analytics | data-analyst, financial-report |
 
 ## Repo layout
@@ -33,10 +38,10 @@ Dashboard → lumiagents-runtime (gateway + orchestrations + cron)
 ```
 /agents/              — Agent entrypoints and tool definitions
 /orchestrations/      — Workflow definitions, one folder per orchestration
-/integrations/        — Typed wrappers around n8n webhooks and external APIs
+/integrations/        — Typed wrappers around external APIs (and legacy n8n webhooks, being phased out)
 /runtime/             — Cloudflare Worker engine (routes, step runner, LLM primitives)
   src/
-  workers/            — Per-agent wrangler configs (angie, beady, patch, money)
+  workers/            — Wrangler configs for the dedicated agent Workers (angie, beady, patch, money)
 /dashboard/           — Next.js app deployed via opennextjs-cloudflare
 /supabase/
   migrations/         — Forward-only Supabase migrations (canonical location)
