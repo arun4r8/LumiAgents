@@ -1,125 +1,162 @@
 # Integrations Inventory
 
-All external systems touched by the orchestration layer or existing n8n workflows. Last updated: 2026-05-06.
+All external systems touched by the orchestration layer. The n8n migration is complete — the runtime calls these APIs directly from Cloudflare Workers; there are no remaining "call it via n8n" wrappers. Last updated: 2026-07-20.
 
-## Google Gemini (via Google AI / Vertex AI)
-**Credential type in n8n:** `googlePalmApi`  
-**Used by:** GovCon Assessment, Resume Scoring, LumiAnalysis, Agent Beady  
-**Usage:** Chat completions, information extraction, embeddings (text-embedding-gecko)  
-**Auth model:** API key (Google AI Studio) or service account (Vertex AI)  
-**Rate limits:** Gemini 1.5 Pro — 1000 RPM / 1M TPM on paid tier  
-**Sandbox:** Yes — separate API key per environment  
-**Credential owner:** TBD — confirm with Arun  
-**Orchestration layer plan:** Migrate to Anthropic API (`llm_decide` / `llm_extract`). Gemini stays as n8n-internal until flows are migrated. Do not call Gemini directly from Workers.
-
----
-
-## Anthropic API
-**Credential type in n8n:** `anthropicApi`  
-**Used by:** Resume Formatting Automation  
-**Usage:** Claude Sonnet 4.5 — resume formatting agent  
-**Auth model:** API key  
-**Rate limits:** Depends on tier — check console.anthropic.com  
-**Sandbox:** Use a separate API key for dev/staging  
-**Credential owner:** Arun  
-**Orchestration layer plan:** Primary LLM for all `llm_decide` / `llm_extract` calls in Workers. Use `claude-sonnet-4-6` (latest). Always log via `run_steps`.
+## Anthropic API (Claude)
+**Used by:** every LLM decision/extraction/drafting step across all six agents
+**Integration code:** `integrations/anthropic/`
+- `rfi.ts` — Beady's RFI / Sources Sought response drafter (grounded only in the company profile + past-performance records; never invents facts)
+- `content.ts` — Cleo's eminence-calendar content drafter (`draftContentPost`, `planContentIdeas`)
+- `govcon.ts` — the GovCon assessment chain (`extractOpportunityFacts`, `scoreDimension`, `scoreQualification`, `writeExecutiveMemo`) plus `pdfToText` OCR
+- `score-resume.ts` — Angie's resume scoring rubric
+**Models:** default `claude-sonnet-4-6`; `claude-haiku-4-5` for cheaper OCR / summaries / resume scoring
+**Auth model:** API key
+**Env:** `ANTHROPIC_API_KEY`
+**Note:** all LLM calls use tool-use for structured JSON and are logged via `run_steps`.
 
 ---
 
 ## Supabase
-**Credential type in n8n:** `supabaseApi`  
-**Used by:** GovCon Assessment, Resume Scoring, LumiAnalysis, LinkedIn Outreach, Inbound Email  
-**Usage:** Postgres reads/writes, vector store (pgvector), file storage  
-**Auth model:** Service role key (in n8n), anon key + JWT (dashboard)  
-**Project:** `cuaknazkpmwvnkmwtamp` (Lumiture, East US - North Virginia)  
-**Sandbox:** Separate project (`bbvfjykxxgwlkpnggkup`, "Test") exists — use for dev  
-**Rate limits:** Database connection pooling via Supabase — watch for connection exhaustion from Workers  
-**Credential owner:** Arun  
-**Orchestration layer plan:** Workers use service role key (via Wrangler secret). Dashboard uses anon key + user JWT. Never mix.
+**Used by:** the entire platform — runtime persistence, dashboard, RAG + agent memory (pgvector), file storage
+**Usage:** Postgres reads/writes across the `orchestration` and `public` schemas, vector store, storage
+**Auth model:** service role key (runtime, via Wrangler secret), anon key + user JWT (dashboard)
+**Project:** `cuaknazkpmwvnkmwtamp` (Lumiture, East US — North Virginia); separate "Test" project (`bbvfjykxxgwlkpnggkup`) for dev
+**Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (runtime); `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (dashboard); `SUPABASE_JWT_SECRET` (JWT verification)
+**Note:** agents have no DB identity — all runtime queries run as `service_role` and bypass RLS. Knowledge access separation (corpus / sensitivity) is enforced in the retrieval path, not by Postgres roles.
+
+---
+
+## SAM.gov (federal opportunity data)
+**Used by:** Beady — opportunity search/sweep, industry-day sweep, RFI grounding
+**Integration code:** `integrations/sam-gov/`
+- `opportunity-search.ts` — SAM.gov Opportunities API v2. Filters by NAICS, agency, posted-within-days, active-only, and `ptype` codes (`o`=Solicitation, `p`=Presolicitation, `r`=Sources Sought, `k`=Combined Synopsis/Solicitation). The `beady/industry-day-sweep` orchestration queries **Special Notices** directly (`ptype=s`) to find agency industry days.
+- `attachments.ts` — fetches a notice's full text (description + PDF **and** .docx attachment text, where the RFI/Sources-Sought questions actually live) to ground `beady/rfi-draft`. Best-effort; unzips .docx via built-in `DecompressionStream`, PDFs via `pdfToText`.
+**Auth model:** `api_key` query param
+**Rate limits:** free tier, ~1,000 req/day
+**Env:** `SAM_GOV_API_KEY`
+**Note:** the key rotates roughly every 90 days; expiry breaks the Beady sweep and RFI attachment fetch.
+
+---
+
+## SBIR / STTR (DoD topics)
+**Used by:** Beady — `search_sbir_topics` (`beady/sbir-topic-search`)
+**Integration code:** `integrations/sbir/topic-search.ts`
+**Usage:** keyword / component / status search over open DoD SBIR-STTR topics
+**Auth model:** none (public portal); tracked against a daily budget for visibility
+**Env:** `SBIR_API_BASE` (optional override of the API base URL — no redeploy needed if the endpoint shifts again)
+**Migration + outage note:** the DoD SBIR/STTR Topics portal migrated from `dodsbirsttr.mil` → `www.defensesbirsttr.mil`; the old apex's DNS A record was pulled, so the code now targets the new host (default base `https://www.defensesbirsttr.mil/topics-app/api/public`) and sends browser-like headers. **As of 2026-07 the source is externally unavailable to server-side callers:** the new host sits behind Akamai bot-protection (403 to Worker calls) and the SBIR.gov public API is disabled. The integration code is correct but the upstream is down; the sweep health alert deliberately does *not* alert on this known outage.
+
+---
+
+## Tavily (web search)
+**Used by:** Cleo's award sweep and Beady's industry-day sweep (also GovCon incumbent research, D3)
+**Integration code:** `integrations/tavily/search.ts`
+**Usage:** thin wrapper over Tavily `/search` (advanced depth, optional domain include-list)
+**Auth model:** API key
+**Env:** `TAVILY_API_KEY`
+**Note:** degrades gracefully — with no key or on error it returns `[]` so the sweep/assessment still completes.
+
+---
+
+## Resend (transactional email)
+**Used by:** all digests + operational alerts
+**Integration code:** `integrations/resend/`
+- `send.ts` — `sendEmail(env, {to, subject, html, from?})`; degrades gracefully if the key is unset
+- `sender.ts` — `senderFor(env, slug)` resolves a **per-agent `from`** identity (e.g. `Beady <beady@domain>`) by reusing the verified domain from `RESEND_FROM`; falls back to the shared sender if `RESEND_FROM` is unset or still on the `resend.dev` test domain
+- `alert.ts` — `sendAlertEmail` + `subscriptionRecipients(env, kind?)`; failure/health alerts go by email to the **live recipients of the active subscriptions** (plus any `ALERT_EMAIL` addresses)
+**Auth model:** API key
+**Env:** `RESEND_API_KEY`, `RESEND_FROM`, `ALERT_EMAIL` (optional extra alert recipients)
+**Note:** digests (Beady opportunity, Cleo award) and all operational alerts now go over email — Teams is no longer used for alerts.
 
 ---
 
 ## Microsoft Teams
-**Credential type in n8n:** (OAuth, via n8n built-in)  
-**Used by:** Teams Messages & Adaptive Cards  
-**Usage:** Post messages, send adaptive cards  
-**Auth model:** OAuth2 (Microsoft 365 app registration)  
-**Sandbox:** Dev tenant or test channel  
-**Credential owner:** TBD  
-**Orchestration layer plan:** Wrap `POST /teams-message` and `POST /teams-card` as n8n integration tools. Do not call Microsoft Graph directly from Workers until the n8n flow is MIGRATE-LATER.
+**Used by:** two-way chat with agents (bot)
+**Integration code:** `integrations/teams/` — `incoming-webhook.ts`, `bot.ts`, `cards.ts`, `notify.ts`, `base.ts`
+**Usage:**
+- `incoming-webhook.ts` — one-way channel notifications (MessageCard / Adaptive Card). **No longer used for operational alerts** — those moved to email (Resend). Still available for ad-hoc notifications.
+- `bot.ts` — the two-way Bot Framework endpoint (`POST /api/teams/bot`): verifies the JWT, parses the Activity, replies via the Bot Connector. Still live for Teams chat with agents.
+**Auth model:** webhook URL (incoming); Azure Bot app ID + secret (bot)
+**Env:** `TEAMS_INCOMING_WEBHOOK_URL`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`
 
 ---
 
-## Microsoft Outlook
-**Credential type in n8n:** `microsoftOutlookOAuth2Api`  
-**Used by:** Agent Beady (Jira)  
-**Usage:** Email reading/sending  
-**Auth model:** OAuth2  
-**Credential owner:** TBD  
-**Orchestration layer plan:** Via n8n wrapper for now.
+## Apollo.io
+**Used by:** Angie — candidate sourcing (`angie/candidate-sourcing`)
+**Integration code:** `integrations/apollo/` (`people-search.ts`, `base.ts`)
+**Usage:** people search (titles, keywords, locations) → LLM scoring → human approval gate
+**Auth model:** API key
+**Env:** `APOLLO_API_KEY`
 
 ---
 
 ## Jira (Atlassian Cloud)
-**Credential type in n8n:** `jiraSoftwareCloudApi`  
-**Used by:** Agent Beady (Jira)  
-**Usage:** Ticket creation/updates  
-**Auth model:** API token + email  
-**Sandbox:** Jira has a free sandbox tier  
-**Credential owner:** TBD  
-**Orchestration layer plan:** Via n8n wrapper.
+**Used by:** Patch — ticket ops (`patch/ticket-ops`, `patch/staff-request`)
+**Integration code:** `integrations/jira/` (`issues.ts`, `base.ts`)
+**Usage:** create / update / search issues
+**Auth model:** API token + account email
+**Env:** `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_BASE_URL`
 
 ---
 
 ## GitHub
-**Credential type in n8n:** `githubApi`  
-**Used by:** Agent Beady (Jira)  
-**Usage:** TBD (likely PR/issue linking)  
-**Auth model:** Personal access token or GitHub App  
-**Credential owner:** TBD  
-**Orchestration layer plan:** Via n8n wrapper.
+**Used by:** Patch — Obsidian vault sync into the RAG knowledge base (`patch/vault-sync`)
+**Integration code:** `integrations/github/` (`files.ts`, `base.ts`)
+**Usage:** read repo file trees / contents (blob SHAs detect unchanged files); triggered by a signed GitHub webhook
+**Auth model:** personal access token / GitHub App
+**Env:** `GITHUB_API_TOKEN`, `GITHUB_WEBHOOK_SECRET` (signed webhook verification)
 
 ---
 
-## LinkedIn
-**Used by:** LinkedIn Recruiter + Daily Autonomous Outreach  
-**Usage:** Search, profile scraping, outreach  
-**Auth model:** Session cookies / unofficial API (fragile — confirm approach with Arun)  
-**Rate limits:** Very aggressive — LinkedIn actively blocks automation  
-**Orchestration layer plan:** Treat as high-risk. Keep entirely in n8n. Wrap with conservative rate limiting.
+## Cloudflare Workers AI (embeddings)
+**Used by:** document RAG (`document-rag.ts`), vault sync (`vault-sync.ts`), and agent memory (`memory.ts`)
+**Usage:** `@cf/baai/bge-large-en-v1.5` (1024-dim) embeddings for pgvector retrieval (ivfflat, cosine)
+**Auth model:** bound automatically to the Worker (no key)
+**Env:** none — Workers AI binding
 
 ---
 
 ## Cloudflare Workers / Workflows
-**Used by:** This repo (runtime)  
-**Account:** `arun.rajendra@lumiture.com` (Account ID: `6ddb39faef7414bddd0c0993e293f895`)  
-**Auth:** OAuth via `wrangler login`  
-**Sandbox:** Use Worker environments (`dev`, `staging`, `production`) + separate KV namespaces per env  
+**Used by:** the runtime itself (durable orchestration execution)
+**Account:** `arun.rajendra@lumiture.com` (Account ID: `6ddb39faef7414bddd0c0993e293f895`)
+**Auth:** OAuth via `wrangler login`
+**Environments:** production (root config) + `[env.dev]`; separate KV namespaces per env
 
 ---
 
-## SAM.gov / GovCon API (opportunity data)
-**Considered:** GovSignals AI (govsignals.ai) — evaluated 2026-05-06 and ruled out.  
-GovSignals is a human-facing SaaS with no public API, no webhook output, and no programmatic access path. It cannot be called from a Worker or n8n flow.
-
-**Plan:** Use one of the following for raw opportunity ingestion into Beady's GovCon assessment:
-- **SAM.gov API** (api.sam.gov) — free with API key, 1,000 req/day. Returns structured JSON for solicitations, contract awards, and entity registrations. Auth: `api_key` query param.
-- **GovCon API** (govconapi.com) — $19–$39/month, 24,000 req/day, 59 fields per notice, cleaner JSON than SAM.gov. Auth: API key.
-
-**Orchestration layer plan:** Add a `sam-gov-opportunity.ts` integration wrapper that calls SAM.gov (or GovCon API) to fetch opportunity details by solicitation number. Beady's `govcon-assessment` orchestration will call this before running the LLM scoring chain, rather than requiring the caller to pre-load the data.
-
-**Note:** If Lumiture subscribes to GovSignals for human BD use, any opportunity IDs or notes from a capture manager's session can be manually entered as inputs to the orchestration. GovSignals remains a human tool; the orchestration layer handles the automated scoring independently.
+## Accounting / CRM / HR — **stubs, not implemented**
+The code structure exists (`base.ts` + typed wrappers) but the real API calls are not written; they throw at runtime.
+- `integrations/accounting/` — `invoices.ts`, `budget-lines.ts`, `labor-records.ts` (QuickBooks / Unanet / Deltek). Env: `ACCOUNTING_API_URL`, `ACCOUNTING_API_KEY`. `money/financial-report` will fail on any accounting-data query until one is implemented.
+- `integrations/crm/` — `contracts.ts` (Salesforce / HubSpot / Costpoint). Env: `CRM_API_URL`, `CRM_API_KEY`.
+- `integrations/hr/` — `employees.ts` (BambooHR / Workday / ADP). Env: `HR_API_URL`, `HR_API_KEY`.
 
 ---
 
-## Credential storage plan (Workers)
+## Credential storage (Workers)
 
-| Secret | Wrangler secret name | Used by |
-|--------|---------------------|---------|
-| Anthropic API key | `ANTHROPIC_API_KEY` | Runtime LLM calls |
-| Supabase service role key | `SUPABASE_SERVICE_ROLE_KEY` | Runtime DB writes |
+All runtime secrets are set via `wrangler secret put <name>` — never in `wrangler.toml` or committed files.
+
+| Secret / var | Env name | Used by |
+|--------------|----------|---------|
+| Anthropic API key | `ANTHROPIC_API_KEY` | All LLM calls |
 | Supabase URL | `SUPABASE_URL` | Runtime DB |
-| n8n API key | `N8N_API_KEY` | Integration wrappers (management only) |
-| n8n webhook auth | `N8N_WEBHOOK_SECRET` | Webhook HMAC verification |
-
-All secrets via `wrangler secret put <name>`. Never in `wrangler.toml` or committed files.
+| Supabase service role key | `SUPABASE_SERVICE_ROLE_KEY` | Runtime DB writes |
+| Supabase JWT secret | `SUPABASE_JWT_SECRET` | JWT verification |
+| SAM.gov API key | `SAM_GOV_API_KEY` | Beady opportunity + industry-day sweeps, RFI attachments |
+| SBIR base override | `SBIR_API_BASE` | Beady SBIR topic search (optional) |
+| Tavily API key | `TAVILY_API_KEY` | Award + industry-day sweeps, GovCon D3 |
+| Resend API key | `RESEND_API_KEY` | Digests + alerts |
+| Resend from address | `RESEND_FROM` | Verified sender / per-agent `from` domain |
+| Alert extra recipients | `ALERT_EMAIL` | Optional extra alert recipients |
+| Apollo API key | `APOLLO_API_KEY` | Angie candidate sourcing |
+| Jira email | `JIRA_EMAIL` | Patch tickets |
+| Jira API token | `JIRA_API_TOKEN` | Patch tickets |
+| Jira base URL | `JIRA_BASE_URL` | Patch tickets |
+| GitHub token | `GITHUB_API_TOKEN` | Patch vault sync |
+| GitHub webhook secret | `GITHUB_WEBHOOK_SECRET` | Signed vault-sync webhook |
+| Teams incoming webhook | `TEAMS_INCOMING_WEBHOOK_URL` | Ad-hoc Teams notifications |
+| Teams bot app ID | `TEAMS_BOT_APP_ID` | Two-way Teams bot |
+| Teams bot app secret | `TEAMS_BOT_APP_SECRET` | Two-way Teams bot |
+| Accounting API | `ACCOUNTING_API_URL` / `ACCOUNTING_API_KEY` | Stub (not implemented) |
+| CRM API | `CRM_API_URL` / `CRM_API_KEY` | Stub (not implemented) |
+| HR API | `HR_API_URL` / `HR_API_KEY` | Stub (not implemented) |

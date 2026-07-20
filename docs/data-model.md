@@ -39,7 +39,63 @@ approvals                 -- human-in-the-loop pause records
   expires_at, created_at
 ```
 
-Domain tables (the actual business data your orchestrations operate on) live in their own schema, separate from this telemetry. Don't conflate them.
+Two more engine tables round out the `orchestration` schema:
+
+```
+schedules                 -- meta-cron dispatch table
+  id, orchestration_name, label, cron_expression,
+  is_active, default_input (jsonb), last_run_at, created_at, updated_at
+
+orchestration_access      -- end-user allow-list join table
+  (orchestration ↔ user grants; see RLS below)
+
+agent_configs             -- per-agent LLM model config
+  (resolved at run start into RunContext.model; per-orchestration override)
+```
+
+A meta-cron (`*/5 * * * *`) reads `schedules` and dispatches any row whose `cron_expression` is due, guarded by `last_run_at`. This is how the daily/weekly sweeps, digests, and nudges fire.
+
+## Domain tables
+
+Domain tables (the actual business data the orchestrations operate on) live in their own schemas, separate from this telemetry — don't conflate them. Most sit in `public` (ops dashboard reads them via RLS, gated by `public.is_ops()`); a few internal ledgers and all knowledge/memory tables sit in `orchestration`. Schema is called out per table.
+
+### GovCon (Beady)
+
+- `opportunities` (`public`) — the saved shortlist of SAM.gov + SBIR notices (fit ≥ min score). Key: `sam_notice_id` (raw SAM `noticeId`, or `sbir_<topicNumber>` for SBIR/STTR topics).
+- `orchestration.scored_notices` — dedup ledger of **every** notice the sweep has scored (pass or pursue), so nothing is ever re-scored (re-billed to the LLM). Columns: `notice_id` (PK, matches `opportunities.sam_notice_id`), `source`, `fit_score`, `recommendation`, `scored_at`.
+- `govcon_assessments` (`public`) — 5-dimension go/no-go assessments.
+- `rfi_drafts` (`public`) — Beady's Sources Sought / RFI response drafts (moved here from Cleo). Columns: `id`, `sam_notice_id`, `opportunity_title`, `agency`, `notice_type`, `response_deadline`, `draft_markdown` (NOT NULL), `model`, `created_at`. Grounded in company profile + past performance.
+- `industry_days` (`public`) — government vendor-outreach events discovered from SAM.gov Special Notices (`ptype=s`) + a Tavily web sweep, scored for fit. Columns: `id`, `event_id` (UNIQUE — SAM notice id or `fnv1a(source_url)`), `title`, `agency`, `event_date`, `location`, `format`, `registration_url`, `source` (`sam_gov`|`web`), `source_url`, `description`, `fit_score` (1–10), `fit_reason`, `recommendation` (`attend`|`consider`|`skip`), `last_scored_at`, `created_at`.
+- `industry_day_scored` (`public`) — dedup ledger for the industry-day sweep: `event_id` (PK), `content_hash`, `scored_at`.
+
+### Awards & eminence (Cleo)
+
+- `awards` (`public`) — industry recognition + government small-business award programs from the weekly Tavily sweep. Columns include `award_id` (UNIQUE), `title`, `sponsor`, `category`, `award_type` (`industry`|`government`), `application_deadline`, `nomination_deadline`, `source_url`, `fit_score` (1–10), `fit_reason`, `prestige`, `effort`, `recommendation` (`apply`|`consider`|`skip`), `last_scored_at`.
+- `orchestration.award_scored` — dedup ledger: `award_id` (PK), `content_hash`, `scored_at`.
+- `content_calendar` (`public`) — the eminence plan (LinkedIn posts, etc.) as data. Columns: `id`, `release_date`, `topic` (NOT NULL), `channel` (default `linkedin`), `asset_type`, `asset_ref`, `description`, `draft_markdown` (Cleo's drafted copy + asset brief), `status` (`idea`|`drafting`|`ready`|`scheduled`|`posted`), `owner`, `model`, timestamps, plus `source_key` — a nullable text column with a partial unique index (`WHERE source_key IS NOT NULL`) that makes CSV re-import idempotent (re-uploading an edited sheet updates the same rows instead of duplicating; manual rows leave it NULL). Humans always approve/post — no auto-publish.
+
+### Subscriptions / digests (unified)
+
+- `orchestration.subscriptions` — the **unified** digest table with a `kind` discriminator (`'opportunity'` | `'award'`). Superset shape: common columns (`id`, `user_id`, `label`, `kind`, `cadence` (`daily`|`weekly`), `recipients` (NOT NULL), `min_fit_score` (default 6), `is_active`, `last_sent_at`, timestamps) plus kind-specific filter columns that coexist — opportunity uses `sources` / `agencies` / `set_asides`; award uses `award_types`. Each agent's digest orchestration reads its `kind` and honors per-subscription cadence.
+- `orchestration.report_subscriptions` and `orchestration.award_subscriptions` — **DEPRECATED** legacy tables. Both still exist as a rollback net (`subscriptions` backfilled from them, preserving ids), but all readers now use the unified table. To be dropped in a later migration once the unified path is proven.
+
+### Knowledge / RAG
+
+- `orchestration.orch_documents` + `orchestration.document_chunks` — the shared knowledge corpus (Workers AI `bge-large-en-v1.5`, 1024-dim, ivfflat cosine). `orch_documents` now carries two access-control columns: `corpus` (NOT NULL, default `'shared'`) — either `shared` (every agent reads it) or an agent slug for that agent's private corpus; and `sensitivity` (NOT NULL, default `'internal'`, CHECK `internal|restricted`) — `restricted` never surfaces in agent retrieval unless explicitly requested.
+- Retrieval RPC: `orchestration.match_document_chunks(query_embedding extensions.vector(1024), match_count integer DEFAULT 6, min_similarity float DEFAULT 0.5, allowed_corpora text[] DEFAULT NULL, include_restricted boolean DEFAULT false)`. `allowed_corpora = NULL` means no corpus restriction (ops/dashboard); otherwise it filters `corpus = ANY(allowed_corpora)`. `include_restricted = false` excludes `sensitivity='restricted'`. The RPC returns `corpus` and `sensitivity` alongside each chunk. Because agents all run as `service_role` and bypass RLS, this RPC — not Postgres roles — is where per-agent knowledge access is enforced (each agent passes the corpora it is allowed to read). Note the `vector` type is schema-qualified to `extensions`.
+
+### Agent memory
+
+All in `orchestration`:
+
+- `conversations` — one per (agent, user) thread; `agent_slug`, `user_id`, `external_id` (Teams conversation id), `title`, timestamps, `last_message_at`.
+- `messages` — transcript rows (`conversation_id` FK, `role` (`user`|`assistant`), `content`).
+- `memory_chunks` — semantic recall (`user_id`, `agent_slug`, `conversation_id`, `source_message_id`, `kind` (`turn`|`summary`|`fact`), `content`, `embedding vector(1024)`). Recalled via `orchestration.match_memory(query_embedding, p_user_id, p_agent_slug, …)`, scoped to one (user, agent) inside the SECURITY DEFINER function.
+- `teams_users` — Teams identity → Lumiture user mapping (`teams_user_id` PK, `user_id`, `display_name`).
+
+### Misc
+
+`agent_tasks`, `analyst_uploads`, `api_budget`, `rate_limit` (per-user fixed-window limiter via the `claim_rate_limit` RPC), and the `n8n_call_queue`.
 
 ## Why this shape
 

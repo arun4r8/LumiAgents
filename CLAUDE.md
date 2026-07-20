@@ -15,7 +15,22 @@ If a request would change anything in these documents, stop and surface that to 
 
 ## Mental model in one paragraph
 
-The orchestration layer is **a deterministic workflow engine with LLM-powered decision points embedded in it** — not an agent loop that happens to call workflows. Each orchestration is a typed workflow (inputs, steps, outputs). Most steps are deterministic (call n8n webhook, query Supabase, hit an integration). A few are `llm_decide(prompt, options)` or `llm_extract(prompt, schema)` with structured outputs. The dashboard's chat surface, if/when we build one, is a separate agent loop that *invokes* orchestrations as tools — it does not reimplement them.
+The orchestration layer is **a deterministic workflow engine with LLM-powered decision points embedded in it** — not an agent loop that happens to call workflows. Each orchestration is a typed workflow (inputs, steps, outputs). Most steps are deterministic (call n8n webhook, query Supabase, hit an integration). A few are `llm_decide(prompt, options)` or `llm_extract(prompt, schema)` with structured outputs. The dashboard's chat surface is built as six named agents: each is a separate agent loop that *invokes* orchestrations as tools — it does not reimplement them. The core pattern is **domain table → orchestration → agent tool → dashboard**.
+
+## Agents (six)
+
+Six named agents, each an LLM tool-loop that calls orchestrations. Defined in `/agents/<slug>/`:
+
+- **Angie** — HR & recruiting
+- **Beady** — GovCon business development (discovery, scoring, RFI/Sources-Sought drafting, industry days)
+- **Cleo** — eminence, awards & proposals, content calendar
+- **Dewey** — knowledge librarian; steward of the shared knowledge corpus
+- **Money** — finance & analytics
+- **Patch** — IT ops & knowledge/RAG
+
+**Worker topology:** angie/beady/patch/money each run as their own Cloudflare Worker (reached via Service Bindings from the runtime). Cleo and Dewey run **inline** inside `lumiagents-runtime` — no dedicated worker — via the fallback in `runtime/src/routes/agents.ts`. "Each agent is its own worker" is no longer universally true.
+
+**Knowledge access:** all agents execute as Postgres `service_role` and bypass RLS, so *which agent may read which knowledge* is enforced in the runtime retrieval path (`runtime/src/agents/knowledge-access.ts`), not by Postgres roles. Each agent reads the `shared` corpus plus its own private corpus (by slug); `restricted`-sensitivity documents are ops-only and never returned to an agent. Dewey is the librarian.
 
 ## Stack
 
@@ -28,14 +43,13 @@ The orchestration layer is **a deterministic workflow engine with LLM-powered de
 ## Repo layout
 
 ```
-/orchestrations/<name>/
+/orchestrations/<agent>/<name>/
   definition.ts      # workflow definition (typed)
   tools.ts           # tools this workflow uses
-  prompts/           # llm_decide / llm_extract prompts
-  tests/
+/agents/<slug>/      # the six agents (LLM tool-loops that invoke orchestrations)
 /runtime/            # the engine itself: workflow runner, tool registry, LLM primitives
-/integrations/       # typed wrappers around n8n webhooks and direct integrations
-/db/                 # Supabase migrations, RLS policies, seed data
+/integrations/       # typed wrappers around external integrations (SAM.gov, SBIR, Tavily, Resend, Jira, Apollo, Teams, ...)
+/supabase/           # migrations, RLS policies, seed data
 /dashboard/          # Next.js app
 /docs/
 .claude/

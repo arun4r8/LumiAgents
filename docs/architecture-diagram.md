@@ -15,50 +15,85 @@ flowchart TB
   subgraph Workers["Orchestration Layer · Cloudflare Workers"]
     direction TB
 
-    Worker["HTTP Worker\n/api/* routes"]
+    Worker["lumiagents-runtime\nHTTP gateway · /api/* routes\ncron · orchestration engine"]
 
-    subgraph AngieAgent["Angie · Recruiting"]
-      CS["candidate-sourcing\nApollo + Claude + human approval"]
+    %% Four agents run as their own Worker, reached over a Service Binding
+    %% (AGENT_BINDINGS in runtime/src/routes/agents.ts).
+    subgraph Dedicated["Dedicated agent Workers · Service Binding (AGENT_BINDINGS)"]
+      direction TB
+
+      subgraph AngieAgent["Angie · HR & Recruiting"]
+        CS["candidate-sourcing\nApollo + Claude + human approval"]
+        RS["resume-scoring\nClaude (native)"]
+        RF["resume-formatting\nClaude"]
+      end
+
+      subgraph BeadyAgent["Beady · GovCon BD — discovery · scoring · response drafting"]
+        OS["opportunity-search\nSAM.gov + Claude"]
+        OSW["opportunity-sweep\nparallel SAM.gov + SBIR"]
+        SB["sbir-topic-search\nSBIR.gov + Claude"]
+        GA["govcon-assessment\ngo/no-go, native Claude"]
+        PP["past-performance-seed"]
+        RFI["rfi-draft\nSources Sought / RFI drafting"]
+        IDS["industry-day-sweep\nweb search + Claude"]
+        OR["opportunity-report\ndigest"]
+      end
+
+      subgraph PatchAgent["Patch · IT / Ops / Knowledge"]
+        IT["inbound-triage\nJira + Claude"]
+        TO["ticket-ops\nJira"]
+        SR["staff-request\nJira + HR"]
+        DR["document-rag\ningest + query · vector search + Claude"]
+        VS["vault-sync\nGitHub → RAG index"]
+      end
+
+      subgraph MoneyAgent["Money · Finance"]
+        FR["financial-report\naccounting data + Claude"]
+        DA["data-analyst\nSQL agent + Claude"]
+      end
     end
 
-    subgraph BeadyAgent["Beady · GovCon BD"]
-      OS["opportunity-search\nSAM.gov + Claude"]
-    end
+    %% Cleo and Dewey have no dedicated Worker — they run inline inside
+    %% lumiagents-runtime via the fallback path (else → runAgentChat).
+    subgraph Inline["Inline in lumiagents-runtime · fallback path (no dedicated Worker)"]
+      direction TB
 
-    subgraph PatchAgent["Patch · IT / Ops / Knowledge"]
-      IT["inbound-triage\nJira + Claude"]
-      TO["ticket-ops\nJira"]
-      SR["staff-request\nJira + HR"]
-      DR["document-rag\nvector search + Claude"]
-      VS["vault-sync\nGitHub → RAG index"]
-    end
+      subgraph CleoAgent["Cleo · Eminence, awards & content"]
+        AS["award-sweep\nawards data + Claude"]
+        AR["award-report\ndigest email"]
+        CP["content-plan\ncontent calendar"]
+        CD["content-draft\nClaude"]
+      end
 
-    subgraph MoneyAgent["Money · Finance"]
-      FR["financial-report\naccounting data + Claude"]
-      DA["data-analyst\nSQL agent + Claude"]
+      subgraph DeweyAgent["Dewey · Knowledge librarian"]
+        KS["knowledge-search\ncorpus-scoped retrieval"]
+        RT["retag-document\ncorpus / sensitivity curation"]
+        KI["knowledge-inventory"]
+      end
     end
 
     Workflow["RunOrchestration\nCloudflare Workflows\n(durable, checkpointed)"]
   end
 
-  %% ── n8n Workflows ────────────────────────────────────────────────────────
-  subgraph N8N["n8n · lumiture.app.n8n.cloud"]
-    direction LR
-    GovConFlow["GovCon Qualification\nAssessment\n76 nodes · 5-dim scoring\nGemini + pgvector RAG"]
-    ResumeScore["Resume Scoring\n38 nodes · Gemini"]
-    ResumeFormat["Resume Formatting\n9 nodes · Claude"]
-  end
-
   %% ── Direct Integrations ──────────────────────────────────────────────────
-  subgraph DirectInt["Direct Integrations"]
+  subgraph DirectInt["Direct Integrations · typed API wrappers"]
     direction LR
     ApolloAPI["Apollo.io\npeople search"]
     SAMGovAPI["SAM.gov API\nopportunity data"]
+    SBIRAPI["SBIR.gov API\ntopics + awards"]
+    TavilyAPI["Tavily\nweb search"]
     GitHubAPI["GitHub API\nvault R/W"]
     JiraAPI["Jira\nAtlassian Cloud"]
     TeamsAPI["MS Teams\nwebhook + bot"]
+    ResendAPI["Resend\ndigest email"]
     AnthropicAPI["Anthropic API\nclaude-sonnet-4-6"]
     CFAI["Cloudflare Workers AI\nbge-large-en-v1.5\n(embeddings)"]
+  end
+
+  %% ── Legacy n8n (being phased out) ────────────────────────────────────────
+  subgraph N8N["Legacy n8n · lumiture.app.n8n.cloud (phasing out)"]
+    direction LR
+    LegacyNote["GovCon scoring, resume scoring &\nresume formatting now run natively in-Worker.\nResidual flows drained via n8n_call_queue."]
   end
 
   %% ── Data Layer ───────────────────────────────────────────────────────────
@@ -66,16 +101,20 @@ flowchart TB
     direction TB
 
     subgraph OrchSchema["orchestration.*"]
-      OT["orchestrations\nruns · run_steps\ntool_calls · approvals"]
-      RAG["orch_documents\ndocument_chunks\n(Workers vector RAG)\n+ source_uri for vault upsert"]
+      OT["orchestrations · runs · run_steps\ntool_calls · approvals · schedules"]
+      RAG["orch_documents (corpus + sensitivity)\ndocument_chunks\n(Workers vector RAG — Dewey's shared corpus)\n+ source_uri for vault upsert"]
+      MEM["conversations · messages\nmemory_chunks · teams_users\n(agent memory)"]
+      SUBS["subscriptions · report_subscriptions\naward_subscriptions · award_scored\nscored_notices"]
     end
 
     subgraph PublicSchema["public.*"]
       GovCon["opportunities · assessments\nincumbent_research\npast_performance\ncapability_statements\ncompany_profiles · icp_profiles\nprompt_bank"]
-      N8NVec["past_performance_vt\nopportunity_documents_vt\n(n8n pgvector RAG)"]
+      Awards["awards · content_calendar\nindustry_days · industry_day_scored\nrfi_drafts"]
+      N8NVec["past_performance_vt\nopportunity_documents_vt\n(legacy n8n pgvector RAG)"]
       Resume["resume_jobs\nresume_queue · resume_results\n+ claim_resume_queue RPC\n+ bump_job_progress RPC"]
       People["candidates\nstaff_requests\nemployees"]
       Finance["contracts · budget_lines\ninvoices · labor_records\nindirect_rates"]
+      Budget["api_budget\n(daily sweep caps)"]
     end
   end
 
@@ -84,80 +123,103 @@ flowchart TB
   TeamsUI   -->|"POST /api/teams/bot\nPOST /api/agents/:slug/chat"| Worker
   ObsidianVault -->|"GitHub push webhook\nPOST /api/vault/webhook"| Worker
 
-  %% ── Worker routes → Orchestrations ──────────────────────────────────────
+  %% ── Runtime → agents ─────────────────────────────────────────────────────
+  Worker -->|"Service Binding"| AngieAgent & BeadyAgent & PatchAgent & MoneyAgent
+  Worker -->|"inline runAgentChat()"| CleoAgent & DeweyAgent
   Worker --> Workflow
-  Workflow --> CS
-  Workflow --> OS
+  Workflow --> CS & RS & RF
+  Workflow --> OS & OSW & SB & GA & PP & RFI & IDS & OR
   Workflow --> IT & TO & SR & DR & VS
   Workflow --> FR & DA
-
-  %% ── Agents → n8n ─────────────────────────────────────────────────────────
-  Worker -->|"POST /govcon-assessment-intake"| GovConFlow
-  Worker -->|"POST /<uuid>"| ResumeScore
-  Worker -->|"POST /resume-upload"| ResumeFormat
+  Workflow --> AS & AR & CP & CD
+  Workflow --> KS & RT & KI
 
   %% ── Agents → Direct Integrations ────────────────────────────────────────
-  CS  --> ApolloAPI
-  OS  --> SAMGovAPI
-  VS  --> GitHubAPI
+  CS --> ApolloAPI
+  OS & OSW --> SAMGovAPI
+  OSW & SB --> SBIRAPI
+  IDS & AS --> TavilyAPI
+  VS --> GitHubAPI
   IT & TO & SR --> JiraAPI
+  AR & OR --> ResendAPI
   Worker -->|"bot replies"| TeamsAPI
 
-  CS & OS & IT & SR & FR & DA & DR & VS --> AnthropicAPI
-  DR & VS --> CFAI
-
-  %% ── n8n → Supabase ───────────────────────────────────────────────────────
-  GovConFlow -->|"opportunities · assessments\nincumbent_research\npast_performance_vt"| GovCon
-  GovConFlow --> N8NVec
-  ResumeScore -->|"resume_jobs\nresume_queue · resume_results"| Resume
-  ResumeFormat -->|"Supabase Storage (PDFs)"| Supabase
+  CS & OS & OSW & SB & GA & RFI & IDS & IT & SR & FR & DA & DR & VS & AS & CD & KS --> AnthropicAPI
+  DR & VS & KS --> CFAI
 
   %% ── Workers → Supabase ───────────────────────────────────────────────────
   Worker --> OT
-  DR  --> RAG
-  VS  --> RAG
-  CS  --> People
-  SR  --> People
-  FR  --> Finance
-  DA  -->|"analyst_query RPC"| PublicSchema
+  Worker --> MEM
+  DR & VS & KS & RT & KI --> RAG
+  CS & SR --> People
+  FR --> Finance
+  DA -->|"analyst_query RPC"| PublicSchema
+  OS & OSW & GA & PP --> GovCon
+  AS & CP & CD & RFI --> Awards
+  AR --> SUBS
+  Worker --> Budget
 ```
 
 ---
 
 ## Component inventory
 
-### Active n8n flows (3)
+### Agent hosting
 
-| Flow | Webhook | Workers stub |
-|---|---|---|
-| GovCon Qualification Assessment | `POST /govcon-assessment-intake` + `POST /past-performance-seeder` | `integrations/n8n/govcon-assessment-intake.ts` |
-| Resume Scoring | `POST /<uuid>` | `integrations/n8n/resume-scoring.ts` |
-| Resume Formatting | `POST /resume-upload` | `integrations/n8n/resume-upload.ts` |
+Four agents run as their own Cloudflare Worker, reached over a Service Binding declared in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`): **Angie → `ANGIE_WORKER`**, **Beady → `BEADY_WORKER`**, **Patch → `PATCH_WORKER`**, **Money → `MONEY_WORKER`**. **Cleo** and **Dewey** have no dedicated Worker — chat for those slugs falls through the `else` branch and runs inline in `lumiagents-runtime` via `runAgentChat(...)`. Orchestrations for all six agents execute in the runtime's Workflow engine regardless of where the chat loop runs.
 
-### Registered Workers orchestrations (10)
+### Legacy n8n flows (being phased out)
 
-| Name | Agent | Description |
-|---|---|---|
-| `angie/candidate-sourcing` | Angie | Apollo search → Claude scoring → approval gate → outreach drafts |
-| `beady/opportunity-search` | Beady | SAM.gov search → LLM filtering |
-| `patch/inbound-triage` | Patch | Jira inbound ticket triage |
-| `patch/ticket-ops` | Patch | Jira ticket operations |
-| `patch/staff-request` | Patch | Staff request → Jira issue |
-| `patch/document-rag` (ingest) | Patch | Ingest document into vector RAG |
-| `patch/document-rag` (query) | Patch | RAG query against knowledge base |
-| `patch/vault-sync` | Patch | Obsidian vault → RAG (incremental or full) |
-| `money/financial-report` | Money | Financial report generation |
-| `money/data-analyst` | Money | Natural language SQL analyst |
+n8n is no longer the primary integration mechanism. GovCon scoring, resume scoring, and resume formatting have been reimplemented natively in-Worker (see the `*_native_*` migrations); the dedicated `integrations/n8n/*` stubs have been removed. Any residual n8n traffic is queued through `orchestration.n8n_call_queue` and drained by `runtime/src/utils/n8n-queue-drainer.ts`.
+
+### Registered orchestrations (27 in the code registry + `patch/vault-sync` via DB)
+
+The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in the code registry map — it is registered in the DB and dispatched from the `/api/vault/webhook` route (`runtime/src/routes/vault.ts`).
+
+| Name | Agent | Hosting | Description |
+|---|---|---|---|
+| `angie/candidate-sourcing` | Angie | Worker | Apollo search → Claude scoring → approval gate → outreach drafts |
+| `angie/resume-scoring` | Angie | Worker | Native Claude resume scoring |
+| `angie/resume-formatting` | Angie | Worker | Reformat a resume to the house template |
+| `beady/opportunity-search` | Beady | Worker | SAM.gov search → LLM filtering |
+| `beady/opportunity-sweep` | Beady | Worker | Parallel SAM.gov + SBIR sweep |
+| `beady/sbir-topic-search` | Beady | Worker | SBIR.gov topic search |
+| `beady/govcon-assessment` | Beady | Worker | Native go/no-go assessment |
+| `beady/past-performance-seed` | Beady | Worker | Seed the past-performance corpus |
+| `beady/rfi-draft` | Beady | Worker | Sources Sought / RFI response drafting (moved here from Cleo) |
+| `beady/industry-day-sweep` | Beady | Worker | Industry-day discovery |
+| `beady/opportunity-report` | Beady | Worker | Opportunity digest |
+| `cleo/award-sweep` | Cleo | Inline | Awards discovery |
+| `cleo/award-report` | Cleo | Inline | Award digest email |
+| `cleo/content-plan` | Cleo | Inline | Content-calendar planning |
+| `cleo/content-draft` | Cleo | Inline | Draft calendar content |
+| `cleo/content-nudge` | Cleo | Inline | Content-calendar nudges |
+| `dewey/knowledge-search` | Dewey | Inline | Corpus-scoped knowledge retrieval |
+| `dewey/retag-document` | Dewey | Inline | Re-tag a document's corpus / sensitivity |
+| `dewey/knowledge-inventory` | Dewey | Inline | Corpus inventory |
+| `money/financial-report` | Money | Worker | Financial report generation |
+| `money/data-analyst` | Money | Worker | Natural-language SQL analyst |
+| `patch/inbound-triage` | Patch | Worker | Jira inbound ticket triage |
+| `patch/ticket-ops` | Patch | Worker | Jira ticket operations |
+| `patch/staff-request` | Patch | Worker | Staff request → Jira issue |
+| `patch/document-ingest` | Patch | Worker | Ingest a document into vector RAG |
+| `patch/document-query` | Patch | Worker | RAG query against the knowledge base |
+| `patch/vault-sync` | Patch | Worker (DB-registered) | Obsidian vault → RAG (incremental or full) |
+| `system/memory-maintenance` | System | Runtime | Roll up conversation memory (summaries + facts) |
 
 ### Supabase schema ownership
 
 | Table group | Owner | RLS |
 |---|---|---|
-| `orchestration.*` | Workers runtime | ops + enduser policies |
-| `opportunities`, `assessments`, `incumbent_research` | n8n (writes) + Workers (reads) | ops only |
-| `past_performance_vt`, `opportunity_documents_vt` | n8n exclusively | ops only |
-| `resume_*` | n8n exclusively | ops only |
-| `company_profiles`, `icp_profiles`, `prompt_bank` | n8n exclusively | ops only |
-| `candidates`, `staff_requests` | Workers runtime | ops only |
+| `orchestration.*` (orchestrations, runs, run_steps, tool_calls, approvals, schedules) | Workers runtime | ops + enduser policies |
+| `orch_documents` (corpus + sensitivity), `document_chunks` | Workers runtime (Dewey / Patch) | ops + enduser read |
+| `conversations`, `messages`, `memory_chunks`, `teams_users` | Workers runtime (agent memory) | ops only |
+| `subscriptions`, `report_subscriptions`, `award_subscriptions`, `award_scored`, `scored_notices` | Workers runtime | ops only |
+| `opportunities`, `assessments`, `incumbent_research`, `past_performance` | Workers runtime (native; formerly n8n writes) | ops only |
+| `awards`, `content_calendar`, `industry_days`, `industry_day_scored`, `rfi_drafts` | Workers runtime | ops only |
+| `past_performance_vt`, `opportunity_documents_vt` | legacy n8n pgvector RAG | ops only |
+| `resume_*` | Workers runtime (native scoring; legacy n8n queue draining) | ops only |
+| `company_profiles`, `icp_profiles`, `prompt_bank` | seeded / Workers runtime | ops only |
+| `candidates`, `staff_requests`, `employees` | Workers runtime | ops only |
 | Finance tables | Workers runtime | ops only |
-| `orch_documents`, `document_chunks` | Workers runtime | ops + enduser read |
+| `api_budget` | Workers runtime | ops only |

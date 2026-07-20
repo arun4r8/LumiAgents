@@ -23,7 +23,7 @@ The key architectural bet: **deterministic workflow spine, LLM at decision point
 │  Interface Layer                                     │
 │  Next.js dashboard → Cloudflare Workers              │
 │  Ops surface (runs, logs, approvals, infra)          │
-│  Agent chat (Angie, Beady, Patch, Money)             │
+│  Agent chat (Angie, Beady, Cleo, Dewey, Patch, Money)│
 └──────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -34,6 +34,7 @@ The key architectural bet: **deterministic workflow spine, LLM at decision point
 │  lumiagents-beady     Agent Worker (Service Binding) │
 │  lumiagents-patch     Agent Worker (Service Binding) │
 │  lumiagents-money     Agent Worker (Service Binding) │
+│  (Cleo + Dewey run INLINE inside lumiagents-runtime) │
 │  Cloudflare Workflows  Durable multi-step execution  │
 └──────────────────────────────────────────────────────┘
               │                        │
@@ -239,24 +240,39 @@ Every run is fully observable: you can reconstruct exactly what happened, in wha
 
 ## 6. The Agent Layer
 
-Agents are a **chat interface on top of the orchestration system** — not a parallel system. Each agent is a Cloudflare Worker with a system prompt and a small, typed tool list. When a user sends a message, the agent's LLM decides which tool (if any) to call. Each tool maps directly to an orchestration.
+Agents are a **chat interface on top of the orchestration system** — not a parallel system. Each agent has a system prompt and a small, typed tool list. When a user sends a message, the agent's LLM decides which tool (if any) to call. Each tool maps directly to an orchestration.
 
 ```
-Browser message → Agent Worker (LLM + tool list)
+Browser message → Agent (LLM + tool list)
                          ↓  tool_use
                Runtime dispatches orchestration run
                          ↓
                Cloudflare Workflow executes
 ```
 
-The four agents and their domains:
+There are **six agents** now. Their definitions all live in `agents/<slug>/index.ts` and are collected in `agents/index.ts`; the orchestration registry is `runtime/src/registry.ts`.
 
-| Agent | Domain | Orchestrations |
-|---|---|---|
-| **Angie** | HR & Recruiting | `resume-scoring`, `candidate-sourcing`, `resume-format` |
-| **Beady** | GovCon BD | `govcon-assessment`, `opportunity-search`, `past-performance-seed` |
-| **Patch** | IT Ops & Knowledge | `ticket-ops`, `staff-request`, `document-rag` |
-| **Money** | Finance & Analytics | `data-analyst`, `financial-report` |
+**Worker topology — not every agent gets its own Worker.** Only **Angie, Beady, Patch, and Money** run as their own isolated Cloudflare Worker reached over a Service Binding (`lumiagents-angie`, `lumiagents-beady`, `lumiagents-patch`, `lumiagents-money`). **Cleo and Dewey run inline inside `lumiagents-runtime`** — there is no dedicated `lumiagents-cleo` or `lumiagents-dewey` Worker; the runtime handles their chat directly via the fallback in `runtime/src/routes/agents.ts`. Same programming model either way; the only difference is where the chat loop executes.
+
+The six agents, their domains, and their tools:
+
+| Agent | Runs as | Domain | Tools (→ orchestration) |
+|---|---|---|---|
+| **Angie** | own Worker | HR & Recruiting | `score_resumes` (resume-scoring), `source_candidates` (candidate-sourcing), `format_resume` (resume-format) |
+| **Beady** | own Worker | GovCon BD — discovery, scoring **and** response drafting | `search_all_opportunities` (parallel SAM.gov + SBIR sweep), `search_opportunities`, `search_sbir_topics`, `assess_opportunity` (5-dimension go/no-go), `seed_past_performance`, `draft_rfi` (Sources Sought / RFI drafting — **moved here from Cleo**), `find_industry_days` (industry-day / vendor-outreach event discovery) |
+| **Cleo** | inline | Eminence, awards & proposals + content calendar | `sweep_awards` (Tavily award sweep), `send_award_digest`, `plan_calendar` (theme → content-calendar ideas), `draft_content` (LinkedIn post copy + asset brief) |
+| **Dewey** | inline | Knowledge librarian — steward of the shared corpus | `search_knowledge` (cited RAG), `retag_document` (curate corpus/sensitivity), `knowledge_inventory` |
+| **Patch** | own Worker | IT Ops & Knowledge | `create_ticket`, `update_ticket`, `search_tickets`, `staff_request`, `query_documents` |
+| **Money** | own Worker | Finance & Analytics | `generate_financial_report`, `query_data` (natural-language SQL) |
+
+### Knowledge separation model (Dewey's domain)
+
+Every agent executes as Postgres `service_role` and bypasses RLS, so "which agent may read which knowledge" is **not** a database-role decision — it is enforced in the runtime retrieval path. Two tags on every document govern access:
+
+- **`corpus`** — `shared` (readable by every agent, the default) or an agent slug (private to that one agent).
+- **`sensitivity`** — `internal` (team-usable, may ground drafts; default) or `restricted` (ops-only — financials, client-confidential, security material — never returned to an agent).
+
+Retrieval calls `orchestration.match_document_chunks(...)` with a per-agent scope from `runtime/src/agents/knowledge-access.ts` (`scopeForAgent(slug)` → `{ allowedCorpora: [shared, slug], includeRestricted: false }`; `OPS_SCOPE` sees everything including restricted). **Dewey** is the librarian over this model: it searches the shared corpus (always citing sources), re-tags a document's corpus/sensitivity to lock it down or move it, and inventories what exists to surface gaps or mis-tagged material.
 
 ### Example: Angie scoring 55 résumés
 

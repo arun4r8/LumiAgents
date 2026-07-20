@@ -5,7 +5,7 @@ import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/re
 import { senderFor } from "../../../integrations/resend/sender";
 
 // Daily nudge: surface content-calendar posts due soon that aren't drafted yet, so the
-// calendar chases the team instead of sitting passive. Posts a Teams alert; degrades
+// calendar chases the team instead of sitting passive. Emails subscribers; degrades
 // gracefully if no webhook is configured.
 
 export const inputSchema = z.object({
@@ -28,7 +28,7 @@ export default defineOrchestration({
   name: "cleo/content-nudge",
   version: 1,
   description:
-    "Daily nudge — Teams alert for content-calendar posts due soon that are not yet drafted/ready.",
+    "Daily nudge — emails subscribers about content-calendar posts due soon that are not yet drafted/ready.",
   inputSchema,
   outputSchema,
   access: {
