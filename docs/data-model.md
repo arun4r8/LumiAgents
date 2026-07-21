@@ -97,6 +97,8 @@ All in `orchestration`:
 
 `agent_tasks`, `analyst_uploads`, `api_budget`, `rate_limit` (per-user fixed-window limiter via the `claim_rate_limit` RPC), and the `n8n_call_queue`.
 
+`run_failure_alerts` is the anti-spam ledger behind run-level failure alerting: one row per *currently failing* orchestration (`orchestration_name` PK, `error_fingerprint`, `last_error`, `consecutive_failures`, `last_failed_run_id`, `first_failed_at`, `last_failed_at`, `last_alerted_at`). The runtime writes it on every failed run and deletes the row on the next success. Not telemetry, so don't read it for history; `runs` is the record.
+
 ## Why this shape
 
 - **`runs` and `run_steps` separated:** lets you query "all failed steps of type llm_decide last week" without scanning run JSON blobs.

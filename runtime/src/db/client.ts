@@ -1,4 +1,4 @@
-import type { Env, Run, RunStep, Schedule } from "../types";
+import type { Env, Run, RunFailureAlert, RunStep, Schedule } from "../types";
 
 // Minimal typed Supabase REST client: no Node deps, pure fetch.
 
@@ -236,6 +236,39 @@ export class SupabaseClient {
     const row = rows[0];
     if (!row) throw new Error(`Agent config for "${agentId}" not found`);
     return row;
+  }
+
+  // ─── Run failure alert state ──────────────────────────────────────────────
+
+  /** Current failure streak for an orchestration, or null when it is healthy. */
+  async getRunFailureAlert(orchestrationName: string): Promise<RunFailureAlert | null> {
+    const rows = await this.request<RunFailureAlert[]>(
+      `/rest/v1/run_failure_alerts?orchestration_name=eq.${encodeURIComponent(orchestrationName)}&limit=1`,
+      "GET",
+    );
+    return rows[0] ?? null;
+  }
+
+  async upsertRunFailureAlert(data: RunFailureAlert): Promise<void> {
+    await this.request(
+      "/rest/v1/run_failure_alerts",
+      "POST",
+      { ...data, updated_at: new Date().toISOString() },
+      { Prefer: "resolution=merge-duplicates,return=minimal" },
+    );
+  }
+
+  /**
+   * Clears the streak and returns the row that was cleared (null if there was none).
+   * A delete-returning keeps the success path to a single round trip: the caller only
+   * learns "this orchestration was previously failing" if there was something to clear.
+   */
+  async clearRunFailureAlert(orchestrationName: string): Promise<RunFailureAlert | null> {
+    const rows = await this.request<RunFailureAlert[]>(
+      `/rest/v1/run_failure_alerts?orchestration_name=eq.${encodeURIComponent(orchestrationName)}`,
+      "DELETE",
+    );
+    return rows[0] ?? null;
   }
 
   // ─── Schedules ────────────────────────────────────────────────────────────

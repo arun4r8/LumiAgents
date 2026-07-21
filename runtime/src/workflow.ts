@@ -16,6 +16,7 @@ import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:work
 import type { Env, RunContext } from "./types";
 import { SupabaseClient } from "./db/client";
 import { orchestrations } from "./registry";
+import { failRun, notifyRunSuccess } from "./utils/run-failure-alert";
 
 export interface RunWorkflowParams {
   runId: string;
@@ -34,12 +35,9 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
     const orch = orchestrations.get(orchestrationName);
     if (!orch) {
       // Mark failed immediately; no run_step row to update
-      await db.updateRun(runId, {
-        status: "failed",
-        error: { message: `Orchestration "${orchestrationName}" not registered` },
-        ended_at: new Date().toISOString(),
-      });
-      throw new Error(`Orchestration "${orchestrationName}" not registered`);
+      const message = `Orchestration "${orchestrationName}" not registered`;
+      await failRun(db, this.env, { runId, orchestrationName, message });
+      throw new Error(message);
     }
 
     // Fetch the run to get the persisted input (avoids re-passing large payloads
@@ -48,12 +46,9 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
 
     const inputParsed = orch.inputSchema.safeParse(run.input);
     if (!inputParsed.success) {
-      await db.updateRun(runId, {
-        status: "failed",
-        error: { message: "Stored run input failed schema validation" },
-        ended_at: new Date().toISOString(),
-      });
-      throw new Error("Stored run input failed schema validation");
+      const message = "Stored run input failed schema validation";
+      await failRun(db, this.env, { runId, orchestrationName, message });
+      throw new Error(message);
     }
 
     // Resolve model: per-orchestration override → agent default → fallback
@@ -90,13 +85,17 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
         ended_at: new Date().toISOString(),
       });
     } catch (err) {
-      await db.updateRun(runId, {
-        status: "failed",
-        error: { message: err instanceof Error ? err.message : String(err) },
-        ended_at: new Date().toISOString(),
+      await failRun(db, this.env, {
+        runId,
+        orchestrationName,
+        message: err instanceof Error ? err.message : String(err),
       });
       // Re-throw so Cloudflare marks the Workflow instance as failed.
       throw err;
     }
+
+    // Only reached on success (the catch above always re-throws). Kept outside the
+    // try so a hypothetical throw in here could never be mistaken for a run failure.
+    await notifyRunSuccess(this.env, orchestrationName);
   }
 }

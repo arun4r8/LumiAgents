@@ -140,6 +140,22 @@ export interface Schedule {
   updated_at: string;
 }
 
+/**
+ * One row per orchestration that is currently failing: the streak plus the
+ * suppression state that stops a broken daily cron emailing every single run.
+ * Deleted as soon as the orchestration succeeds again.
+ */
+export interface RunFailureAlert {
+  orchestration_name: string;
+  error_fingerprint: string;
+  last_error: string | null;
+  consecutive_failures: number;
+  last_failed_run_id: string | null;
+  first_failed_at: string;
+  last_failed_at: string;
+  last_alerted_at: string | null;
+}
+
 export interface RunStep {
   id: string;
   run_id: string;
