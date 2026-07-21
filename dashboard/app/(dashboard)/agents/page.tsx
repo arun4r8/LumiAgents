@@ -100,7 +100,7 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      <div className="orch-grid">
+      <div className="orch-grid ag-grid">
         {AGENTS.map((agent) => (
           <AgentCard key={agent.slug} agent={agent} />
         ))}
