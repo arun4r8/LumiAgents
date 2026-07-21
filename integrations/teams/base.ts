@@ -1,9 +1,9 @@
 /**
- * Microsoft Teams integration — shared helpers.
+ * Microsoft Teams integration: shared helpers.
  *
  * Two modes:
- *   1. Incoming Webhook  — one-way notifications; just needs TEAMS_INCOMING_WEBHOOK_URL
- *   2. Bot Framework     — bidirectional chat; needs TEAMS_BOT_APP_ID + TEAMS_BOT_APP_SECRET
+ *   1. Incoming Webhook:   one-way notifications; just needs TEAMS_INCOMING_WEBHOOK_URL
+ *   2. Bot Framework:      bidirectional chat; needs TEAMS_BOT_APP_ID + TEAMS_BOT_APP_SECRET
  *
  * Set secrets via `wrangler secret put`:
  *   TEAMS_INCOMING_WEBHOOK_URL   (per-channel webhook URL from Teams connector config)

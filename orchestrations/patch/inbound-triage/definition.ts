@@ -21,7 +21,7 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "patch/inbound-triage",
   version: 1,
-  description: "Triage inbound email or Teams messages — classify, extract action items, route or auto-respond",
+  description: "Triage inbound email or Teams messages: classify, extract action items, route or auto-respond",
   inputSchema,
   outputSchema,
   access: {
@@ -45,7 +45,7 @@ export default defineOrchestration({
 
     // Discard noise immediately
     if (intent === "noise") {
-      return { action: "discard", intent, summary: "Message classified as noise — no action taken." };
+      return { action: "discard", intent, summary: "Message classified as noise. No action taken." };
     }
 
     // Step 2: Extract structured action items
@@ -100,7 +100,7 @@ export default defineOrchestration({
       return { action: "card", intent, summary: extracted.summary };
     }
 
-    // inquiry — post simple Teams message
+    // inquiry: post simple Teams message
     await step(ctx, "post-inquiry-message", () =>
       sendTeamsMessage(ctx, {
         channel: "ops-general",

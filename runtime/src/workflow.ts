@@ -6,9 +6,9 @@
  * (including the workflowStep binding), and drives the orchestration to completion.
  *
  * Benefits over synchronous Worker execution:
- *   - Each step.do() is checkpointed — crashes auto-resume from last completed step.
+ *   - Each step.do() is checkpointed, so crashes auto-resume from last completed step.
  *   - No 30s CPU limit per invocation (each step.do() resets the limit).
- *   - await_approval uses step.sleep() instead of PauseSignal — no replay needed.
+ *   - await_approval uses step.sleep() instead of PauseSignal, so no replay is needed.
  *   - LLM calls get automatic retries via step.do() retry config.
  */
 
@@ -33,7 +33,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
 
     const orch = orchestrations.get(orchestrationName);
     if (!orch) {
-      // Mark failed immediately — no run_step row to update
+      // Mark failed immediately; no run_step row to update
       await db.updateRun(runId, {
         status: "failed",
         error: { message: `Orchestration "${orchestrationName}" not registered` },
@@ -67,7 +67,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
       ]);
       resolvedModel = orchRow?.model ?? agentCfg?.model ?? DEFAULT_MODEL;
     } catch {
-      // non-fatal — default is safe
+      // non-fatal; default is safe
     }
 
     let stepCounter = 0;

@@ -4,7 +4,7 @@ import type { Env } from "../../runtime/src/types";
 // All GovCon assessment LLM calls. Prompts are ported VERBATIM from the n8n
 // "GovCon Qualification Assessment" flow so scores stay comparable. The D1–D4
 // dimension prompt *bodies* are read live from the prompt_bank table (as n8n did);
-// only the system messages — which lived inside n8n nodes — are embedded here.
+// only the system messages (which lived inside n8n nodes) are embedded here.
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -17,7 +17,7 @@ function firstText(resp: Anthropic.Message): string {
   return b && b.type === "text" ? b.text : "";
 }
 
-// Lenient JSON extractor — matches the n8n code nodes' parse-or-regex behaviour.
+// Lenient JSON extractor, matching the n8n code nodes' parse-or-regex behaviour.
 export function parseLooseJson<T = Record<string, unknown>>(raw: string): T {
   const text = String(raw ?? "").trim();
   try {
@@ -29,7 +29,7 @@ export function parseLooseJson<T = Record<string, unknown>>(raw: string): T {
   }
 }
 
-// ─── Information Extractor — Opportunity Facts ─────────────────────────────────
+// ─── Information Extractor: Opportunity Facts ──────────────────────────────────
 
 export interface OpportunityFacts {
   agency: string | null;
@@ -172,12 +172,12 @@ Write a plain-English memo of 200-350 words based ONLY on the provided JSON. Do 
 
 Structure: 
 1. One-line recommendation (posture + decision label) 
-2. Why — 2-3 key reasons 
+2. Why: 2-3 key reasons
 3. Top 2-3 risks or gaps leadership must know 
 4. Confidence caveat if confidence_level is Low or Medium-Low 
 5. Immediate next actions (3-5 bullets)  
 
-Tone: Direct. No filler. Written for a BD VP with 90 seconds.`;
+Tone: Direct. No filler. Written for a BD VP with 90 seconds. Do not use em dashes.`;
 
 export async function writeExecutiveMemo(env: Env, scored: unknown, model = DEFAULT_MODEL): Promise<string> {
   const resp = await client(env).messages.create({
@@ -199,7 +199,7 @@ Respond ONLY with valid JSON:
 const D4_SYSTEM = `You are a GovCon BD strategist scoring ICP STRATEGIC FIT. Respond ONLY with valid JSON: { "score": float, "fit_factors": [string], "misalignments": [string], "rationale": string }. Score: 0.0 (poor fit) to 1.0 (perfect fit).`;
 export const DIMENSION_SYSTEMS = { requirements: D1_SYSTEM, past_performance: D2_SYSTEM, incumbent: D3_SYSTEM, icp_fit: D4_SYSTEM };
 
-// Generic dimension scorer — system message + a prompt_bank-filled user prompt.
+// Generic dimension scorer: system message + a prompt_bank-filled user prompt.
 export async function scoreDimension(env: Env, system: string, prompt: string, model = DEFAULT_MODEL): Promise<Record<string, unknown>> {
   const resp = await client(env).messages.create({
     model, max_tokens: 1024, system,
@@ -222,7 +222,7 @@ export async function pdfToText(env: Env, base64: string): Promise<string> {
       role: "user",
       content: [
         { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-        { type: "text", text: "Extract all text from this document. Preserve structure — headings, bullet points, tables, numbered lists — as closely as possible. Return only the extracted text with no commentary." },
+        { type: "text", text: "Extract all text from this document. Preserve structure (headings, bullet points, tables, numbered lists) as closely as possible. Return only the extracted text with no commentary." },
       ],
     }],
   });

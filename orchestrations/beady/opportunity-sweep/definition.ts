@@ -9,7 +9,7 @@ import { senderFor } from "../../../integrations/resend/sender";
 // hash those fields; if the hash differs from what's in scored_notices, the notice
 // was materially amended and is scored again (so monitor → pursue can happen when
 // the government actually changes the solicitation). FNV-1a is plenty for change
-// detection — this isn't security-sensitive.
+// detection; this isn't security-sensitive.
 function fnv1a(str: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -83,7 +83,7 @@ export default defineOrchestration({
   version: 1,
   description:
     "Parallel sweep of SAM.gov + DoD SBIR/STTR topics. Scores all results together in one LLM pass and upserts the shortlist into opportunities.",
-  // Replace the two individual Monday crons — this one sweep covers both sources
+  // Replace the two individual Monday crons: this one sweep covers both sources
   cron: "0 8 * * 1",
   inputSchema,
   outputSchema,
@@ -93,7 +93,7 @@ export default defineOrchestration({
   },
 
   async run(ctx, input) {
-    // Step 1: Fetch both sources (resilient — one source failing or hitting its
+    // Step 1: Fetch both sources (resilient, so one source failing or hitting its
     // budget cap doesn't kill the other), then drop opportunities we've already
     // scored so only net-new items reach the LLM.
     const { samResults, sbirResults, samError, sbirError } = await step(ctx, "fetch-both-sources", async () => {
@@ -148,7 +148,7 @@ export default defineOrchestration({
     });
 
     // Health alert: a source failure or a suspiciously empty sweep (e.g. an expired
-    // SAM key) — otherwise the run silently "completes" with 0 and no one notices.
+    // SAM key). Otherwise the run silently "completes" with 0 and no one notices.
     await step(ctx, "sweep-health-alert", async () => {
       const samCount = samResults.totalRecords;
       const sbirCount = sbirResults.totalElements;
@@ -159,7 +159,7 @@ export default defineOrchestration({
       // alerting once a working SBIR source is restored.
       const issues: string[] = [];
       if (samError) issues.push(`SAM.gov source FAILED: ${samError.slice(0, 300)}`);
-      else if (samCount === 0) issues.push("SAM.gov returned 0 results (normally ~thousands — likely an API/key issue).");
+      else if (samCount === 0) issues.push("SAM.gov returned 0 results (normally ~thousands, so this is likely an API/key issue).");
 
       if (issues.length === 0) {
         return { alerted: false, samCount, sbirCount, sbirError: sbirError ?? null };
@@ -168,10 +168,10 @@ export default defineOrchestration({
       const authHint = samError && /\b40[13]\b/.test(samError)
         ? "\n\nA 401/403 from SAM usually means SAM_GOV_API_KEY expired (SAM rotates keys ~every 90 days). Renew it, then: wrangler secret put SAM_GOV_API_KEY."
         : "";
-      const sbirNote = sbirError ? "\n\n(SBIR is separately unavailable — known external issue; not alerting on it.)" : "";
-      const text = `Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run — SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}${sbirNote}`;
+      const sbirNote = sbirError ? "\n\n(SBIR is separately unavailable: known external issue, not alerting on it.)" : "";
+      const text = `Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run had SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}${sbirNote}`;
 
-      // Alert the people subscribed to the opportunity digest — they're the ones a
+      // Alert the people subscribed to the opportunity digest; they're the ones a
       // broken sweep affects.
       const to = await subscriptionRecipients(ctx.env, "opportunity");
       const result = await sendAlertEmail(ctx.env, { to, subject: "⚠️ Beady sweep health alert", text, from: senderFor(ctx.env, "beady") });
@@ -189,7 +189,7 @@ export default defineOrchestration({
       prompt: `
 You are Beady, Lumiture's BD AI. Score each opportunity below against Lumiture's profile.
 Opportunities come from two sources: SAM.gov (traditional contracts) and DoD SBIR/STTR (R&D
-solicitations). Apply the same scoring logic to both — SBIR topics are R&D-focused so expect
+solicitations). Apply the same scoring logic to both. SBIR topics are R&D-focused so expect
 lower technical fit scores on average, but surface them anyway for leadership review.
 
 Lumiture profile:
@@ -255,7 +255,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
     // Record every notice we just scored (pass or pursue) in the dedup ledger so it
     // is never re-scored on a later run. Items below minScore aren't in scoreMap
     // (the model only returns the shortlist), so they're logged as recommendation
-    // 'pass' with a null score — they were still evaluated.
+    // 'pass' with a null score, but they were still evaluated.
     await step(ctx, "record-scored-notices", async () => {
       const scoredAt = new Date().toISOString();
       const rows = [
@@ -406,7 +406,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
     // in scoreMap fell below the save floor (the model only returns fitScore >= minScore).
     // For any that already exist in opportunities (a prior pursue/monitor whose
     // amendment narrowed its fit), flip them to recommendation='pass' so reports drop
-    // them — symmetric to a monitor climbing to pursue. New sub-floor notices that were
+    // them, symmetric to a monitor climbing to pursue. New sub-floor notices that were
     // never saved simply match nothing here. We mark rather than delete: assessments,
     // incumbent_research and documents FK to opportunities (ON DELETE CASCADE), so a
     // delete would wipe analyst work; a demoted row is preserved but excluded from reports.

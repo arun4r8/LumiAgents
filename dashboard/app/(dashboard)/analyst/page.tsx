@@ -130,7 +130,7 @@ export default function AnalystPage() {
         <div>
           <h1>Data Analyst</h1>
           <div className="sub">
-            SQL over live Postgres tables — opportunities, contracts, candidates, runs & more. Read-only.
+            SQL over live Postgres tables: opportunities, contracts, candidates, runs & more. Read-only.
           </div>
         </div>
         {phase !== "idle" && (
@@ -160,7 +160,7 @@ export default function AnalystPage() {
             ref={taRef}
             placeholder={csvUpload
               ? `Ask about "${csvUpload.sourceName}" or any other table…`
-              : "Ask anything — e.g. which opportunities scored pursue this quarter?"}
+              : "Ask anything, e.g. which opportunities scored pursue this quarter?"}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -235,7 +235,7 @@ export default function AnalystPage() {
                 </span>
               </label>
               <p className="hint" style={{ margin: "6px 0 0" }}>
-                Aggregation queries (COUNT, SUM, GROUP BY) are unlimited — this cap only applies to raw row returns.
+                Aggregation queries (COUNT, SUM, GROUP BY) are unlimited; this cap only applies to raw row returns.
               </p>
             </div>
           )}

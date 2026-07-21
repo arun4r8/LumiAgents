@@ -6,8 +6,8 @@
 //   - ADP       → use the ADP Workforce Now API (OAuth2)
 //
 // Required Wrangler secrets (wrangler secret put <NAME>):
-//   HR_API_URL   — base URL of the HR system REST API, e.g. https://api.bamboohr.com/api/gateway.php/yourcompany/v1
-//   HR_API_KEY   — API key or bearer token for the HR system
+//   HR_API_URL:    base URL of the HR system REST API, e.g. https://api.bamboohr.com/api/gateway.php/yourcompany/v1
+//   HR_API_KEY:    API key or bearer token for the HR system
 //
 // Once the secrets are set, implement the actual HTTP calls in employees.ts (and any
 // future files in this directory) and remove the "not configured" stubs.

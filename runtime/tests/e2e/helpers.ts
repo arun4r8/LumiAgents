@@ -2,7 +2,7 @@ export const RUNTIME_URL = process.env.E2E_RUNTIME_URL ?? process.env.NEXT_PUBLI
 export const SUPABASE_URL = process.env.E2E_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 export const SUPABASE_ANON_KEY = process.env.E2E_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-// Cached per process — sign in once, reuse for the whole test run.
+// Cached per process: sign in once, reuse for the whole test run.
 let _token: string | null = null;
 
 export async function getOpsToken(): Promise<string> {
@@ -64,7 +64,7 @@ export async function pollRun(runId: string, timeoutMs = 120_000): Promise<{ sta
     lastStatus = `status=${row!.status}`;
     if (row!.status === "completed" || row!.status === "failed") return row!;
   }
-  throw new Error(`Run ${runId} did not complete within ${timeoutMs / 1000}s — last poll: ${lastStatus}`);
+  throw new Error(`Run ${runId} did not complete within ${timeoutMs / 1000}s; last poll: ${lastStatus}`);
 }
 
 export async function triggerRun(name: string, input: Record<string, unknown>): Promise<string> {

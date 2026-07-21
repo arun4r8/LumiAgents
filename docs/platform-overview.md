@@ -1,6 +1,6 @@
 # LumiAgents Platform Overview
 
-_Prepared for leadership review — updated July 2026_
+_Prepared for leadership review, updated July 2026_
 
 ---
 
@@ -14,7 +14,7 @@ The platform has four layers:
 |---|---|---|
 | **Runtime** | Cloudflare Workers + Cloudflare Workflows | Executes orchestrations durably; retries, survives crashes |
 | **Data** | Supabase (Postgres + RLS + Realtime) | Stores every run, step, LLM call, and artifact; enforces access control |
-| **Dashboard** | Next.js on Cloudflare Pages | Ops team interface — trigger runs, monitor, approve, subscribe, configure |
+| **Dashboard** | Next.js on Cloudflare Pages | Ops team interface: trigger runs, monitor, approve, subscribe, configure |
 | **Agents** | Anthropic Claude (`claude-sonnet-4-6`; `claude-haiku-4-5` for cheap OCR/scoring) | Six named agents that wrap orchestrations as tools for conversational use |
 
 ### The core pattern
@@ -29,18 +29,18 @@ Every capability follows the same spine: a **domain table** holds the data → a
 
 Two GitHub Actions workflows live in `.github/workflows/`:
 
-**`deploy-worker.yml`** — fires on any push to `main` that touches `runtime/`, `orchestrations/`, or `integrations/`.
+**`deploy-worker.yml`** fires on any push to `main` that touches `runtime/`, `orchestrations/`, or `integrations/`.
 Steps: install → typecheck → `wrangler deploy` → runtime is live on Cloudflare Workers.
 
-**`deploy-dashboard.yml`** — fires on any push to `main` that touches `dashboard/`.
+**`deploy-dashboard.yml`** fires on any push to `main` that touches `dashboard/`.
 Steps: install → `opennextjs-cloudflare build` → `opennextjs-cloudflare deploy` → dashboard is live on Cloudflare Pages.
 
-Both workflows are **fully automatic** — merging to `main` is the deployment mechanism. No manual steps.
+Both workflows are **fully automatic**: merging to `main` is the deployment mechanism. No manual steps.
 
 ### Environments
 
-- **Production** — default Cloudflare environment, `wrangler.toml` root config.
-- **Development** — `[env.dev]` block in `wrangler.toml`; deploy with `wrangler deploy --env dev`.
+- **Production:** default Cloudflare environment, `wrangler.toml` root config.
+- **Development:** `[env.dev]` block in `wrangler.toml`; deploy with `wrangler deploy --env dev`.
 - The dashboard reads `NEXT_PUBLIC_RUNTIME_URL` at build time to point at whichever runtime environment is relevant.
 
 ### GitHub secrets required in the repo
@@ -59,15 +59,15 @@ Both workflows are **fully automatic** — merging to `main` is the deployment m
 
 Each agent is a named AI persona with a system prompt and a set of tools that map directly to orchestrations. When you chat with an agent, it decides which orchestrations to invoke based on your request.
 
-**Worker topology:** **Angie, Beady, Patch, and Money** each run as their own Cloudflare Worker (reached via Service Bindings). **Cleo and Dewey run inline** inside `lumiagents-runtime` — there is no dedicated worker for them; they resolve through the fallback in `runtime/src/routes/agents.ts`.
+**Worker topology:** **Angie, Beady, Patch, and Money** each run as their own Cloudflare Worker (reached via Service Bindings). **Cleo and Dewey run inline** inside `lumiagents-runtime`; there is no dedicated worker for them, and they resolve through the fallback in `runtime/src/routes/agents.ts`.
 
-### Angie — HR & Recruiting
+### Angie: HR & Recruiting
 Sourcing and resume work.
 - `source_candidates` → `angie/candidate-sourcing` (Apollo search → LLM scoring → approval gate)
 - `score_resumes` → `angie/resume-scoring`
 - `format_resume` → `angie/resume-format`
 
-### Beady — GovCon Business Development
+### Beady: GovCon Business Development
 Discovery, scoring, **and** response drafting (RFI drafting moved here from Cleo).
 - `search_all_opportunities` → parallel SAM.gov + SBIR sweep
 - `search_opportunities` → `beady/opportunity-search` (SAM.gov → LLM scoring → upsert)
@@ -77,24 +77,24 @@ Discovery, scoring, **and** response drafting (RFI drafting moved here from Cleo
 - `draft_rfi` → `beady/rfi-draft` (Sources Sought / RFI drafting)
 - `find_industry_days` → `beady/industry-day-sweep`
 
-### Cleo — Eminence, Awards & Content
+### Cleo: Eminence, Awards & Content
 Award tracking plus the content/eminence calendar.
 - `sweep_awards` → `cleo/award-sweep`
 - `send_award_digest` → `cleo/award-report`
 - `plan_calendar` → `cleo/content-plan`
 - `draft_content` → `cleo/content-draft`
 
-### Dewey — Knowledge Librarian
+### Dewey: Knowledge Librarian
 Steward of the shared knowledge corpus.
 - `search_knowledge` → `dewey/knowledge-search`
 - `retag_document` → `dewey/retag-document` (set a document's corpus / sensitivity)
 - `knowledge_inventory` → `dewey/knowledge-inventory`
 
-### Money — Finance & Data Analytics
+### Money: Finance & Data Analytics
 - `query_data` → `money/data-analyst` (NL → SQL → execute → interpret)
 - `generate_financial_report` → `money/financial-report` (multi-question analysis → executive report)
 
-### Patch — IT Operations & Knowledge
+### Patch: IT Operations & Knowledge
 - `create_ticket` / `update_ticket` / `search_tickets` → `patch/ticket-ops` (Jira CRUD)
 - `staff_request` → `patch/staff-request`
 - `query_documents` → `patch/document-rag` (RAG search across ingested knowledge)
@@ -125,12 +125,12 @@ Manual/event orchestrations include `angie/candidate-sourcing`, `angie/resume-sc
 
 ### How every orchestration works under the hood
 
-1. **Input validation** — Zod schema validates the payload before any work starts.
-2. **Run record created** — a `runs` row is written to Supabase with `status: running`.
-3. **Durable execution** — Cloudflare Workflows runs the steps; if the Worker restarts, it resumes from the last checkpoint.
-4. **Every step is logged** — before/after each step a `run_steps` row records timing, status, and the full LLM prompt/response.
-5. **Human-in-the-loop** — `await_approval` steps pause execution until an ops user approves or rejects from the dashboard.
-6. **Structured LLM outputs** — all LLM calls use Anthropic tool-use for structured JSON, not free text.
+1. **Input validation:** Zod schema validates the payload before any work starts.
+2. **Run record created:** a `runs` row is written to Supabase with `status: running`.
+3. **Durable execution:** Cloudflare Workflows runs the steps; if the Worker restarts, it resumes from the last checkpoint.
+4. **Every step is logged:** before/after each step a `run_steps` row records timing, status, and the full LLM prompt/response.
+5. **Human-in-the-loop:** `await_approval` steps pause execution until an ops user approves or rejects from the dashboard.
+6. **Structured LLM outputs:** all LLM calls use Anthropic tool-use for structured JSON, not free text.
 
 ---
 
@@ -138,18 +138,18 @@ Manual/event orchestrations include `angie/candidate-sourcing`, `angie/resume-sc
 
 The shared knowledge base powers RAG for every agent, but not every agent may read everything. Because agents execute as Postgres `service_role` (they bypass RLS), the read rules are enforced in the **runtime retrieval path**, not by database roles. Each document chunk carries two tags:
 
-- **`corpus`** — `shared` (readable by every agent) or an agent slug (private to that agent). Default `shared`.
-- **`sensitivity`** — `internal` (team-usable, default) or `restricted` (ops-only; never returned to an agent).
+- **`corpus`**: `shared` (readable by every agent) or an agent slug (private to that agent). Default `shared`.
+- **`sensitivity`**: `internal` (team-usable, default) or `restricted` (ops-only; never returned to an agent).
 
 `orchestration.match_document_chunks(...)` filters retrieval on both, driven by `runtime/src/agents/knowledge-access.ts`: `scopeForAgent(slug)` yields `{allowedCorpora: [shared, slug], includeRestricted: false}`, while `OPS_SCOPE` sees everything including restricted. **Dewey** is the librarian who searches the shared corpus, re-tags a document's corpus/sensitivity, and inventories the base.
 
-Embeddings are Cloudflare Workers AI `@cf/baai/bge-large-en-v1.5` (1024-dim), stored in pgvector (ivfflat, cosine) — the same model backs **agent memory** (per-conversation message history embedded for recall), maintained by the daily `system/memory-maintenance` job.
+Embeddings are Cloudflare Workers AI `@cf/baai/bge-large-en-v1.5` (1024-dim), stored in pgvector (ivfflat, cosine); the same model backs **agent memory** (per-conversation message history embedded for recall), maintained by the daily `system/memory-maintenance` job.
 
 ---
 
 ## Subscriptions, Digests & Alerts
 
-**Unified subscriptions.** A single `orchestration.subscriptions` table with a `kind` discriminator (`opportunity` | `award`) drives all digests; it holds the superset of filter columns (sources / agencies / set-asides for opportunity; award types for award). It replaces the old `report_subscriptions` + `award_subscriptions` tables, which still exist but are deprecated (kept only as a rollback net — all readers use `subscriptions`).
+**Unified subscriptions.** A single `orchestration.subscriptions` table with a `kind` discriminator (`opportunity` | `award`) drives all digests; it holds the superset of filter columns (sources / agencies / set-asides for opportunity; award types for award). It replaces the old `report_subscriptions` + `award_subscriptions` tables, which still exist but are deprecated (kept only as a rollback net; all readers use `subscriptions`).
 
 **Digests.** Each agent's digest is its own scheduled orchestration (`beady/opportunity-report`, `cleo/award-report`), driven by the meta-cron, honoring each subscription's cadence (daily/weekly) and sending via the shared Resend `sendEmail` with a per-agent `from`. A dashboard "Send now" hits `/api/orchestrations/{name}/run` with `{subscriptionId}`, routed by kind.
 
@@ -165,13 +165,13 @@ Embeddings are Cloudflare Workers AI `@cf/baai/bge-large-en-v1.5` (1024-dim), st
 
 ## Industry Days
 
-`beady/industry-day-sweep` gathers agency industry days from two sources — SAM.gov **Special Notices** (`ptype=s`) and a Tavily web sweep — LLM-scores each for relevance to Lumiture, and upserts into `industry_days` (with an `industry_day_scored` dedup ledger). Runs weekly; surfaced on the `/industry-days` dashboard page and via the `find_industry_days` tool.
+`beady/industry-day-sweep` gathers agency industry days from two sources: SAM.gov **Special Notices** (`ptype=s`) and a Tavily web sweep. It LLM-scores each for relevance to Lumiture and upserts into `industry_days` (with an `industry_day_scored` dedup ledger). Runs weekly; surfaced on the `/industry-days` dashboard page and via the `find_industry_days` tool.
 
 ---
 
 ## Auth
 
-Two enforced roles: **ops** (full access) and **enduser** (own records only), enforced both in Postgres RLS (`auth.jwt()->>'role'`) and in runtime route guards (`requireOpsToken`). Agents have no DB identity — all run as `service_role`. (`role:analyst` and `role:hr` appear in orchestration `access` metadata but are not enforced anywhere.) Login is email + password via Supabase. Currently 4 ops accounts; no enduser accounts yet.
+Two enforced roles: **ops** (full access) and **enduser** (own records only), enforced both in Postgres RLS (`auth.jwt()->>'role'`) and in runtime route guards (`requireOpsToken`). Agents have no DB identity; all run as `service_role`. (`role:analyst` and `role:hr` appear in orchestration `access` metadata but are not enforced anywhere.) Login is email + password via Supabase. Currently 4 ops accounts; no enduser accounts yet.
 
 The custom JWT hook (`public.custom_access_token_hook`) is deployed by migration but must be **manually enabled** in the Supabase dashboard (Authentication → Hooks → Custom Access Token). Without it, the `role` claim falls back to `app_metadata`.
 
@@ -199,6 +199,6 @@ The custom JWT hook (`public.custom_access_token_hook`) is deployed by migration
 
 ## Known Gaps
 
-- **Accounting / CRM / HR integrations are stubs** — `integrations/accounting`, `integrations/crm`, `integrations/hr` throw at runtime; `money/financial-report` fails on any accounting-data query until one is implemented.
-- **SBIR source is externally unavailable** — the DoD topics portal now sits behind Akamai bot-protection and the SBIR.gov API is disabled; the integration code is correct but upstream is down.
-- **SAM.gov key rotation** — `SAM_GOV_API_KEY` expires roughly every 90 days and must be renewed to keep the Beady sweeps and RFI attachment fetch working.
+- **Accounting / CRM / HR integrations are stubs:** `integrations/accounting`, `integrations/crm`, `integrations/hr` throw at runtime; `money/financial-report` fails on any accounting-data query until one is implemented.
+- **SBIR source is externally unavailable:** the DoD topics portal now sits behind Akamai bot-protection and the SBIR.gov API is disabled; the integration code is correct but upstream is down.
+- **SAM.gov key rotation:** `SAM_GOV_API_KEY` expires roughly every 90 days and must be renewed to keep the Beady sweeps and RFI attachment fetch working.

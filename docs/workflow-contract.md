@@ -1,6 +1,6 @@
 # Workflow contract
 
-Every orchestration is a typed workflow. This document defines the shape. Follow it exactly — the runtime, dashboard, and tools all depend on this contract.
+Every orchestration is a typed workflow. This document defines the shape. Follow it exactly; the runtime, dashboard, and tools all depend on this contract.
 
 ## An orchestration is a folder
 
@@ -71,7 +71,7 @@ Read that example before writing a new orchestration. The pattern is what matter
 
 ### `step(name, fn)`
 
-Wraps a deterministic operation. Logs to `run_steps` before and after. Retries with backoff on transient failure. Idempotent — re-runs of the same step in a resumed workflow return the previous result.
+Wraps a deterministic operation. Logs to `run_steps` before and after. Retries with backoff on transient failure. Idempotent: re-runs of the same step in a resumed workflow return the previous result.
 
 ### `llm_decide(ctx, { promptFile, input, options })`
 
@@ -90,7 +90,7 @@ Pauses the workflow, creates an `approvals` row, and resumes when a human decide
 A tool is a typed wrapper around a side-effect (n8n webhook, integration API, Supabase write, etc.). Each tool lives in `/integrations/<system>/<tool>.ts` and is re-exported from the orchestration's `tools.ts` for clarity.
 
 Every tool:
-- Takes `ctx` (the runtime context — gives access to logging, secrets, the user the run is acting on behalf of).
+- Takes `ctx` (the runtime context, which gives access to logging, secrets, and the user the run is acting on behalf of).
 - Takes a typed input.
 - Returns a typed output.
 - Carries an idempotency key (or is provably idempotent).
@@ -127,20 +127,20 @@ export const lookupCustomer = defineTool({
 
 An orchestration can be invoked by:
 
-- **HTTP** — POST to `/api/orchestrations/<name>/run` with input. Used by the dashboard and external systems.
-- **Cron** — declared in `definition.ts` as `cron: "0 9 * * *"`. The runtime invokes with no input (or a stubbed input).
-- **Queue** — for high-volume async cases. Producer puts a message; runtime drains.
-- **Another orchestration** — `await invoke("other-orchestration", { ... })`. Captured as a child run in the runs table.
+- **HTTP:** POST to `/api/orchestrations/<name>/run` with input. Used by the dashboard and external systems.
+- **Cron:** declared in `definition.ts` as `cron: "0 9 * * *"`. The runtime invokes with no input (or a stubbed input).
+- **Queue:** for high-volume async cases. Producer puts a message; runtime drains.
+- **Another orchestration:** `await invoke("other-orchestration", { ... })`. Captured as a child run in the runs table.
 
 ## What "schema-driven forms" means in practice
 
-The dashboard reads `inputSchema` for each orchestration and renders a form. zod has good metadata support — use `.describe()` and `.meta()` to add UI hints (label, help text, widget type). Don't hand-build forms. If you can't render the form from the schema, the schema is wrong.
+The dashboard reads `inputSchema` for each orchestration and renders a form. zod has good metadata support, so use `.describe()` and `.meta()` to add UI hints (label, help text, widget type). Don't hand-build forms. If you can't render the form from the schema, the schema is wrong.
 
 ## Testing an orchestration
 
 Every orchestration has tests in `/tests/`:
 
-- **Unit:** mock the runtime context. Test pure logic — branches, error handling.
+- **Unit:** mock the runtime context. Test pure logic: branches, error handling.
 - **Integration:** run against a local Supabase + a fake n8n. Verify the run lands in `runs` with expected `run_steps`.
 - **Eval (when relevant):** for orchestrations with `llm_decide` / `llm_extract`, a small eval set in `tests/eval/` with input → expected decision. Run on PRs that touch the prompt.
 

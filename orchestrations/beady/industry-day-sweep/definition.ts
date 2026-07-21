@@ -57,7 +57,7 @@ export default defineOrchestration({
     const candidates = await step(ctx, "gather-candidates", async () => {
       const out: Candidate[] = [];
 
-      // SAM.gov Special Notices (ptype=s) — one search per title keyword.
+      // SAM.gov Special Notices (ptype=s), one search per title keyword.
       const to = new Date();
       const from = new Date(to.getTime());
       from.setDate(from.getDate() - input.postedWithinDays);

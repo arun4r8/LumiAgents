@@ -393,7 +393,7 @@ function OrchRow({ orch, agentColor, agentDefaultModel, updateOrchestrationConfi
           {/* Model override */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>
-              Model override <span style={{ textTransform: "none", fontWeight: 400 }}>— leave blank to use agent default ({agentDefaultModel.split("-").slice(1, 3).join(" ")})</span>
+              Model override <span style={{ textTransform: "none", fontWeight: 400 }}>(leave blank to use agent default: {agentDefaultModel.split("-").slice(1, 3).join(" ")})</span>
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setModel("")}

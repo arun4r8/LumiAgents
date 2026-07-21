@@ -1,7 +1,7 @@
 import type { Env } from "../../runtime/src/types";
 import { pdfToText } from "../anthropic/govcon";
 
-// Fetch the full notice text for a SAM opportunity — its description plus the text
+// Fetch the full notice text for a SAM opportunity: its description plus the text
 // of any PDF attachments (the RFI itself, where the specific questions live). Used
 // by beady/rfi-draft so the response can answer the notice's actual questions.
 // Best-effort: returns "" if nothing is retrievable; non-PDF attachments (e.g. docx)
@@ -83,7 +83,7 @@ const fmtDate = (d: Date): string =>
 
 export interface AttachmentResult {
   text: string;
-  /** Human-readable trace of what happened — surfaced in the run step for observability. */
+  /** Human-readable trace of what happened, surfaced in the run step for observability. */
   note: string;
 }
 
@@ -125,7 +125,7 @@ export async function fetchOpportunityAttachmentText(
     });
     const res = await fetchWithRetry(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
     if (!res.ok) {
-      return { text: "", note: `SAM search failed: HTTP ${res.status}${res.status === 429 ? " (rate-limited — shares the daily SAM quota with the sweep)" : ""}` };
+      return { text: "", note: `SAM search failed: HTTP ${res.status}${res.status === 429 ? " (rate-limited; shares the daily SAM quota with the sweep)" : ""}` };
     }
     const data = (await res.json()) as { opportunitiesData?: Array<{ description?: string; resourceLinks?: string[] }> };
     const opp = data.opportunitiesData?.[0];
@@ -142,7 +142,7 @@ export async function fetchOpportunityAttachmentText(
       parts.push(`# Notice description\n${opp.description}`); notes.push("description");
     }
 
-    // 3. Attachments — PDFs → Haiku OCR; .docx → unzip word/document.xml.
+    // 3. Attachments: PDFs → Haiku OCR; .docx → unzip word/document.xml.
     const links = opp.resourceLinks ?? [];
     for (const link of links.slice(0, 4)) {
       try {

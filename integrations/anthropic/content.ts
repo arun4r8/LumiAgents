@@ -2,9 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../../runtime/src/types";
 
 // Cleo's content drafter for the eminence calendar. Two modes:
-//   draftContentPost — turn one calendar row into a submission-ready LinkedIn post
+//   draftContentPost: turn one calendar row into a submission-ready LinkedIn post
 //     (copy + asset brief), grounded ONLY in the real company profile.
-//   planContentIdeas — propose a run of post ideas from a theme.
+//   planContentIdeas: propose a run of post ideas from a theme.
 // Never invents facts about Lumiture (contracts, awards, numbers) that aren't in the
 // profile; eminence content is the company's public voice.
 
@@ -27,20 +27,22 @@ Anything the human should confirm before posting (e.g. a claim to verify, a tag 
 
 Rules:
 - Ground any claim about Lumiture ONLY in the provided company profile. Never invent contracts, clients, awards, certifications, or metrics.
-- If the entry's description is thin, expand on the topic sensibly but do not fabricate company specifics — use a clearly-marked placeholder like [confirm: specific example].
-- Match a confident, credible, non-salesy government-technology brand voice.`;
+- If the entry's description is thin, expand on the topic sensibly but do not fabricate company specifics; use a clearly-marked placeholder like [confirm: specific example].
+- Match a confident, credible, non-salesy government-technology brand voice.
+- Do not use em dashes.`;
 
 const PLAN_SYSTEM = `You are Cleo, Lumiture's eminence strategist. Propose a run of LinkedIn post IDEAS for Lumiture, LLC on the given theme.
 
 Return ONLY a JSON array (no prose) of objects with keys:
-  "topic"       — short post title (<= 80 chars)
-  "description" — 1–2 sentence brief of what the post covers and its angle
-  "asset_type"  — one of: graphic | carousel | video | text
+  "topic":       short post title (<= 80 chars)
+  "description": 1–2 sentence brief of what the post covers and its angle
+  "asset_type":  one of: graphic | carousel | video | text
 
 Rules:
 - Ideas must be relevant to Lumiture's actual capabilities per the provided profile; do not invent specifics.
 - Vary the angles (thought leadership, team/culture, capability spotlight, industry commentary).
-- Return exactly the requested number of ideas.`;
+- Return exactly the requested number of ideas.
+- Do not use em dashes.`;
 
 export interface ContentPostInput {
   entry: Record<string, unknown>;

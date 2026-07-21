@@ -14,7 +14,7 @@ Given a migration file (or set of files), check:
 ### Hard requirements (block merge if missing)
 
 - [ ] New tables have `ENABLE ROW LEVEL SECURITY` in the same migration.
-- [ ] New tables have at least one ops policy and one enduser policy — or an explicit comment justifying enduser-no-access.
+- [ ] New tables have at least one ops policy and one enduser policy, or an explicit comment justifying enduser-no-access.
 - [ ] Columns referenced in RLS USING clauses are indexed.
 - [ ] Foreign keys have an explicit `ON DELETE` clause.
 - [ ] New NOT NULL columns on populated tables have a DEFAULT.
@@ -31,7 +31,7 @@ Given a migration file (or set of files), check:
 
 ### Cross-reference
 
-- Does this contradict `docs/data-model.md`? If yes, the docs need to update — flag it.
+- Does this contradict `docs/data-model.md`? If yes, the docs need to update; flag it.
 - Does this break existing RLS tests in `db/tests/`? Run `pnpm db:test-rls` and report.
 - Are there orchestrations or dashboard code that read removed/renamed columns? Grep for them.
 

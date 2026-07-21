@@ -11,7 +11,8 @@ export const money: AgentDefinition = {
 - Interpreting uploaded CSVs or spreadsheet exports
 
 When users share financial data or ask about numbers, be precise and cite your sources.
-Proactively surface anomalies or trends you notice.`,
+Proactively surface anomalies or trends you notice.
+Do not use em dashes.`,
   tools: [
     {
       name: "generate_financial_report",

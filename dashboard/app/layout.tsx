@@ -4,7 +4,7 @@ import "./globals.css";
 import "./lumi.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-// Modernist design language: Archivo is the only family — headings and body both.
+// Modernist design language: Archivo is the only family, for headings and body both.
 const archivo = Archivo({
   variable: "--font-archivo",
   subsets: ["latin"],
@@ -12,7 +12,7 @@ const archivo = Archivo({
 
 export const metadata: Metadata = {
   title: "LumiAgents",
-  description: "Agent orchestration layer — Lumiture",
+  description: "Agent orchestration layer by Lumiture",
 };
 
 // Inline script: reads localStorage before first paint to avoid theme flash

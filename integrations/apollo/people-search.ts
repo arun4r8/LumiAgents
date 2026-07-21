@@ -32,7 +32,7 @@ export const apolloPersonSchema = z.object({
   lastName: z.string(),
   title: z.string().nullable(),
   company: z.string().nullable(),
-  email: z.string().nullable().describe("Revealed email — costs 1 credit. Null if not available."),
+  email: z.string().nullable().describe("Revealed email. Costs 1 credit. Null if not available."),
   linkedinUrl: z.string().nullable(),
   city: z.string().nullable(),
   state: z.string().nullable(),
@@ -49,7 +49,7 @@ export const apolloPeopleSearchOutputSchema = z.object({
 
 export type ApolloPerson = z.infer<typeof apolloPersonSchema>;
 
-// ─── Raw Apollo response shape (internal — not exported) ─────────────────────
+// ─── Raw Apollo response shape (internal, not exported) ──────────────────────
 
 interface RawApolloPerson {
   id?: string;

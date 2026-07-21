@@ -1,4 +1,4 @@
-// Recursive character text splitter — no Node deps, pure string ops.
+// Recursive character text splitter: no Node deps, pure string ops.
 
 export interface Chunk {
   index: number;

@@ -30,8 +30,8 @@ Always return:
 <the direct answer in 1–3 sentences>
 
 ## Evidence
-- path/to/file.ts:42 — <one-line note>
-- path/to/other.ts:103 — <one-line note>
+- path/to/file.ts:42: <one-line note>
+- path/to/other.ts:103: <one-line note>
 
 ## Caveats / unknowns
 <anything you couldn't determine, or where you'd want a human to confirm>
@@ -43,7 +43,7 @@ Keep the whole report under 50 lines unless the user explicitly asked for depth.
 
 - The architecture is documented in `/docs/`. Read those before assuming things.
 - `/runtime/` is the workflow engine. `/orchestrations/<name>/` are workflow definitions. `/integrations/<system>/` are tool wrappers. `/dashboard/` is the Next.js app.
-- If you find code that contradicts the docs, surface that — it's a real signal.
+- If you find code that contradicts the docs, surface that; it's a real signal.
 - Don't speculate about why something was written a certain way. Report what's there.
 - Don't propose changes. The main session does that.
 

@@ -334,7 +334,7 @@ function StepRow({
                 {step.llm_input_tokens ?? 0}in&nbsp;/&nbsp;{step.llm_output_tokens ?? 0}out
               </span>
             )}
-            {duration !== "—" && (
+            {duration !== "-" && (
               <span>{duration}</span>
             )}
             {hasDetail && (

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { tavilySearch } from "./tools";
 
-// FNV-1a — same approach as the opportunity-sweep content fingerprinting.
+// FNV-1a, the same approach as the opportunity-sweep content fingerprinting.
 function fnv1a(str: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -105,7 +105,7 @@ export default defineOrchestration({
         }
       }
 
-      // Deduplicate by URL — keep first occurrence
+      // Deduplicate by URL, keeping the first occurrence
       const seen = new Set<string>();
       const unique = all.filter((r) => {
         if (seen.has(r.url)) return false;
@@ -165,10 +165,10 @@ Lumiture profile:
 - Looking to build brand recognition through awards for eminence and business development
 
 Fit score (1-10):
-- 8-10: strong match — Lumiture clearly eligible, high value to apply
-- 6-7: good fit — eligible, worth the effort
-- 4-5: possible — stretch eligibility or niche value
-- 1-3: not applicable — wrong industry, size, or geography
+- 8-10: strong match, Lumiture clearly eligible, high value to apply
+- 6-7: good fit, eligible and worth the effort
+- 4-5: possible, stretch eligibility or niche value
+- 1-3: not applicable, wrong industry, size, or geography
 
 recommendation:
   "apply"    → fit ≥ 7

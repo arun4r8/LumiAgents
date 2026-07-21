@@ -24,7 +24,7 @@ export interface ApprovalResult {
  *
  * Workflow mode (ctx.workflowStep present):
  *   Creates the approval row then uses step.sleep() to poll every 5 minutes.
- *   The run stays "paused" in the DB while waiting. No PauseSignal is thrown —
+ *   The run stays "paused" in the DB while waiting. No PauseSignal is thrown;
  *   the Workflow is durably suspended between polls.
  */
 export async function await_approval(
@@ -145,7 +145,7 @@ export async function await_approval(
         throw new Error(`Approval for "${options.name}" expired without a decision`);
       }
 
-      // "pending" — continue sleeping
+      // "pending": continue sleeping
     }
 
     throw new Error(
@@ -159,7 +159,7 @@ export async function await_approval(
   const existingStep = await db.getCompletedStep(ctx.runId, idx);
 
   if (existingStep !== null) {
-    // Step was completed during a previous replay — return cached result
+    // Step was completed during a previous replay, so return the cached result
     return existingStep.output as ApprovalResult;
   }
 
@@ -168,9 +168,9 @@ export async function await_approval(
   const existingApproval = await findPendingApproval(ctx, idx);
 
   if (existingApproval !== null) {
-    // Already have an approval row — check if it's been decided
+    // Already have an approval row, so check if it's been decided
     if (existingApproval.status === "approved" || existingApproval.status === "rejected") {
-      // Decision came in — mark the run_step completed and return
+      // Decision came in, so mark the run_step completed and return
       await db.updateRunStep(existingApproval.runStepId, {
         status: "completed",
         output: {
@@ -197,11 +197,11 @@ export async function await_approval(
       throw new Error(`Approval for "${options.name}" expired without a decision`);
     }
 
-    // Still pending — pause again
+    // Still pending, so pause again
     throw new PauseSignal(existingApproval.id);
   }
 
-  // First time hitting this step — create the run_step and approval row
+  // First time hitting this step: create the run_step and approval row
   const runStep = await db.createRunStep({
     run_id: ctx.runId,
     step_index: idx,

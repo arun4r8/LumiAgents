@@ -65,7 +65,7 @@ export function buildRunCard(options: {
 
   return buildAdaptiveCard(
     `${statusEmoji} ${options.orchestrationName}`,
-    options.summary ?? `Run ${options.runId.slice(0, 8)} — ${options.status}`,
+    options.summary ?? `Run ${options.runId.slice(0, 8)}: ${options.status}`,
     [{ label: "View run →", url: `${options.dashboardUrl}/runs/${options.runId}` }],
   );
 }

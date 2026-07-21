@@ -16,7 +16,7 @@ DECLARE
 BEGIN
   app_role := event -> 'claims' -> 'app_metadata' ->> 'role';
   IF app_role IS NOT NULL THEN
-    -- Use a custom claim — do NOT override 'role', which PostgREST uses
+    -- Use a custom claim; do NOT override 'role', which PostgREST uses
     -- to determine the Postgres role (authenticated / anon / service_role).
     event := jsonb_set(event, '{claims,user_role}', to_jsonb(app_role));
   END IF;

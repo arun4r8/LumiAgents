@@ -2,7 +2,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import mammoth from "mammoth";
 import type { FileAttachment } from "../agents/agent-chat";
 
-// Tools that require PDF input — intercept and convert at dispatch time.
+// Tools that require PDF input: intercept and convert at dispatch time.
 export const PDF_REQUIRED_TOOLS = new Set(["assess_opportunity", "score_resumes"]);
 // Which of those tools accept multiple PDFs (batch).
 export const PDF_BATCH_TOOLS = new Set(["score_resumes"]);
@@ -74,7 +74,7 @@ function bytesToBase64(bytes: Uint8Array): string {
  *   RTF              → strip control words → pdf-lib
  *   TXT / MD / CSV   → pdf-lib
  *   JPEG / PNG       → pdf-lib image embed (preserves visual layout)
- *   DOC (legacy)     → error — LibreOffice required, not available in CF Workers
+ *   DOC (legacy)     → error (LibreOffice required, not available in CF Workers)
  */
 export async function ensurePdfBase64(file: FileAttachment): Promise<string> {
   if (isPdf(file)) return file.content;

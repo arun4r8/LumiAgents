@@ -48,7 +48,7 @@ export default async function IndustryDaysPage() {
     revalidatePath("/industry-days");
   }
 
-  // Find now: fire beady/industry-day-sweep (async) — results land here.
+  // Find now: fire beady/industry-day-sweep (async); results land here.
   async function findNow(): Promise<void> {
     "use server";
     const token = await getToken();

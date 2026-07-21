@@ -65,7 +65,7 @@ TARGET ROLE: Sr. Data Engineer
 - Highlight cloud platforms (AWS, GCP, Azure), orchestration (Airflow, Prefect, dbt), and storage (Redshift, BigQuery, Snowflake)
 - Lead bullets with operational outcomes: reduced pipeline failures, cut processing time, enabled new data product
 - If the candidate has experience serving ML/analytics consumers from a data platform, call that out specifically
-- Private sector data engineering experience (fintech, retail, healthtech) is a differentiator — surface it first
+- Private sector data engineering experience (fintech, retail, healthtech) is a differentiator, so surface it first
 `,
 };
 
@@ -85,6 +85,7 @@ UNIVERSAL FORMATTING CONSTRAINTS
 7. Professional Summary: 3 sentences max. Open with a strong claim about the candidate's primary value. End with the type of engagement they excel at.
 8. Do NOT invent accomplishments. If you reword something, preserve factual accuracy.
 9. Output the resume in clean plain text. Use consistent section headers: PROFESSIONAL SUMMARY, EXPERIENCE, EDUCATION, SKILLS, CERTIFICATIONS.
+10. Do not use em dashes.
 `;
 
 export default defineOrchestration({
@@ -103,7 +104,7 @@ export default defineOrchestration({
   async run(ctx, input) {
     const parsed = await llm_extract(ctx, {
       name: "parse-resume",
-      prompt: `Parse the resume into structured JSON. Extract every position, all bullet points verbatim, education, and skills exactly as written. Do not rephrase or improve anything at this stage — faithful extraction only.`,
+      prompt: `Parse the resume into structured JSON. Extract every position, all bullet points verbatim, education, and skills exactly as written. Do not rephrase or improve anything at this stage: faithful extraction only.`,
       input: { resume_text: input.resume_text },
       schema: parsedResumeSchema,
     });

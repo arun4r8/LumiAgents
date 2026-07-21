@@ -1,5 +1,5 @@
 /**
- * Teams Incoming Webhook — one-way notifications.
+ * Teams Incoming Webhook: one-way notifications.
  *
  * Replaces the n8n `teams-message` and `teams-card` webhooks.
  * Get the URL from Teams: channel settings → Connectors → Incoming Webhook.

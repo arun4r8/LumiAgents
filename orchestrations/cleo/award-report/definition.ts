@@ -211,7 +211,7 @@ function renderEmail(
         <div style="color:#6b7280;font-size:13px;line-height:1.5;margin-bottom:12px;">${esc(a.fit_reason ?? "")}</div>
         <div style="margin-bottom:10px;">${prestigeBadge(a.prestige)}${effortBadge(a.effort)}</div>
         <table role="presentation" style="border-collapse:collapse;margin-bottom:10px;">
-          ${kv("Sponsor", esc(a.sponsor ?? "—"))}
+          ${kv("Sponsor", esc(a.sponsor ?? "-"))}
           ${kv("Deadline", fmtDate(deadline))}
         </table>
         ${a.source_url ? `<a href="${esc(a.source_url)}" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600;">View award &rarr;</a>` : ""}

@@ -16,5 +16,5 @@ ALTER TABLE public.opportunities
 COMMENT ON COLUMN public.opportunities.fit_score       IS 'Beady 1-10 fit score for Lumiture (null = not yet scored)';
 COMMENT ON COLUMN public.opportunities.fit_reason      IS 'One-to-two sentence justification from Beady';
 COMMENT ON COLUMN public.opportunities.red_flags       IS 'Any concerns surfaced by Beady (clearance, incumbent, size, etc.)';
-COMMENT ON COLUMN public.opportunities.recommendation  IS 'pursue | monitor | pass — set by Beady';
+COMMENT ON COLUMN public.opportunities.recommendation  IS 'pursue | monitor | pass; set by Beady';
 COMMENT ON COLUMN public.opportunities.last_scored_at  IS 'Timestamp of the most recent Beady scoring pass';

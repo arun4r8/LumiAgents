@@ -1,14 +1,14 @@
 # Integrations Inventory
 
-All external systems touched by the orchestration layer. The n8n migration is complete — the runtime calls these APIs directly from Cloudflare Workers; there are no remaining "call it via n8n" wrappers. Last updated: 2026-07-20.
+All external systems touched by the orchestration layer. The n8n migration is complete. The runtime calls these APIs directly from Cloudflare Workers; there are no remaining "call it via n8n" wrappers. Last updated: 2026-07-20.
 
 ## Anthropic API (Claude)
 **Used by:** every LLM decision/extraction/drafting step across all six agents
 **Integration code:** `integrations/anthropic/`
-- `rfi.ts` — Beady's RFI / Sources Sought response drafter (grounded only in the company profile + past-performance records; never invents facts)
-- `content.ts` — Cleo's eminence-calendar content drafter (`draftContentPost`, `planContentIdeas`)
-- `govcon.ts` — the GovCon assessment chain (`extractOpportunityFacts`, `scoreDimension`, `scoreQualification`, `writeExecutiveMemo`) plus `pdfToText` OCR
-- `score-resume.ts` — Angie's resume scoring rubric
+- `rfi.ts`: Beady's RFI / Sources Sought response drafter (grounded only in the company profile + past-performance records; never invents facts)
+- `content.ts`: Cleo's eminence-calendar content drafter (`draftContentPost`, `planContentIdeas`)
+- `govcon.ts`: the GovCon assessment chain (`extractOpportunityFacts`, `scoreDimension`, `scoreQualification`, `writeExecutiveMemo`) plus `pdfToText` OCR
+- `score-resume.ts`: Angie's resume scoring rubric
 **Models:** default `claude-sonnet-4-6`; `claude-haiku-4-5` for cheaper OCR / summaries / resume scoring
 **Auth model:** API key
 **Env:** `ANTHROPIC_API_KEY`
@@ -17,20 +17,20 @@ All external systems touched by the orchestration layer. The n8n migration is co
 ---
 
 ## Supabase
-**Used by:** the entire platform — runtime persistence, dashboard, RAG + agent memory (pgvector), file storage
+**Used by:** the entire platform, for runtime persistence, dashboard, RAG + agent memory (pgvector), and file storage
 **Usage:** Postgres reads/writes across the `orchestration` and `public` schemas, vector store, storage
 **Auth model:** service role key (runtime, via Wrangler secret), anon key + user JWT (dashboard)
-**Project:** `cuaknazkpmwvnkmwtamp` (Lumiture, East US — North Virginia); separate "Test" project (`bbvfjykxxgwlkpnggkup`) for dev
+**Project:** `cuaknazkpmwvnkmwtamp` (Lumiture, East US, North Virginia); separate "Test" project (`bbvfjykxxgwlkpnggkup`) for dev
 **Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (runtime); `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (dashboard); `SUPABASE_JWT_SECRET` (JWT verification)
-**Note:** agents have no DB identity — all runtime queries run as `service_role` and bypass RLS. Knowledge access separation (corpus / sensitivity) is enforced in the retrieval path, not by Postgres roles.
+**Note:** agents have no DB identity; all runtime queries run as `service_role` and bypass RLS. Knowledge access separation (corpus / sensitivity) is enforced in the retrieval path, not by Postgres roles.
 
 ---
 
 ## SAM.gov (federal opportunity data)
-**Used by:** Beady — opportunity search/sweep, industry-day sweep, RFI grounding
+**Used by:** Beady, for opportunity search/sweep, industry-day sweep, and RFI grounding
 **Integration code:** `integrations/sam-gov/`
-- `opportunity-search.ts` — SAM.gov Opportunities API v2. Filters by NAICS, agency, posted-within-days, active-only, and `ptype` codes (`o`=Solicitation, `p`=Presolicitation, `r`=Sources Sought, `k`=Combined Synopsis/Solicitation). The `beady/industry-day-sweep` orchestration queries **Special Notices** directly (`ptype=s`) to find agency industry days.
-- `attachments.ts` — fetches a notice's full text (description + PDF **and** .docx attachment text, where the RFI/Sources-Sought questions actually live) to ground `beady/rfi-draft`. Best-effort; unzips .docx via built-in `DecompressionStream`, PDFs via `pdfToText`.
+- `opportunity-search.ts`: SAM.gov Opportunities API v2. Filters by NAICS, agency, posted-within-days, active-only, and `ptype` codes (`o`=Solicitation, `p`=Presolicitation, `r`=Sources Sought, `k`=Combined Synopsis/Solicitation). The `beady/industry-day-sweep` orchestration queries **Special Notices** directly (`ptype=s`) to find agency industry days.
+- `attachments.ts`: fetches a notice's full text (description + PDF **and** .docx attachment text, where the RFI/Sources-Sought questions actually live) to ground `beady/rfi-draft`. Best-effort; unzips .docx via built-in `DecompressionStream`, PDFs via `pdfToText`.
 **Auth model:** `api_key` query param
 **Rate limits:** free tier, ~1,000 req/day
 **Env:** `SAM_GOV_API_KEY`
@@ -39,11 +39,11 @@ All external systems touched by the orchestration layer. The n8n migration is co
 ---
 
 ## SBIR / STTR (DoD topics)
-**Used by:** Beady — `search_sbir_topics` (`beady/sbir-topic-search`)
+**Used by:** Beady, via `search_sbir_topics` (`beady/sbir-topic-search`)
 **Integration code:** `integrations/sbir/topic-search.ts`
 **Usage:** keyword / component / status search over open DoD SBIR-STTR topics
 **Auth model:** none (public portal); tracked against a daily budget for visibility
-**Env:** `SBIR_API_BASE` (optional override of the API base URL — no redeploy needed if the endpoint shifts again)
+**Env:** `SBIR_API_BASE` (optional override of the API base URL; no redeploy needed if the endpoint shifts again)
 **Migration + outage note:** the DoD SBIR/STTR Topics portal migrated from `dodsbirsttr.mil` → `www.defensesbirsttr.mil`; the old apex's DNS A record was pulled, so the code now targets the new host (default base `https://www.defensesbirsttr.mil/topics-app/api/public`) and sends browser-like headers. **As of 2026-07 the source is externally unavailable to server-side callers:** the new host sits behind Akamai bot-protection (403 to Worker calls) and the SBIR.gov public API is disabled. The integration code is correct but the upstream is down; the sweep health alert deliberately does *not* alert on this known outage.
 
 ---
@@ -54,35 +54,35 @@ All external systems touched by the orchestration layer. The n8n migration is co
 **Usage:** thin wrapper over Tavily `/search` (advanced depth, optional domain include-list)
 **Auth model:** API key
 **Env:** `TAVILY_API_KEY`
-**Note:** degrades gracefully — with no key or on error it returns `[]` so the sweep/assessment still completes.
+**Note:** degrades gracefully: with no key or on error it returns `[]` so the sweep/assessment still completes.
 
 ---
 
 ## Resend (transactional email)
 **Used by:** all digests + operational alerts
 **Integration code:** `integrations/resend/`
-- `send.ts` — `sendEmail(env, {to, subject, html, from?})`; degrades gracefully if the key is unset
-- `sender.ts` — `senderFor(env, slug)` resolves a **per-agent `from`** identity (e.g. `Beady <beady@domain>`) by reusing the verified domain from `RESEND_FROM`; falls back to the shared sender if `RESEND_FROM` is unset or still on the `resend.dev` test domain
-- `alert.ts` — `sendAlertEmail` + `subscriptionRecipients(env, kind?)`; failure/health alerts go by email to the **live recipients of the active subscriptions** (plus any `ALERT_EMAIL` addresses)
+- `send.ts`: `sendEmail(env, {to, subject, html, from?})`; degrades gracefully if the key is unset
+- `sender.ts`: `senderFor(env, slug)` resolves a **per-agent `from`** identity (e.g. `Beady <beady@domain>`) by reusing the verified domain from `RESEND_FROM`; falls back to the shared sender if `RESEND_FROM` is unset or still on the `resend.dev` test domain
+- `alert.ts`: `sendAlertEmail` + `subscriptionRecipients(env, kind?)`; failure/health alerts go by email to the **live recipients of the active subscriptions** (plus any `ALERT_EMAIL` addresses)
 **Auth model:** API key
 **Env:** `RESEND_API_KEY`, `RESEND_FROM`, `ALERT_EMAIL` (optional extra alert recipients)
-**Note:** digests (Beady opportunity, Cleo award) and all operational alerts now go over email — Teams is no longer used for alerts.
+**Note:** digests (Beady opportunity, Cleo award) and all operational alerts now go over email; Teams is no longer used for alerts.
 
 ---
 
 ## Microsoft Teams
 **Used by:** two-way chat with agents (bot)
-**Integration code:** `integrations/teams/` — `incoming-webhook.ts`, `bot.ts`, `cards.ts`, `notify.ts`, `base.ts`
+**Integration code:** `integrations/teams/` (`incoming-webhook.ts`, `bot.ts`, `cards.ts`, `notify.ts`, `base.ts`)
 **Usage:**
-- `incoming-webhook.ts` — one-way channel notifications (MessageCard / Adaptive Card). **No longer used for operational alerts** — those moved to email (Resend). Still available for ad-hoc notifications.
-- `bot.ts` — the two-way Bot Framework endpoint (`POST /api/teams/bot`): verifies the JWT, parses the Activity, replies via the Bot Connector. Still live for Teams chat with agents.
+- `incoming-webhook.ts`: one-way channel notifications (MessageCard / Adaptive Card). **No longer used for operational alerts**; those moved to email (Resend). Still available for ad-hoc notifications.
+- `bot.ts`: the two-way Bot Framework endpoint (`POST /api/teams/bot`): verifies the JWT, parses the Activity, replies via the Bot Connector. Still live for Teams chat with agents.
 **Auth model:** webhook URL (incoming); Azure Bot app ID + secret (bot)
 **Env:** `TEAMS_INCOMING_WEBHOOK_URL`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`
 
 ---
 
 ## Apollo.io
-**Used by:** Angie — candidate sourcing (`angie/candidate-sourcing`)
+**Used by:** Angie, for candidate sourcing (`angie/candidate-sourcing`)
 **Integration code:** `integrations/apollo/` (`people-search.ts`, `base.ts`)
 **Usage:** people search (titles, keywords, locations) → LLM scoring → human approval gate
 **Auth model:** API key
@@ -91,7 +91,7 @@ All external systems touched by the orchestration layer. The n8n migration is co
 ---
 
 ## Jira (Atlassian Cloud)
-**Used by:** Patch — ticket ops (`patch/ticket-ops`, `patch/staff-request`)
+**Used by:** Patch, for ticket ops (`patch/ticket-ops`, `patch/staff-request`)
 **Integration code:** `integrations/jira/` (`issues.ts`, `base.ts`)
 **Usage:** create / update / search issues
 **Auth model:** API token + account email
@@ -100,7 +100,7 @@ All external systems touched by the orchestration layer. The n8n migration is co
 ---
 
 ## GitHub
-**Used by:** Patch — Obsidian vault sync into the RAG knowledge base (`patch/vault-sync`)
+**Used by:** Patch, for Obsidian vault sync into the RAG knowledge base (`patch/vault-sync`)
 **Integration code:** `integrations/github/` (`files.ts`, `base.ts`)
 **Usage:** read repo file trees / contents (blob SHAs detect unchanged files); triggered by a signed GitHub webhook
 **Auth model:** personal access token / GitHub App
@@ -112,7 +112,7 @@ All external systems touched by the orchestration layer. The n8n migration is co
 **Used by:** document RAG (`document-rag.ts`), vault sync (`vault-sync.ts`), and agent memory (`memory.ts`)
 **Usage:** `@cf/baai/bge-large-en-v1.5` (1024-dim) embeddings for pgvector retrieval (ivfflat, cosine)
 **Auth model:** bound automatically to the Worker (no key)
-**Env:** none — Workers AI binding
+**Env:** none (Workers AI binding)
 
 ---
 
@@ -124,17 +124,17 @@ All external systems touched by the orchestration layer. The n8n migration is co
 
 ---
 
-## Accounting / CRM / HR — **stubs, not implemented**
+## Accounting / CRM / HR: **stubs, not implemented**
 The code structure exists (`base.ts` + typed wrappers) but the real API calls are not written; they throw at runtime.
-- `integrations/accounting/` — `invoices.ts`, `budget-lines.ts`, `labor-records.ts` (QuickBooks / Unanet / Deltek). Env: `ACCOUNTING_API_URL`, `ACCOUNTING_API_KEY`. `money/financial-report` will fail on any accounting-data query until one is implemented.
-- `integrations/crm/` — `contracts.ts` (Salesforce / HubSpot / Costpoint). Env: `CRM_API_URL`, `CRM_API_KEY`.
-- `integrations/hr/` — `employees.ts` (BambooHR / Workday / ADP). Env: `HR_API_URL`, `HR_API_KEY`.
+- `integrations/accounting/`: `invoices.ts`, `budget-lines.ts`, `labor-records.ts` (QuickBooks / Unanet / Deltek). Env: `ACCOUNTING_API_URL`, `ACCOUNTING_API_KEY`. `money/financial-report` will fail on any accounting-data query until one is implemented.
+- `integrations/crm/`: `contracts.ts` (Salesforce / HubSpot / Costpoint). Env: `CRM_API_URL`, `CRM_API_KEY`.
+- `integrations/hr/`: `employees.ts` (BambooHR / Workday / ADP). Env: `HR_API_URL`, `HR_API_KEY`.
 
 ---
 
 ## Credential storage (Workers)
 
-All runtime secrets are set via `wrangler secret put <name>` — never in `wrangler.toml` or committed files.
+All runtime secrets are set via `wrangler secret put <name>`, never in `wrangler.toml` or committed files.
 
 | Secret / var | Env name | Used by |
 |--------------|----------|---------|

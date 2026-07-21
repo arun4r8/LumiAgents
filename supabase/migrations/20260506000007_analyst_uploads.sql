@@ -51,7 +51,7 @@ CREATE POLICY "owner_delete" ON public.analyst_uploads
 
 -- ── Grants ────────────────────────────────────────────────────────────────────
 
--- Service role (runtime) gets full access — bypasses RLS by design
+-- Service role (runtime) gets full access; bypasses RLS by design
 GRANT ALL ON public.analyst_uploads TO service_role;
 
 -- Authenticated users get the three operations they need; UPDATE is excluded

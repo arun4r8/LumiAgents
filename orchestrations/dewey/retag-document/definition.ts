@@ -4,7 +4,7 @@ import type { Env } from "@/runtime";
 
 // Dewey's curatorial power: move a document between corpora and set its sensitivity.
 // This is how a document gets locked down (sensitivity='restricted', ops-only) or
-// handed to a specific agent's private corpus. Ops-only — it changes who can read what.
+// handed to a specific agent's private corpus. Ops-only, since it changes who can read what.
 
 export const inputSchema = z.object({
   documentId: z.string().uuid().describe("orch_documents.id of the document to re-tag."),
@@ -35,7 +35,7 @@ export default defineOrchestration({
   version: 1,
   triggerMode: "agent",
   description:
-    "Re-tag a document's corpus and/or sensitivity — Dewey's curation of the knowledge base (e.g. lock a doc to 'restricted', or move it to an agent's private corpus).",
+    "Re-tag a document's corpus and/or sensitivity. Dewey's curation of the knowledge base (e.g. lock a doc to 'restricted', or move it to an agent's private corpus).",
   inputSchema,
   outputSchema,
   access: {
@@ -45,7 +45,7 @@ export default defineOrchestration({
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
     const env = ctx.env;
     if (input.corpus === undefined && input.sensitivity === undefined) {
-      throw new Error("Nothing to change — provide corpus and/or sensitivity.");
+      throw new Error("Nothing to change. Provide corpus and/or sensitivity.");
     }
 
     return step(ctx, "retag", async () => {

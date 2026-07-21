@@ -1,4 +1,4 @@
--- Migration: fix claim_resume_queue — wrong status filter
+-- Migration: fix claim_resume_queue (wrong status filter)
 --
 -- The function was filtering for status = 'pending' but n8n's
 -- "Add to Process Queue" node inserts rows with status = 'queued'.

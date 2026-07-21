@@ -347,7 +347,7 @@ function SubscriptionRow({
       )}
       <td style={{ padding: "12px 16px" }}>
         <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
-          {s.label ?? <span style={{ color: "var(--ink-3)" }}>—</span>}
+          {s.label ?? <span style={{ color: "var(--ink-3)" }}>-</span>}
         </div>
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 5 }}>

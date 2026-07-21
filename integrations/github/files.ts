@@ -8,7 +8,7 @@ import { githubFetch } from "./base";
 export interface GitHubFileContent {
   path: string;
   content: string;       // decoded UTF-8 text
-  blobSha: string;       // Git blob SHA — used to detect unchanged files
+  blobSha: string;       // Git blob SHA, used to detect unchanged files
   size: number;
 }
 
@@ -55,7 +55,7 @@ export async function fetchRepoMarkdownFiles(
 
   if (tree.truncated) {
     // Repos >100k items get truncated. In practice an Obsidian vault won't hit this.
-    console.warn(`[vault-sync] GitHub tree truncated for ${owner}/${repo} — large vault`);
+    console.warn(`[vault-sync] GitHub tree truncated for ${owner}/${repo} (large vault)`);
   }
 
   return tree.tree

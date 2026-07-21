@@ -432,7 +432,7 @@ function TextIngest() {
                 background: "var(--bg-2)",
               }}>
                 <FileSpreadsheet style={{ width: 14, height: 14, flexShrink: 0, color: "var(--accent)" }} />
-                {content ? "CSV loaded — paste or re-upload to replace" : "Choose a .csv file or paste below"}
+                {content ? "CSV loaded: paste or re-upload to replace" : "Choose a .csv file or paste below"}
               </label>
               <input id="csv-upload" type="file" accept=".csv,text/csv" onChange={handleFileChange} style={{ display: "none" }} />
               <textarea className="ta mono" placeholder="Or paste CSV content here…"
@@ -468,7 +468,7 @@ function TextIngest() {
       <div className="card" style={{ padding: 18 }}>
         <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Tips</div>
         <ul style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.7, paddingLeft: 16, margin: 0 }}>
-          <li>Use clear, descriptive source names — they appear in query citations.</li>
+          <li>Use clear, descriptive source names; they appear in query citations.</li>
           <li>CSVs are chunked row-by-row, one chunk per row.</li>
           <li>For PDFs or images, use <strong>File upload (OCR)</strong> above.</li>
           <li>After ingesting, use <strong>Query</strong> to verify the content is retrievable.</li>
@@ -522,7 +522,7 @@ function DocCorpus({
   }
 
   if (useRich) {
-    // Rich view — data from runtime /api/documents
+    // Rich view: data from runtime /api/documents
     const filtered = search.trim()
       ? corpusDocs.filter((d) =>
           d.source_name.toLowerCase().includes(search.trim().toLowerCase()),
@@ -550,7 +550,7 @@ function DocCorpus({
           </div>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
             <div style={{ fontSize: 22, fontWeight: 700 }}>
-              {[...new Set(corpusDocs.map((d) => d.source_kind))].join(" · ") || "—"}
+              {[...new Set(corpusDocs.map((d) => d.source_kind))].join(" · ") || "-"}
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>source kinds</div>
           </div>
@@ -607,7 +607,7 @@ function DocCorpus({
                       {doc.chunk_count.toLocaleString()}
                     </td>
                     <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13, color: "var(--ink-2)" }}>
-                      {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "—"}
+                      {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "-"}
                     </td>
                     <td style={{ fontSize: 12.5, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
                       {new Date(doc.created_at).toLocaleDateString()}
@@ -635,7 +635,7 @@ function DocCorpus({
     );
   }
 
-  // Legacy fallback view — data from Supabase (no chunk counts)
+  // Legacy fallback view: data from Supabase (no chunk counts)
   const totalChars = documents.reduce((s, d) => s + (d.char_count ?? 0), 0);
 
   return (
@@ -651,7 +651,7 @@ function DocCorpus({
         </div>
         <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
           <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {[...new Set(documents.map((d) => d.source_kind))].join(" · ") || "—"}
+            {[...new Set(documents.map((d) => d.source_kind))].join(" · ") || "-"}
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>source kinds</div>
         </div>

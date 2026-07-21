@@ -1,4 +1,4 @@
-// Central orchestration registry — imported by both worker.ts and workflow.ts.
+// Central orchestration registry, imported by both worker.ts and workflow.ts.
 // Add new orchestrations here; the name key MUST match the `name` field in the definition.
 
 import { z } from "zod";

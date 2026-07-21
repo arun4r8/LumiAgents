@@ -32,7 +32,7 @@ export interface ContractRecord {
 }
 
 export interface SyncContractsOptions {
-  /** ISO 8601 datetime — only return contracts modified after this timestamp */
+  /** ISO 8601 datetime. Only return contracts modified after this timestamp */
   since?: string;
 }
 
@@ -51,6 +51,6 @@ export async function syncContractsFromCrm(
   // Suppress unused-variable warning until implementation lands.
   void options;
   throw new Error(
-    "TODO: implement CRM contract sync — see integrations/crm/contracts.ts",
+    "TODO: implement CRM contract sync. See integrations/crm/contracts.ts",
   );
 }

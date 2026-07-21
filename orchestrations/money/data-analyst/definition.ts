@@ -4,7 +4,7 @@ import { runDataAnalyst } from "@/runtime/agents/data-analyst";
 
 export const inputSchema = z.object({
   question: z.string().min(1).describe("Natural language business question"),
-  tables: z.array(z.string()).optional().describe("Restrict to specific tables (optional — defaults to all available)"),
+  tables: z.array(z.string()).optional().describe("Restrict to specific tables (optional; defaults to all available)"),
   maxRows: z.number().int().min(1).max(5000).default(500).describe("Row cap for query results"),
 });
 

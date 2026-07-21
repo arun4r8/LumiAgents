@@ -1,4 +1,4 @@
--- Register Dewey's orchestrations. Dewey is the knowledge librarian — an additive,
+-- Register Dewey's orchestrations. Dewey is the knowledge librarian: an additive,
 -- curatorial agent over the shared corpus (it does not own the ingest pipeline; Patch
 -- keeps that). All three are agent-triggered / on-demand (no schedule).
 --
@@ -11,9 +11,9 @@ VALUES
     'Answer a question from the shared central knowledge base (RAG over the shared corpus).',
     '{}', '{}', true, 'agent'),
   ('dewey/retag-document', 1,
-    'Re-tag a document''s corpus and/or sensitivity — Dewey''s curation of the knowledge base.',
+    'Re-tag a document''s corpus and/or sensitivity, Dewey''s curation of the knowledge base.',
     '{}', '{}', true, 'agent'),
   ('dewey/knowledge-inventory', 1,
-    'Summarize the knowledge base — counts by corpus and sensitivity, plus recent documents.',
+    'Summarize the knowledge base: counts by corpus and sensitivity, plus recent documents.',
     '{}', '{}', true, 'agent')
 ON CONFLICT (name, version) DO UPDATE SET description = EXCLUDED.description, is_active = EXCLUDED.is_active;

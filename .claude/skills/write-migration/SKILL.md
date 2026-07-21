@@ -17,7 +17,7 @@ Confirm with the user:
 
 ## File location and naming
 
-`db/migrations/YYYYMMDDHHMM_<short_description>.sql` — timestamp prefix, snake_case description.
+`db/migrations/YYYYMMDDHHMM_<short_description>.sql`: timestamp prefix, snake_case description.
 
 ## Required structure
 
@@ -66,7 +66,7 @@ COMMIT;
 - New table → at least one ops policy and one enduser policy (or an explicit comment why end users have no access).
 - Indexes for any column used in an RLS policy's USING clause. Otherwise RLS becomes a sequential scan on every query.
 - Columns added to existing tables: nullable or with a DEFAULT. No NOT NULL without DEFAULT on a populated table.
-- Renames: split into "add new column", backfill, "switch readers", "drop old column" — across multiple migrations and PRs. Never rename in one shot.
+- Renames: split into "add new column", backfill, "switch readers", "drop old column", across multiple migrations and PRs. Never rename in one shot.
 - Foreign keys: always `ON DELETE` explicitly chosen (RESTRICT / CASCADE / SET NULL). Don't accept the default.
 
 ## Soft rules
@@ -87,7 +87,7 @@ If `db:test-rls` doesn't have a case covering your new table, add one before mer
 
 ## Gotchas
 
-- `auth.jwt()` is not available in service-role connections. RLS policies that reference it will return false for service role, which is fine because service role bypasses RLS — but it's confusing to debug.
+- `auth.jwt()` is not available in service-role connections. RLS policies that reference it will return false for service role, which is fine because service role bypasses RLS, but it's confusing to debug.
 - Adding a NOT NULL column with a DEFAULT on a large table can lock the table briefly. For tables with millions of rows, do it in two migrations (add nullable, backfill, then alter to NOT NULL).
 - Supabase replicas can lag. After a migration, the realtime subscriptions in the dashboard may temporarily show stale data. Document this if it matters for the change.
 - `DROP COLUMN` removes data permanently. Always check with the user before writing one.

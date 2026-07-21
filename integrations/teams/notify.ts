@@ -12,7 +12,7 @@ import { sendIncomingWebhookMessage, sendIncomingWebhookCard } from "./incoming-
 export const sendTeamsMessage = defineTool({
   name: "sendTeamsMessage",
   inputSchema: z.object({
-    channel: z.string().describe("Teams channel name or ID (informational — webhook URL determines destination)"),
+    channel: z.string().describe("Teams channel name or ID (informational; the webhook URL determines the destination)"),
     message: z.string(),
     subject: z.string().optional(),
   }),

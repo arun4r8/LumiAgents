@@ -1,6 +1,6 @@
 -- scored_notices: a dedup ledger of every opportunity the sweep has ever scored,
 -- pass or pursue. Previously the sweep deduped against public.opportunities, which
--- only holds the *saved* shortlist (fit >= minScore) — so notices scored below the
+-- only holds the *saved* shortlist (fit >= minScore), so notices scored below the
 -- threshold weren't remembered and could be re-scored (re-billed to the LLM) on a
 -- later run. beady/opportunity-sweep now records every scored notice here and dedups
 -- against this table, so nothing is ever scored twice.

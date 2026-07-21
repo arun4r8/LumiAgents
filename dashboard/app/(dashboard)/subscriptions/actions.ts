@@ -134,7 +134,7 @@ export async function deleteSubscription(formData: FormData) {
   revalidatePath("/awards");
 }
 
-// Send this subscription's digest now — routes to the orchestration for its kind.
+// Send this subscription's digest now, routing to the orchestration for its kind.
 export async function sendNow(formData: FormData) {
   const id = formData.get("id") as string;
   const kind = normalizeKind(formData.get("kind"));

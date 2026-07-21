@@ -1,5 +1,5 @@
 /*
- * LumiAgents Design System — derived from Claude Design prototype
+ * LumiAgents Design System, derived from the Claude Design prototype
  * Scoped custom CSS; does not conflict with Tailwind (which we keep for
  * components that haven't been redesigned yet).
  */
@@ -11,7 +11,7 @@
   --accent-c: 0.145;
   --accent-l: 0.74;
 
-  /* neutrals — Modernist gray ground + ink */
+  /* neutrals: Modernist gray ground + ink */
   --bg: #f3f2f2;
   --bg-1: #ffffff;
   --bg-2: #eae8e6;
@@ -56,11 +56,11 @@
   --card-pad: 18px;
   --gap: 14px;
 
-  /* Archivo — loaded via next/font/google in app/layout.tsx */
+  /* Archivo: loaded via next/font/google in app/layout.tsx */
   --sans: var(--font-archivo, "Archivo", system-ui, -apple-system, sans-serif);
   --mono: var(--font-archivo, "Archivo", ui-monospace, SFMono-Regular, Menlo, monospace);
 
-  /* flat — no elevation */
+  /* flat: no elevation */
   --shadow-sm: none;
   --shadow-md: none;
   --shadow-lg: none;
@@ -823,7 +823,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .login-shell {
   min-height: 100vh;
   display: grid; place-items: center;
-  background: var(--bg);   /* flat ground — Modernist (radial glows removed) */
+  background: var(--bg);   /* flat Modernist ground (radial glows removed) */
   padding: 24px;
 }
 .login-card {

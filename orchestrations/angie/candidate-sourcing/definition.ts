@@ -52,7 +52,7 @@ export default defineOrchestration({
   name: "angie/candidate-sourcing",
   version: 1,
   description:
-    "Source candidates for a role via Apollo.io — extracts search params, filters by fit, surfaces a shortlist, and drafts outreach on approval",
+    "Source candidates for a role via Apollo.io: extracts search params, filters by fit, surfaces a shortlist, and drafts outreach on approval",
   inputSchema,
   outputSchema,
   access: {
@@ -75,7 +75,7 @@ Rules:
 - locations: derive from the input location; if unclear default to ["United States"]
 - If the role is government-contract-related, add "cleared" or "security clearance" to keywords
 
-Return ONLY the structured parameters — do not include explanations.
+Return ONLY the structured parameters. Do not include explanations.
       `.trim(),
       input: {
         jobTitle: input.jobTitle,
@@ -106,7 +106,7 @@ Return ONLY the structured parameters — do not include explanations.
     );
 
     if (searchResults.people.length === 0) {
-      // Nothing found — return early without consuming an approval
+      // Nothing found, so return early without consuming an approval
       return {
         totalFound: 0,
         shortlistCount: 0,
@@ -126,7 +126,7 @@ working primarily on US government contracts.
 Score each candidate against the job requirements. Only include candidates scoring 6 or higher.
 Write a short matchReason (1-2 sentences) explaining the fit.
 
-Do NOT generate outreachDraft yet — set it to null for all candidates.
+Do NOT generate outreachDraft yet. Set it to null for all candidates.
       `.trim(),
       input: {
         jobTitle: input.jobTitle,
@@ -196,7 +196,7 @@ Do NOT generate outreachDraft yet — set it to null for all candidates.
     // ── Step 5: Pause for human approval before drafting outreach ─────────────
     const approvalPromptLines = shortlisted.shortlisted.map(
       (c, i) =>
-        `${i + 1}. ${c.name} — ${c.title ?? "Unknown title"} @ ${c.company ?? "Unknown"} (score: ${c.matchScore}/10)\n   ${c.matchReason}`,
+        `${i + 1}. ${c.name}: ${c.title ?? "Unknown title"} @ ${c.company ?? "Unknown"} (score: ${c.matchScore}/10)\n   ${c.matchReason}`,
     );
 
     const approval = await await_approval(ctx, {
@@ -236,7 +236,8 @@ Guidelines:
 - Briefly describe the opportunity and why it fits them
 - End with a soft call-to-action ("Would you be open to a quick conversation?")
 - Do NOT mention salary or compensation
-- Tone: professional but conversational — not corporate-stiff
+- Tone: professional but conversational, not corporate-stiff
+- Do not use em dashes.
 - Sign as "Angie, Lumiture Recruiting"
       `.trim(),
       input: {

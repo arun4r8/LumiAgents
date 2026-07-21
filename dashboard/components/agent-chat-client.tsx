@@ -78,7 +78,7 @@ async function docxToPdf(file: File): Promise<AttachedFile> {
 async function readFile(file: File): Promise<AttachedFile> {
   if (/\.docx$/i.test(file.name)) return docxToPdf(file);
   if (/\.doc$/i.test(file.name)) {
-    throw new Error(`"${file.name}" is a legacy .doc file — please save it as .docx or PDF first`);
+    throw new Error(`"${file.name}" is a legacy .doc file. Please save it as .docx or PDF first`);
   }
   const isText = TEXT_TYPES.has(file.type) || TEXT_EXTS.test(file.name);
   if (isText) {
@@ -144,7 +144,7 @@ export default function AgentChatClient({
   // ── Send ───────────────────────────────────────────────────────────────────
 
   // Each batch sent to the runtime: must stay well under the 100MB Workers body limit.
-  // 20 × ~300KB PDFs ≈ 6MB base64 per request — safe for any Workers plan.
+  // 20 × ~300KB PDFs ≈ 6MB base64 per request, safe for any Workers plan.
   const FILE_BATCH = 20;
 
   // Build the payload messages array. Server-side ChatMessage uses `content` (not `text`).
@@ -213,7 +213,7 @@ export default function AgentChatClient({
           if (isFirst) firstReply = data.reply;
           const batchRunIds = data.runIds ?? [];
           if (!isFirst && batchRunIds.length === 0) {
-            // LLM responded but didn't call the tool — retry once with a stronger prompt.
+            // LLM responded but didn't call the tool; retry once with a stronger prompt.
             const retryHistory = [
               ...batchHistory,
               { role: "assistant" as const, text: data.reply },
@@ -242,7 +242,7 @@ export default function AgentChatClient({
       setBatchProgress(null);
       setThinking(false);
       const missedNote = missedBatches > 0
-        ? `\n\n⚠️ ${missedBatches} batch(es) could not be submitted — please re-upload those files.`
+        ? `\n\n⚠️ ${missedBatches} batch(es) could not be submitted. Please re-upload those files.`
         : "";
       setMessages((prev) => [
         ...prev,
@@ -389,7 +389,7 @@ export default function AgentChatClient({
             {/* File upload */}
             <label
               className="btn sm"
-              title="Attach file (.txt, .csv, .pdf, .md, .json, .docx — .docx auto-converts to PDF)"
+              title="Attach file (.txt, .csv, .pdf, .md, .json, .docx; .docx auto-converts to PDF)"
               style={{ cursor: "pointer" }}
             >
               <Paperclip style={{ width: 12, height: 12 }} />

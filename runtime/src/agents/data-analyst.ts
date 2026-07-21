@@ -3,7 +3,7 @@ import type { Env } from "../types";
 
 const MODEL = "claude-sonnet-4-6";
 
-// Tables the analyst can query — curated list to keep the schema prompt focused.
+// Tables the analyst can query: a curated list to keep the schema prompt focused.
 // Add tables here as the business needs grow.
 const QUERYABLE_TABLES = [
   "public.opportunities",
@@ -20,7 +20,7 @@ const QUERYABLE_TABLES = [
   "public.past_performance",
 ] as const;
 
-// Compact schema descriptions — keeps the prompt tight.
+// Compact schema descriptions, which keep the prompt tight.
 // These are hand-maintained and should match the real schema.
 const TABLE_SCHEMAS: Record<string, string> = {
   "public.opportunities": `opportunities(id uuid, title text, agency text, set_aside text, naics_code text, solicitation_number text, response_deadline date, posted_date date, source text, source_url text, status text, fit_score float, fit_reason text, red_flags text, recommendation text, last_scored_at timestamptz, created_at timestamptz)`,
@@ -199,11 +199,12 @@ Given a business question, write a single valid SELECT query to answer it.
 
 Rules:
 - Only use tables from the schema provided
-- Only SELECT — no INSERT, UPDATE, DELETE, DROP, or any mutation
+- Only SELECT queries: no INSERT, UPDATE, DELETE, DROP, or any mutation
 - Use proper joins where needed. Prefer explicit column names over SELECT *
 - Limit results to ${maxRows} rows unless aggregating
 - For financial amounts, round to 2 decimal places
-- Return ONLY the SQL query, nothing else — no markdown, no explanation${uploadTableNote}`,
+- Return ONLY the SQL query, nothing else: no markdown, no explanation
+- Do not use em dashes.${uploadTableNote}`,
     messages: [
       {
         role: "user",
@@ -250,8 +251,9 @@ Rules:
     max_tokens: 2048,
     system: `You are a senior business analyst for Lumiture, a government contracting firm.
 Interpret SQL query results and provide a clear, concise business answer.
-Include key numbers, trends, or anomalies. Be direct — no filler.
-If the result set is empty, say so and suggest why.`,
+Include key numbers, trends, or anomalies. Be direct and skip the filler.
+If the result set is empty, say so and suggest why.
+Do not use em dashes.`,
     messages: [
       {
         role: "user",

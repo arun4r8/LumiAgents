@@ -6,8 +6,8 @@ export interface Env {
   SUPABASE_SERVICE_ROLE_KEY: string;
   SUPABASE_JWT_SECRET: string;
   ANTHROPIC_API_KEY: string;
-  N8N_WEBHOOK_SECRET?: string;  // optional — set when n8n webhooks have Header Auth configured
-  APOLLO_API_KEY?: string;      // optional — set when Apollo API key is obtained
+  N8N_WEBHOOK_SECRET?: string;  // optional: set when n8n webhooks have Header Auth configured
+  APOLLO_API_KEY?: string;      // optional: set when Apollo API key is obtained
   JIRA_BASE_URL: string;
   JIRA_EMAIL: string;
   JIRA_API_TOKEN: string;
@@ -32,9 +32,9 @@ export interface Env {
   ACCOUNTING_API_URL?: string;
   ACCOUNTING_API_KEY?: string;
   AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
-  /** Cloudflare Workflows binding — present in deployed Workers, absent in local dev without wrangler. */
+  /** Cloudflare Workflows binding: present in deployed Workers, absent in local dev without wrangler. */
   ORCHESTRATION_WORKFLOW: Workflow;
-  // Per-agent Service Bindings — present in production, absent in local dev (fallback to local fn).
+  // Per-agent Service Bindings: present in production, absent in local dev (fallback to local fn).
   ANGIE_WORKER?: Fetcher;
   BEADY_WORKER?: Fetcher;
   PATCH_WORKER?: Fetcher;
@@ -43,14 +43,14 @@ export interface Env {
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   TEAMS_BOT_APP_ID?: string;
   TEAMS_BOT_APP_SECRET?: string;
-  // GitHub integration — Obsidian vault sync
-  VAULT_OWNER: string;           // set in wrangler.toml [vars] — org/user that owns LumiKnowledge
+  // GitHub integration (Obsidian vault sync)
+  VAULT_OWNER: string;           // set in wrangler.toml [vars]; org/user that owns LumiKnowledge
   VAULT_REPO: string;            // set in wrangler.toml [vars]
   GITHUB_API_TOKEN: string;      // set via `wrangler secret put`
   GITHUB_WEBHOOK_SECRET?: string;
-  // Tavily web-search (GovCon incumbent research) — set via `wrangler secret put`
+  // Tavily web-search (GovCon incumbent research), set via `wrangler secret put`
   TAVILY_API_KEY?: string;
-  // Resend transactional email (opportunity report dispatch) — set via `wrangler secret put`
+  // Resend transactional email (opportunity report dispatch), set via `wrangler secret put`
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;  // e.g. "Beady <reports@lumiture.com>"
 }
@@ -63,9 +63,9 @@ export interface RunContext {
   env: Env;
   idempotencyKey: (tool: string, ...parts: string[]) => string;
   fetch: typeof fetch;
-  /** Set when running inside a Cloudflare Workflow — enables durable step execution. */
+  /** Set when running inside a Cloudflare Workflow; enables durable step execution. */
   workflowStep?: WorkflowStep;
-  /** ID of the currently-executing run_step row — set by step() before invoking fn(). */
+  /** ID of the currently-executing run_step row, set by step() before invoking fn(). */
   currentStepId?: string;
   /** LLM model resolved at run start from orchestration.agent_configs (with per-orchestration
    *  override). Falls back to claude-sonnet-4-6. llm_decide / llm_extract read this automatically. */

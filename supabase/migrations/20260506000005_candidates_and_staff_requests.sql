@@ -4,7 +4,7 @@
 -- staff_requests: add columns so patch/staff-request can log requests with Jira links
 -- opportunities: add columns for SAM.gov data so beady/opportunity-search can store finds
 --
--- All three tables are empty (0 rows per audit) — safe to add/alter freely.
+-- All three tables are empty (0 rows per audit), so it is safe to add/alter freely.
 
 -- ─── candidates ──────────────────────────────────────────────────────────────
 

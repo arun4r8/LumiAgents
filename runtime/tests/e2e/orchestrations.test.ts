@@ -43,7 +43,7 @@ describe("Orchestration auth", () => {
   it("rejects unknown orchestration name", async () => {
     const res = await fetch(`${RUNTIME_URL}/api/orchestrations/does-not-exist/run`, {
       method: "POST",
-      headers: await authHeaders(), // valid token — auth passes, then 404 on unknown name
+      headers: await authHeaders(), // valid token: auth passes, then 404 on unknown name
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(404);
@@ -60,7 +60,7 @@ describe("Orchestration auth", () => {
 });
 
 // ─── Beady: opportunity-search (SAM.gov) ──────────────────────────────────────
-// Skipped in automated CI — hits the SAM.gov API (free key, limited quota).
+// Skipped in automated CI: hits the SAM.gov API (free key, limited quota).
 // Run manually with: pnpm test:e2e --reporter=verbose tests/e2e/orchestrations.test.ts
 
 describe.skip("beady/opportunity-search", () => {
@@ -94,12 +94,12 @@ describe("patch/document-ingest", () => {
   }, 160_000);
 });
 
-// Skipped in automated CI — requires Jira credentials (JIRA_EMAIL, JIRA_API_TOKEN).
+// Skipped in automated CI: requires Jira credentials (JIRA_EMAIL, JIRA_API_TOKEN).
 describe.skip("patch/ticket-ops", () => {
   it("creates a Jira ticket", async () => {
     const runId = await triggerRun("patch/ticket-ops", {
       operation: "create",
-      requestText: "[E2E TEST] Smoke test ticket — safe to close immediately",
+      requestText: "[E2E TEST] Smoke test ticket, safe to close immediately",
       requestedBy: "e2e-test-runner",
       notifyTeams: false,
     });
@@ -113,7 +113,7 @@ describe.skip("patch/ticket-ops", () => {
 });
 
 // ─── Angie: candidate-sourcing (Apollo) ───────────────────────────────────────
-// Skipped in automated CI — requires APOLLO_API_KEY.
+// Skipped in automated CI: requires APOLLO_API_KEY.
 
 describe.skip("angie/candidate-sourcing", () => {
   it("sources candidates from Apollo", async () => {
@@ -130,7 +130,7 @@ describe.skip("angie/candidate-sourcing", () => {
 });
 
 // ─── Angie: resume-scoring (native) ───────────────────────────────────────────
-// Skipped in automated CI — runs a live Claude call (ANTHROPIC_API_KEY) and writes
+// Skipped in automated CI: runs a live Claude call (ANTHROPIC_API_KEY) and writes
 // resume_results directly. The minimal PDF below has no real content, so scores are nominal.
 
 describe.skip("angie/resume-scoring", () => {
@@ -149,7 +149,7 @@ describe.skip("angie/resume-scoring", () => {
 });
 
 // ─── Beady: govcon-assessment (native) ────────────────────────────────────────
-// Skipped in automated CI — runs ~7 live Claude calls + Tavily, writes to
+// Skipped in automated CI: runs ~7 live Claude calls + Tavily, writes to
 // assessments/incumbent_research. Needs a real opportunity row (or intake text).
 
 describe.skip("beady/govcon-assessment", () => {
@@ -166,7 +166,7 @@ describe.skip("beady/govcon-assessment", () => {
 });
 
 // ─── Beady: past-performance-seed (CF Workers AI + Supabase) ──────────────────
-// Skipped in automated CI — requires a real past_performance row UUID in the DB.
+// Skipped in automated CI: requires a real past_performance row UUID in the DB.
 
 describe.skip("beady/past-performance-seed", () => {
   it("embeds a past performance record into the RAG index", async () => {
@@ -183,7 +183,7 @@ describe.skip("beady/past-performance-seed", () => {
 });
 
 // ─── Money: data-analyst (Supabase + LLM) ─────────────────────────────────────
-// Skipped in automated CI — queries live financial data in Supabase; safe to
+// Skipped in automated CI: queries live financial data in Supabase; safe to
 // enable once the money schema is populated in the target environment.
 
 describe.skip("money/data-analyst", () => {
@@ -201,7 +201,7 @@ describe.skip("money/data-analyst", () => {
 });
 
 // ─── Money: financial-report (Supabase + LLM) ─────────────────────────────────
-// Skipped in automated CI — same as data-analyst: needs populated financial data.
+// Skipped in automated CI, same as data-analyst: needs populated financial data.
 
 describe.skip("money/financial-report", () => {
   it("generates a burn-rate report", async () => {
@@ -218,7 +218,7 @@ describe.skip("money/financial-report", () => {
 });
 
 // ─── Patch: inbound-triage (Teams + LLM) ──────────────────────────────────────
-// Skipped in automated CI — posts cards to Microsoft Teams
+// Skipped in automated CI: posts cards to Microsoft Teams
 // (TEAMS_INCOMING_WEBHOOK_URL / TEAMS_BOT_APP_ID).
 
 describe.skip("patch/inbound-triage", () => {
@@ -238,7 +238,7 @@ describe.skip("patch/inbound-triage", () => {
 });
 
 // ─── Patch: staff-request (Jira + Teams + LLM) ────────────────────────────────
-// Skipped in automated CI — creates a Jira ticket in the HR project and posts
+// Skipped in automated CI: creates a Jira ticket in the HR project and posts
 // a Teams card. Requires JIRA_EMAIL, JIRA_API_TOKEN, TEAMS_INCOMING_WEBHOOK_URL.
 
 describe.skip("patch/staff-request", () => {
@@ -260,7 +260,7 @@ describe.skip("patch/staff-request", () => {
 });
 
 // ─── Patch: vault-sync (GitHub → Supabase RAG) ────────────────────────────────
-// Skipped in automated CI — requires GITHUB_API_TOKEN with repo read access
+// Skipped in automated CI: requires GITHUB_API_TOKEN with repo read access
 // and the target Obsidian vault repo to exist.
 
 describe.skip("patch/vault-sync", () => {

@@ -57,7 +57,7 @@ export function scheduleDue(
     const t = new Date(now.getTime() - i * 60_000);
     t.setUTCSeconds(0, 0);
     if (!cronMatches(cronExpr, t)) continue;
-    // Matched — only run if we haven't already fired for this occurrence.
+    // Matched: only run if we haven't already fired for this occurrence.
     if (lastRunAt === null || lastRunAt < t) return true;
     return false;
   }

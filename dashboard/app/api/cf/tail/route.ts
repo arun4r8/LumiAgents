@@ -20,7 +20,7 @@ function getCfConfig() {
   };
 }
 
-// POST /api/cf/tail — create a tail session
+// POST /api/cf/tail: create a tail session
 export async function POST(_req: NextRequest): Promise<NextResponse> {
   if (!(await authCheck())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -81,7 +81,7 @@ const DeleteTailSchema = z.object({
   tailId: z.string().min(1),
 });
 
-// DELETE /api/cf/tail — delete a tail session
+// DELETE /api/cf/tail: delete a tail session
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   if (!(await authCheck())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

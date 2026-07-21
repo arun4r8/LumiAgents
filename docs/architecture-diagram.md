@@ -1,4 +1,4 @@
-# LumiAgents — Architecture Diagram
+# LumiAgents Architecture Diagram
 
 ```mermaid
 flowchart TB
@@ -28,7 +28,7 @@ flowchart TB
         RF["resume-formatting\nClaude"]
       end
 
-      subgraph BeadyAgent["Beady · GovCon BD — discovery · scoring · response drafting"]
+      subgraph BeadyAgent["Beady · GovCon BD: discovery · scoring · response drafting"]
         OS["opportunity-search\nSAM.gov + Claude"]
         OSW["opportunity-sweep\nparallel SAM.gov + SBIR"]
         SB["sbir-topic-search\nSBIR.gov + Claude"]
@@ -53,7 +53,7 @@ flowchart TB
       end
     end
 
-    %% Cleo and Dewey have no dedicated Worker — they run inline inside
+    %% Cleo and Dewey have no dedicated Worker; they run inline inside
     %% lumiagents-runtime via the fallback path (else → runAgentChat).
     subgraph Inline["Inline in lumiagents-runtime · fallback path (no dedicated Worker)"]
       direction TB
@@ -102,7 +102,7 @@ flowchart TB
 
     subgraph OrchSchema["orchestration.*"]
       OT["orchestrations · runs · run_steps\ntool_calls · approvals · schedules"]
-      RAG["orch_documents (corpus + sensitivity)\ndocument_chunks\n(Workers vector RAG — Dewey's shared corpus)\n+ source_uri for vault upsert"]
+      RAG["orch_documents (corpus + sensitivity)\ndocument_chunks\n(Workers vector RAG: Dewey's shared corpus)\n+ source_uri for vault upsert"]
       MEM["conversations · messages\nmemory_chunks · teams_users\n(agent memory)"]
       SUBS["subscriptions · report_subscriptions\naward_subscriptions · award_scored\nscored_notices"]
     end
@@ -166,7 +166,7 @@ flowchart TB
 
 ### Agent hosting
 
-Four agents run as their own Cloudflare Worker, reached over a Service Binding declared in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`): **Angie → `ANGIE_WORKER`**, **Beady → `BEADY_WORKER`**, **Patch → `PATCH_WORKER`**, **Money → `MONEY_WORKER`**. **Cleo** and **Dewey** have no dedicated Worker — chat for those slugs falls through the `else` branch and runs inline in `lumiagents-runtime` via `runAgentChat(...)`. Orchestrations for all six agents execute in the runtime's Workflow engine regardless of where the chat loop runs.
+Four agents run as their own Cloudflare Worker, reached over a Service Binding declared in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`): **Angie → `ANGIE_WORKER`**, **Beady → `BEADY_WORKER`**, **Patch → `PATCH_WORKER`**, **Money → `MONEY_WORKER`**. **Cleo** and **Dewey** have no dedicated Worker; chat for those slugs falls through the `else` branch and runs inline in `lumiagents-runtime` via `runAgentChat(...)`. Orchestrations for all six agents execute in the runtime's Workflow engine regardless of where the chat loop runs.
 
 ### Legacy n8n flows (being phased out)
 
@@ -174,7 +174,7 @@ n8n is no longer the primary integration mechanism. GovCon scoring, resume scori
 
 ### Registered orchestrations (27 in the code registry + `patch/vault-sync` via DB)
 
-The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in the code registry map — it is registered in the DB and dispatched from the `/api/vault/webhook` route (`runtime/src/routes/vault.ts`).
+The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in the code registry map; it is registered in the DB and dispatched from the `/api/vault/webhook` route (`runtime/src/routes/vault.ts`).
 
 | Name | Agent | Hosting | Description |
 |---|---|---|---|

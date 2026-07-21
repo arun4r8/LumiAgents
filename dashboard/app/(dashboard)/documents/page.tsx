@@ -53,7 +53,7 @@ export default async function DocumentsPage() {
     if (token) {
       const res = await fetch(`${RUNTIME}/api/documents`, {
         headers: { Authorization: `Bearer ${token}` },
-        // Next.js server fetch — opt out of caching for fresh data
+        // Next.js server fetch: opt out of caching for fresh data
         cache: "no-store",
       });
       if (res.ok) {
@@ -61,7 +61,7 @@ export default async function DocumentsPage() {
       }
     }
   } catch {
-    // Gracefully degrade — corpus tab shows empty state
+    // Gracefully degrade: corpus tab shows empty state
   }
 
   async function deleteDocument(id: string) {

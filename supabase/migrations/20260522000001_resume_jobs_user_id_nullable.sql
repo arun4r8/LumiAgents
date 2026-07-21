@@ -2,7 +2,7 @@
 --
 -- The resume_jobs table was originally built for the old frontend which used
 -- integer user IDs. The new LumiAgents platform uses Supabase UUID users and
--- does not send a userId to the n8n webhook — so user_id is always null on
+-- does not send a userId to the n8n webhook, so user_id is always null on
 -- every inbound request. Keeping the NOT NULL constraint causes every job
 -- creation to fail with a DB error before any scoring can start.
 --

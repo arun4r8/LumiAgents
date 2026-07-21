@@ -5,7 +5,7 @@ import { draftContentPost } from "../../../integrations/anthropic/content";
 
 // Draft a LinkedIn eminence post for one content-calendar row, grounded in the company
 // profile. Writes the draft back to the row and advances status to 'ready'. A human
-// still approves/posts — this never publishes.
+// still approves/posts; this never publishes.
 
 export const inputSchema = z.object({
   calendarId: z.string().uuid().describe("content_calendar.id of the entry to draft a post for."),

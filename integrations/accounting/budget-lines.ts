@@ -41,6 +41,6 @@ export async function syncBudgetLinesFromAccounting(
   assertAccountingConfigured(env);
   void contractId;
   throw new Error(
-    "TODO: implement accounting budget-line sync — see integrations/accounting/budget-lines.ts",
+    "TODO: implement accounting budget-line sync. See integrations/accounting/budget-lines.ts",
   );
 }

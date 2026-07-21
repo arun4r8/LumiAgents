@@ -35,9 +35,9 @@ export async function handleVault(
 ): Promise<Response | null> {
   const { pathname } = url;
 
-  // POST /api/vault/webhook — GitHub push event → patch/vault-sync
+  // POST /api/vault/webhook: GitHub push event → patch/vault-sync
   if (pathname === "/api/vault/webhook" && request.method === "POST") {
-    // GitHub sends a ping event when a webhook is first created or tested — acknowledge it.
+    // GitHub sends a ping event when a webhook is first created or tested, so acknowledge it.
     if (request.headers.get("X-GitHub-Event") === "ping") {
       return new Response(JSON.stringify({ status: "pong" }), { status: 200 });
     }
@@ -70,7 +70,7 @@ export async function handleVault(
     return dispatchVaultSync(payload, env);
   }
 
-  // POST /api/vault/sync — ops-only manual full sync
+  // POST /api/vault/sync: ops-only manual full sync
   if (pathname === "/api/vault/sync" && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -99,7 +99,7 @@ export async function handleVault(
     return json({ runId: run.id, status: "running" }, 202);
   }
 
-  // GET /api/vault/files/tree — list all markdown files in the vault
+  // GET /api/vault/files/tree: list all markdown files in the vault
   if (pathname === "/api/vault/files/tree" && request.method === "GET") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -115,7 +115,7 @@ export async function handleVault(
     return json({ files });
   }
 
-  // GET /api/vault/files?path=... — fetch a single file's content
+  // GET /api/vault/files?path=... : fetch a single file's content
   if (pathname === "/api/vault/files" && request.method === "GET") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -133,7 +133,7 @@ export async function handleVault(
     return json({ path: filePath, content, sha: data.sha });
   }
 
-  // PUT /api/vault/files — create or update a file
+  // PUT /api/vault/files: create or update a file
   if (pathname === "/api/vault/files" && request.method === "PUT") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -164,7 +164,7 @@ export async function handleVault(
     return json({ path: result.content.path, sha: result.content.sha });
   }
 
-  // DELETE /api/vault/files — delete a file
+  // DELETE /api/vault/files: delete a file
   if (pathname === "/api/vault/files" && request.method === "DELETE") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;

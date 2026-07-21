@@ -236,7 +236,7 @@ function EditorTab() {
       setSelectedSha(null);
       setContent("");
     } catch {
-      alert("Delete failed — check runtime logs");
+      alert("Delete failed. Check runtime logs.");
     } finally {
       setDeleting(false);
     }
@@ -521,7 +521,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
           fontSize: 13, color: "var(--ok)",
         }}>
           <Check style={{ width: 13, height: 13 }} />
-          Full sync started — <a href={`/runs/${syncResult.runId}`} style={{ color: "var(--accent)", textDecoration: "underline" }}>view run</a>
+          Full sync started · <a href={`/runs/${syncResult.runId}`} style={{ color: "var(--accent)", textDecoration: "underline" }}>view run</a>
         </div>
       )}
       {syncResult === "error" && (
@@ -531,7 +531,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
           background: "var(--err-soft)", border: "1px solid var(--err-line)",
           fontSize: 13, color: "var(--err)",
         }}>
-          <AlertTriangle style={{ width: 13, height: 13 }} /> Sync failed — check runtime logs
+          <AlertTriangle style={{ width: 13, height: 13 }} /> Sync failed. Check runtime logs.
         </div>
       )}
 
@@ -550,7 +550,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
         <StatCard
           icon={<Check style={{ width: 15, height: 15 }} />}
           label="Last status"
-          value={lastRun ? capitalize(lastRun.status) : "—"}
+          value={lastRun ? capitalize(lastRun.status) : "-"}
           accent={lastRun?.status === "completed" ? "ok" : lastRun?.status === "failed" ? "err" : undefined}
         />
       </div>
@@ -564,7 +564,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {initialRuns.length === 0 ? (
               <div style={{ padding: "20px 16px", fontSize: 13, color: "var(--ink-3)", textAlign: "center" }}>
-                No syncs yet — push a note to LumiKnowledge to trigger the first one.
+                No syncs yet. Push a note to LumiKnowledge to trigger the first one.
               </div>
             ) : (
               initialRuns.map((run, i) => {

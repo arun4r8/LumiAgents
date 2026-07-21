@@ -12,7 +12,7 @@ export const inputSchema = z.object({
   component: z
     .array(z.string())
     .optional()
-    .describe("DoD branch filter — e.g. ['ARMY', 'USAF']. Omit to search all branches."),
+    .describe("DoD branch filter, e.g. ['ARMY', 'USAF']. Omit to search all branches."),
   topicStatus: z
     .enum(["Open", "Closed", "Pre-Release"])
     .default("Open")
@@ -24,7 +24,7 @@ export const inputSchema = z.object({
     .max(10)
     .default(4)
     .describe(
-      "Minimum Beady fit score to include. Default is low (4) because SBIR topics skew R&D — " +
+      "Minimum Beady fit score to include. Default is low (4) because SBIR topics skew R&D; " +
       "run the full assessment to get a proper go/no-go after sourcing.",
     ),
   limit: z.number().int().min(1).max(200).default(50),
@@ -90,7 +90,7 @@ export default defineOrchestration({
       name: "score-sbir-topics",
       prompt: `
 You are Beady, Lumiture's BD AI. Evaluate each DoD SBIR/STTR topic below against Lumiture's
-capabilities. SBIR/STTR topics are government-funded R&D solicitations — they are deliberately
+capabilities. SBIR/STTR topics are government-funded R&D solicitations. They are deliberately
 broader in scope than traditional contracts, covering Phase I feasibility (~$250K) and Phase II
 prototype (~$1.5M). Score generously: we're sourcing candidates for the full govcon-assessment
 pipeline, not making final bid decisions here.
@@ -105,7 +105,7 @@ Lumiture profile:
 
 Scoring rules (1-10):
 - 8-10: strong software/data/AI angle that Lumiture can credibly address
-- 6-7: partial match — software component exists but hardware-heavy
+- 6-7: partial match, software component exists but hardware-heavy
 - 4-5: stretch or niche R&D, but worth surfacing for leadership to decide
 - 1-3: clearly hardware, manufacturing, or domain we cannot serve
 

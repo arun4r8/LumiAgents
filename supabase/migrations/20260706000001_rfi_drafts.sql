@@ -25,7 +25,7 @@ CREATE POLICY "ops_all_rfi_drafts" ON public.rfi_drafts
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.rfi_drafts TO authenticated;
 GRANT ALL ON public.rfi_drafts TO service_role;
 
--- Register the orchestration (agent-triggered / on-demand — no schedule).
+-- Register the orchestration (agent-triggered / on-demand, no schedule).
 INSERT INTO orchestration.orchestrations (name, version, description, input_schema, output_schema, is_active, trigger_mode)
 VALUES ('cleo/rfi-draft', 1,
   'Draft a Sources Sought / RFI response for an opportunity, grounded in Lumiture''s profile and past performance.',

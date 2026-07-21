@@ -2,7 +2,7 @@
 -- opportunities (every upsert of a net-new row failed, so the table stayed empty):
 --
 --   1. public.opportunities.id (uuid PRIMARY KEY) had no default, so the sweep's
---      upsert — which doesn't supply an id — violated the NOT NULL constraint.
+--      upsert (which doesn't supply an id) violated the NOT NULL constraint.
 --   2. opportunities_source_check rejected 'sbir', but the sweep writes
 --      source='sbir' for DoD SBIR/STTR topics (so SBIR rows would fail even after
 --      the id fix). 'govcon_api' is kept for backward compatibility.

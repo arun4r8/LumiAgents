@@ -53,10 +53,10 @@ export default defineOrchestration({
 
       const content = [
         `# ${record["title"] ?? "Past Performance Record"}`,
-        `**Customer:** ${record["customer"] ?? "—"}`,
-        `**Domain:** ${record["domain"] ?? "—"}`,
-        `**Contract Value:** ${record["contract_value"] ?? "—"}`,
-        `**Period of Performance:** ${record["period_of_performance"] ?? "—"}`,
+        `**Customer:** ${record["customer"] ?? "-"}`,
+        `**Domain:** ${record["domain"] ?? "-"}`,
+        `**Contract Value:** ${record["contract_value"] ?? "-"}`,
+        `**Period of Performance:** ${record["period_of_performance"] ?? "-"}`,
         tags ? `**Tags:** ${tags}` : null,
         ``,
         `## Scope Summary`,

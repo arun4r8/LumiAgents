@@ -136,7 +136,7 @@ export function RunsClient({
                 <tr key={r.id} onClick={() => router.push(`/runs/${r.id}`)}>
                   <td>
                     <span className="mono" style={{ color: "var(--ink)", fontSize: 12.5 }}>
-                      {orch?.name ?? "—"}
+                      {orch?.name ?? "-"}
                     </span>
                     {orch?.version != null && (
                       <span className="muted mono" style={{ fontSize: 11, marginLeft: 6 }}>
@@ -146,7 +146,7 @@ export function RunsClient({
                   </td>
                   <td><StatusBadge status={r.status} /></td>
                   <td>
-                    <TriggerChip trigger={{ kind: r.triggered_by ?? "—", label: r.triggered_by }} />
+                    <TriggerChip trigger={{ kind: r.triggered_by ?? "-", label: r.triggered_by }} />
                   </td>
                   <td className="mono tabular" style={{ color: "var(--ink-2)", fontSize: 12 }}>
                     {fmtAbs(r.created_at)}

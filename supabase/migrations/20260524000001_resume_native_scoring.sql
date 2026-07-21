@@ -19,7 +19,7 @@ ALTER TABLE public.resume_results
 ALTER TABLE public.resume_results
   ALTER COLUMN queued_resume_id DROP NOT NULL;
 
--- 3. Pin this orchestration to Haiku — cheap and sufficient for the rubric.
+-- 3. Pin this orchestration to Haiku: cheap and sufficient for the rubric.
 --    Ops can override per-orchestration or per-agent from /settings.
 UPDATE orchestration.orchestrations
 SET model = 'claude-haiku-4-5', updated_at = now()

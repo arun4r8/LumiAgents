@@ -110,7 +110,7 @@ function StepRow({
           <span className={`chip ${color}`}>{step.step_type}</span>
           {step.status !== "pending" && <StatusBadge status={step.status} />}
           <span className="tl-meta">
-            {duration !== "—" && <span>{duration}</span>}
+            {duration !== "-" && <span>{duration}</span>}
             {hasDetail && (
               <ChevronRight
                 style={{
@@ -168,7 +168,7 @@ function StepRow({
                     <span key={k}>
                       <span className="k">{k}</span>{" "}
                       <span className="v">
-                        {typeof v === "number" ? v.toLocaleString() : String(v ?? "—")}
+                        {typeof v === "number" ? v.toLocaleString() : String(v ?? "-")}
                       </span>
                     </span>
                   ))}

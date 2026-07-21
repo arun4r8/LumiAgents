@@ -141,7 +141,7 @@ export default defineOrchestration({
       attachmentText: attachment.text || null,
     };
 
-    // 4. Phase 1 — analyze: what does this solicitation require, and do we know enough?
+    // 4. Phase 1 analyze: what does this solicitation require, and do we know enough?
     const analysis: RfiAnalysis = await step(ctx, "analyze-solicitation", async () =>
       analyzeSolicitation(env, grounding, ctx.model),
     );
@@ -152,7 +152,7 @@ export default defineOrchestration({
     // hasn't already supplied answers (and isn't forcing).
     const gate = !analysis.sufficient && !answers && !input.force;
 
-    // 5a. Gated — store the intake and stop. No draft is written until facts are confirmed.
+    // 5a. Gated: store the intake and stop. No draft is written until facts are confirmed.
     if (gate) {
       const draftId = await step(ctx, "store-intake", async () =>
         saveDraft(env, input.draftId, {
@@ -186,12 +186,12 @@ export default defineOrchestration({
       };
     }
 
-    // 5b. Phase 4 — draft, using the analysis and any confirmed answers.
+    // 5b. Phase 4 draft, using the analysis and any confirmed answers.
     const firstDraft = await step(ctx, "draft-response", async () =>
       draftRfiResponse(env, { ...grounding, analysis, answers }, ctx.model),
     );
 
-    // 6. Phase 5 — assess as an evaluator would, then revise the must-fixes.
+    // 6. Phase 5 assess as an evaluator would, then revise the must-fixes.
     const assessment = await step(ctx, "assess-draft", async () =>
       assessRfiDraft(env, { draftMarkdown: firstDraft, opportunity: opp, analysis, grounding }, ctx.model),
     );

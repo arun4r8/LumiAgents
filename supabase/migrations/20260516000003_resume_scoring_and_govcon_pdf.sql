@@ -17,7 +17,7 @@ VALUES (
       "pdfBase64s": {
         "type": "array",
         "format": "pdf-files",
-        "description": "PDF résumés to score — attach in chat or upload here (batch supported)"
+        "description": "PDF résumés to score; attach in chat or upload here (batch supported)"
       },
       "jobId": {
         "type": "string",
@@ -56,7 +56,7 @@ SET
       "solicitationPdfBase64": {
         "type": "string",
         "format": "pdf-file",
-        "description": "Solicitation document PDF — single file only (optional)"
+        "description": "Solicitation document PDF, single file only (optional)"
       }
     },
     "required": ["opportunityId"]

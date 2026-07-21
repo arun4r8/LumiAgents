@@ -2,7 +2,7 @@ import type { RunContext } from "../../runtime/src/types";
 
 /**
  * Call the Jira REST API v3.
- * Auth: HTTP Basic — base64(email:api_token).
+ * Auth: HTTP Basic, using base64(email:api_token).
  * JIRA_BASE_URL  e.g. "https://lumiture.atlassian.net"  (var in wrangler.toml)
  * JIRA_EMAIL     Atlassian account email                  (wrangler secret)
  * JIRA_API_TOKEN API token from id.atlassian.com          (wrangler secret)

@@ -1,20 +1,20 @@
 -- Knowledge separation, phase 1: tag every document with a *corpus* (ownership /
 -- visibility) and a *sensitivity* (how far it may travel), and teach the retrieval
 -- RPC to enforce both. Agents all execute as service_role (they bypass RLS), so the
--- gate lives here in the RPC — each agent passes the corpora it's allowed to read.
+-- gate lives here in the RPC: each agent passes the corpora it's allowed to read.
 --
 -- Model:
 --   corpus       'shared' (central knowledge every agent reads) or an agent slug
 --                ('beady','money',…) for that agent's private corpus. Default 'shared'.
---   sensitivity  'internal' (default — team-usable, may ground outward drafts) or
---                'restricted' (financials / client-confidential / security — ops-only,
+--   sensitivity  'internal' (default: team-usable, may ground outward drafts) or
+--                'restricted' (financials / client-confidential / security; ops-only,
 --                never surfaces in agent retrieval unless include_restricted is set).
 --
 -- Backfill is a no-op for behavior: existing rows become shared/internal, so every
 -- agent still reads everything until documents are deliberately re-tagged.
 --
 -- NOTE: the pgvector `vector` type lives in the `extensions` schema, so it is
--- schema-qualified below — `supabase db push` applies migrations with a search_path
+-- schema-qualified below: `supabase db push` applies migrations with a search_path
 -- that does not include `extensions`, and a bare `vector` fails to resolve there.
 --
 -- Rollback:

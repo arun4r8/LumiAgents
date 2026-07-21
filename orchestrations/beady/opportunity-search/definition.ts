@@ -12,7 +12,7 @@ export const inputSchema = z.object({
   naicsCodes: z
     .array(z.string())
     .default(["541512", "541511", "541519", "541330"])
-    .describe("NAICS codes relevant to Lumiture — defaults to IT/engineering codes"),
+    .describe("NAICS codes relevant to Lumiture. Defaults to IT/engineering codes"),
   agencies: z
     .array(z.string())
     .optional()
@@ -39,7 +39,7 @@ const scoredOpportunitySchema = z.object({
   postedDate: z.string().nullable(),
   sourceUrl: z.string(),
   fitScore: z.number().int().min(1).max(10).describe("Beady's 1-10 fit score for Lumiture"),
-  fitReason: z.string().describe("Why this opportunity fits — 1-2 sentences"),
+  fitReason: z.string().describe("Why this opportunity fits, in 1-2 sentences"),
   redFlags: z.string().nullable().describe("Any concerns (clearance req, incumbent, etc.)"),
   recommendation: z.enum(["pursue", "monitor", "pass"]),
 });

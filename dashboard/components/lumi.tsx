@@ -1,6 +1,6 @@
 "use client";
 /**
- * LumiAgents design-system components — client-side only.
+ * LumiAgents design-system components (client-side only).
  * Import these in Server Components by wrapping in a Suspense boundary or
  * passing to Client Component children.
  */
@@ -31,7 +31,7 @@ interface Trigger {
 }
 
 export function TriggerChip({ trigger }: { trigger: Trigger }) {
-  const label = trigger?.label ?? trigger?.kind ?? "—";
+  const label = trigger?.label ?? trigger?.kind ?? "-";
   const cls =
     trigger?.kind === "cron" ? "chip muted"
     : trigger?.kind === "webhook" ? "chip info"
@@ -79,7 +79,7 @@ export function JsonPanel({
       <div className="jh">
         <span className="ttl">
           {title}
-          {isEmpty && <span className="chip muted" style={{ marginLeft: 6, fontSize: 10.5 }}>—</span>}
+          {isEmpty && <span className="chip muted" style={{ marginLeft: 6, fontSize: 10.5 }}>-</span>}
         </span>
         {!isEmpty && (
           <button
@@ -121,7 +121,7 @@ function colorizeJson(val: unknown): string {
 // ── Time helpers ──────────────────────────────────────────────────────
 
 export function fmtTimeAgo(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
   if (s < 60) return `${s}s ago`;
@@ -133,7 +133,7 @@ export function fmtTimeAgo(iso: string | null | undefined): string {
 }
 
 export function fmtAbs(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
@@ -157,10 +157,10 @@ export function fmtExpiry(iso: string | null | undefined): string {
 }
 
 export function fmtDuration(startedAt: string | null, endedAt: string | null): string {
-  if (!startedAt) return "—";
+  if (!startedAt) return "-";
   const end = endedAt ? new Date(endedAt) : new Date();
   const ms = end.getTime() - new Date(startedAt).getTime();
-  if (ms < 0) return "—";
+  if (ms < 0) return "-";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   const m = Math.floor(ms / 60000);

@@ -35,7 +35,7 @@ binding = "ORCHESTRATION_WORKFLOW"
 class_name = "RunOrchestration"
 script_name = "lumiagents-runtime"
 
-# Per-agent Service Bindings — route chat requests to their own CF Workers.
+# Per-agent Service Bindings: route chat requests to their own CF Workers.
 [[services]]
 binding = "ANGIE_WORKER"
 service = "lumiagents-angie"

@@ -1,5 +1,5 @@
 // Agent memory (Phase 1): durable conversations + transcripts, Teams identity.
-// All helpers fail open — a memory problem must never break the chat itself.
+// All helpers fail open: a memory problem must never break the chat itself.
 // Runs in the runtime worker (has Supabase creds); the route orchestrates recall
 // and persistence around the agent Service-Binding forward.
 import Anthropic from "@anthropic-ai/sdk";
@@ -32,7 +32,7 @@ async function embed(env: Env, text: string): Promise<number[] | null> {
 
 // Semantic recall: most relevant past turns/summaries for this (user, agent), as a
 // system preamble. Empty string when there's no user (unmapped Teams) or nothing
-// relevant — so it's a no-op until memory accrues.
+// relevant, so it's a no-op until memory accrues.
 export async function recall(
   env: Env,
   opts: { userId?: string | null; agentSlug: string; queryText: string; k?: number },
@@ -222,7 +222,7 @@ export async function maybeSummarize(
         'Summarize this conversation for an assistant\'s long-term memory. Return ONLY JSON: {"summary": string, "facts": string[]}. ' +
         "summary = 2-4 sentences capturing what matters for future turns. " +
         "facts = durable, user-specific facts worth remembering across conversations (preferences, ongoing goals, recurring context), each self-contained. " +
-        "Omit anything ephemeral. No prose outside the JSON.",
+        "Omit anything ephemeral. No prose outside the JSON. Do not use em dashes.",
       messages: [{ role: "user", content: convoText }],
     });
     const text = resp.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("");

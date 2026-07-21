@@ -4,7 +4,7 @@ import { queryDocuments } from "@/runtime/agents/document-rag";
 import { scopeForAgent } from "@/runtime/agents/knowledge-access";
 
 // Dewey answers questions over the shared central knowledge base. It reads the
-// `shared` corpus plus its own `dewey` corpus, internal sensitivity only — the same
+// `shared` corpus plus its own `dewey` corpus, internal sensitivity only. This is the same
 // scoped retrieval every agent uses, exposed as Dewey's primary tool.
 
 export const inputSchema = z.object({

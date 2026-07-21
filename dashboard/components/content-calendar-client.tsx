@@ -25,7 +25,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso + "T00:00:00");
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -114,9 +114,9 @@ export function ContentCalendarClient({
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 780 }}>
         The eminence plan as a living calendar. Add posts, or have Cleo propose a run of ideas from a theme.
-        Cleo drafts the post copy + asset brief for any entry (grounded in the company profile) — the draft lands
+        Cleo drafts the post copy + asset brief for any entry (grounded in the company profile), and the draft lands
         here with status <b>ready</b>. A human always reviews before posting; nothing publishes automatically.
-        Or <b>Import CSV</b> from the team's planning spreadsheet (export to CSV first) — rows sync in and
+        Or <b>Import CSV</b> from the team's planning spreadsheet (export to CSV first): rows sync in and
         re-importing an edited sheet updates them without touching existing drafts.
       </p>
 
@@ -166,7 +166,7 @@ export function ContentCalendarClient({
 
       {entries.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <div className="sub">Nothing scheduled yet — add an entry or plan a run with Cleo to get started.</div>
+          <div className="sub">Nothing scheduled yet. Add an entry or plan a run with Cleo to get started.</div>
         </div>
       ) : (
         <div className="card" style={{ overflow: "hidden" }}>
@@ -191,7 +191,7 @@ export function ContentCalendarClient({
                       {e.description && <div className="sub" style={{ maxWidth: 380 }}>{e.description}</div>}
                     </td>
                     <td>{e.channel}</td>
-                    <td className="sub">{e.asset_type ?? "—"}{e.asset_ref ? ` · ${e.asset_ref}` : ""}</td>
+                    <td className="sub">{e.asset_type ?? "-"}{e.asset_ref ? ` · ${e.asset_ref}` : ""}</td>
                     <td><StatusBadge status={e.status} /></td>
                     <td>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>

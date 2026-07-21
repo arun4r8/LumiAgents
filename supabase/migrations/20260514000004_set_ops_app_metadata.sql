@@ -1,5 +1,5 @@
 -- Set app_metadata.role = 'ops' for all current users.
--- This is an internal tool — every account that exists is an ops account.
+-- This is an internal tool, so every account that exists is an ops account.
 -- The custom_access_token_hook then copies this into the JWT role claim,
 -- which is_ops() reads to pass RLS on the orchestration schema tables.
 --

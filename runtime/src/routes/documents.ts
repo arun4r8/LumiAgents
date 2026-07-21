@@ -55,7 +55,7 @@ async function ocrWithClaude(env: Env, base64: string, mimeType: string): Promis
         contentBlock,
         {
           type: "text",
-          text: "Extract all text from this document. Preserve structure — headings, bullet points, tables, numbered lists — as closely as possible. Return only the extracted text with no commentary.",
+          text: "Extract all text from this document. Preserve structure (headings, bullet points, tables, numbered lists) as closely as possible. Return only the extracted text with no commentary.",
         },
       ],
     }],
@@ -74,7 +74,7 @@ export async function handleDocuments(
 ): Promise<Response | null> {
   const { pathname } = url;
 
-  // POST /api/documents/ingest-file  (multipart — OCR via Claude then embed)
+  // POST /api/documents/ingest-file  (multipart: OCR via Claude then embed)
   if (pathname === "/api/documents/ingest-file" && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -90,7 +90,7 @@ export async function handleDocuments(
     }
 
     const fileEntry = formData.get("file");
-    // File is a Fetch API type — check for arrayBuffer presence rather than instanceof
+    // File is a Fetch API type, so check for arrayBuffer presence rather than instanceof
     if (fileEntry === null || typeof fileEntry === "string" || !("arrayBuffer" in fileEntry)) {
       return json({ error: "file field is required" }, 400);
     }
@@ -213,7 +213,7 @@ export async function handleDocuments(
       return json({ error: "question is required" }, 400);
     }
 
-    // Dashboard document search is an ops surface — full corpus access, incl. restricted.
+    // Dashboard document search is an ops surface: full corpus access, incl. restricted.
     const result = await queryDocuments(env, { ...body, allowedCorpora: OPS_SCOPE.allowedCorpora, includeRestricted: OPS_SCOPE.includeRestricted });
     return json(result);
   }
@@ -282,7 +282,7 @@ export async function handleDocuments(
     return json(result);
   }
 
-  // GET /api/documents — list all RAG corpus documents with chunk counts, ops-only
+  // GET /api/documents: list all RAG corpus documents with chunk counts, ops-only
   if (pathname === "/api/documents" && request.method === "GET") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -347,7 +347,7 @@ export async function handleDocuments(
     return json(result);
   }
 
-  // DELETE /api/documents/:id — delete a document (cascades to chunks via FK), ops-only
+  // DELETE /api/documents/:id: delete a document (cascades to chunks via FK), ops-only
   const docMatch = pathname.match(/^\/api\/documents\/([^/]+)$/);
   if (docMatch && request.method === "DELETE") {
     const authResult = await requireOpsToken(request, env);

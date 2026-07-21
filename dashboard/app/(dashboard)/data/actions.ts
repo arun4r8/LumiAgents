@@ -12,7 +12,7 @@ type TableName =
   | "employees"
   | "past_performance";
 
-// Allowed tables for writes — explicit allowlist, never interpolate user input directly
+// Allowed tables for writes: explicit allowlist, never interpolate user input directly
 const WRITABLE_TABLES: ReadonlySet<TableName> = new Set([
   "contracts",
   "budget_lines",

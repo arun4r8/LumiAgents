@@ -1,6 +1,6 @@
 ---
 name: add-integration
-description: Use when the user wants to add a new tool to /integrations/ — wrapping an n8n webhook, an external API, or any side-effect that orchestrations will call. Trigger on phrases like "add an integration", "wrap the n8n flow", "expose X as a tool", "I need to call Y from a workflow".
+description: Use when the user wants to add a new tool to /integrations/, wrapping an n8n webhook, an external API, or any side-effect that orchestrations will call. Trigger on phrases like "add an integration", "wrap the n8n flow", "expose X as a tool", "I need to call Y from a workflow".
 ---
 
 # Adding a new integration / tool
@@ -73,12 +73,12 @@ Always:
 If the underlying system supports an `Idempotency-Key` header, use it. If it doesn't:
 - For reads: idempotency is automatic.
 - For writes that have a natural unique key (e.g., "create ticket with external_ref X"): include the unique key in the request, and ensure the upstream rejects duplicates.
-- For writes with no natural key: write a small dedupe layer in `client.ts` that records "we already did key K" in Supabase before calling upstream. Discuss with the user before doing this — it's the heaviest pattern.
+- For writes with no natural key: write a small dedupe layer in `client.ts` that records "we already did key K" in Supabase before calling upstream. Discuss with the user before doing this; it's the heaviest pattern.
 
 ## Tests
 
-- `unit.test.ts` — mock `ctx.fetch`. Verify request shape (headers, body, idempotency key) and response parsing.
-- `integration.test.ts` (when there's a sandbox) — hit a real sandbox endpoint. Skipped in CI unless `SANDBOX_CREDENTIALS` is set.
+- `unit.test.ts`: mock `ctx.fetch`. Verify request shape (headers, body, idempotency key) and response parsing.
+- `integration.test.ts` (when there's a sandbox): hit a real sandbox endpoint. Skipped in CI unless `SANDBOX_CREDENTIALS` is set.
 
 ## README
 
@@ -86,7 +86,7 @@ If the underlying system supports an `Idempotency-Key` header, use it. If it doe
 - How to set up credentials locally.
 - Sandbox vs. production endpoints.
 - Rate limits and current handling.
-- Quirks — especially anything where the upstream's behavior surprised us.
+- Quirks, especially anything where the upstream's behavior surprised us.
 
 ## Gotchas
 

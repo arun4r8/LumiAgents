@@ -55,7 +55,7 @@ describe("Agent greetings", () => {
 });
 
 // ── Conversational Q&A (no tool calls expected) ────────────────────────────────
-// These questions are answerable from general domain knowledge — the LLM should
+// These questions are answerable from general domain knowledge, so the LLM should
 // reply directly without invoking any tool, so runIds must stay empty.
 
 describe("Agent conversational Q&A", () => {

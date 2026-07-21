@@ -1,6 +1,6 @@
 // Drains the public.n8n_call_queue table, firing up to `slots` pending webhook
 // calls per invocation. Called from the main cron handler alongside schedule dispatch.
-// Binary payloads are not supported here — callers should upload to Storage first.
+// Binary payloads are not supported here; callers should upload to Storage first.
 
 const N8N_BASE = "https://lumiture.app.n8n.cloud/webhook";
 const N8N_CONCURRENCY_CAP = 5;

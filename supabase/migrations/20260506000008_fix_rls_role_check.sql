@@ -3,8 +3,8 @@
 -- Problem: All ops_all policies check (auth.jwt() ->> 'role') = 'ops', but Supabase's
 -- JWT always has role = 'authenticated' at the top level. Custom roles live in
 -- app_metadata. The custom_access_token_hook that injected a top-level 'role' claim
--- was removed, so all ops_all policies are silently failing — ops users have no write
--- access to any table.
+-- was removed, so all ops_all policies are silently failing and ops users have no
+-- write access to any table.
 --
 -- Fix: Create a helper function public.is_ops() that checks BOTH locations (top-level
 -- role claim AND app_metadata.role), so it works whether or not the hook is later

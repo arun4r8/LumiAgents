@@ -1,8 +1,8 @@
 -- =============================================================================
--- supabase/seed.sql — canonical orchestration registry seed
+-- supabase/seed.sql: canonical orchestration registry seed
 --
 -- Applied automatically by `supabase db reset` and on fresh CI environments.
--- Fully idempotent — safe to re-run at any time.
+-- Fully idempotent; safe to re-run at any time.
 --
 -- Naming convention: <agent>/<workflow>  (matches TypeScript definition names)
 -- =============================================================================
@@ -15,7 +15,7 @@ VALUES
   (
     'angie/candidate-sourcing',
     1,
-    'Source candidates for a role via Apollo.io — extracts search params, filters by fit, surfaces a shortlist, and drafts outreach on approval',
+    'Source candidates for a role via Apollo.io: extracts search params, filters by fit, surfaces a shortlist, and drafts outreach on approval',
     '{}', '{}',
     false   -- requires APOLLO_API_KEY; enable once secret is provisioned
   ),
@@ -51,14 +51,14 @@ VALUES
   (
     'patch/inbound-triage',
     1,
-    'Triage inbound email or Teams messages — classify, extract action items, route or auto-respond',
+    'Triage inbound email or Teams messages: classify, extract action items, route or auto-respond',
     '{}', '{}',
     true
   ),
   (
     'patch/ticket-ops',
     1,
-    'Create, update, or search Jira tickets for ops — Patch''s primary ticketing interface',
+    'Create, update, or search Jira tickets for ops. Patch''s primary ticketing interface',
     '{}', '{}',
     true
   ),
@@ -72,7 +72,7 @@ VALUES
   (
     'patch/document-ingest',
     1,
-    'Ingest a document into the RAG knowledge base — chunks, embeds, and stores it',
+    'Ingest a document into the RAG knowledge base: chunks, embeds, and stores it',
     '{}', '{}',
     true
   ),
@@ -86,7 +86,7 @@ VALUES
   (
     'patch/vault-sync',
     1,
-    'Sync Obsidian vault from GitHub — ingests changed markdown files into the RAG knowledge base',
+    'Sync Obsidian vault from GitHub, ingesting changed markdown files into the RAG knowledge base',
     '{}', '{}',
     true
   )

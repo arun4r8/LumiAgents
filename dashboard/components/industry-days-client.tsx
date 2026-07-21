@@ -63,12 +63,12 @@ export function IndustryDaysClient({ events, dismiss, findNow }: Props) {
       </div>
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 780 }}>
-        Government agency industry days, vendor-outreach, and small-business matchmaking events — discovered from
+        Government agency industry days, vendor-outreach, and small-business matchmaking events, discovered from
         SAM.gov Special Notices and the web, scored for relevance to Lumiture. &ldquo;Find with Beady&rdquo; runs a
         fresh sweep in the background (~30–60s); new events appear here.
       </p>
 
-      {justStarted && <div className="chip ok" style={{ marginBottom: 12 }}>Sweep started — refresh in a bit to see new events.</div>}
+      {justStarted && <div className="chip ok" style={{ marginBottom: 12 }}>Sweep started; refresh in a bit to see new events.</div>}
       {error && <div className="chip" style={{ color: "var(--danger)", marginBottom: 12 }}>{error}</div>}
 
       {events.length === 0 ? (

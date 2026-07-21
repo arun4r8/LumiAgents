@@ -3,16 +3,16 @@
 -- This table was dropped in 20260506000004_prune_and_harden.sql under the
 -- assumption that it was superseded by the orchestration schema. However the
 -- n8n resume-scoring workflow still writes to it as an intermediate step
--- immediately after creating the resume_jobs row — it inserts one row per job
+-- immediately after creating the resume_jobs row; it inserts one row per job
 -- so that downstream n8n nodes can track processing state.
 --
 -- Schema inferred from n8n "Create Agent Angie's Task" node field mappings:
---   id          — set to the resume_jobs.id UUID (one task per job)
---   source      — "n8n"
---   task_type   — "Resume Scoring"
---   payload     — JSON-stringified webhook body
---   agent       — "Angie"
---   status      — "pending" → updated by downstream n8n nodes
+--   id:           set to the resume_jobs.id UUID (one task per job)
+--   source:       "n8n"
+--   task_type:    "Resume Scoring"
+--   payload:      JSON-stringified webhook body
+--   agent:        "Angie"
+--   status:       "pending" → updated by downstream n8n nodes
 --
 -- Rollback:
 --   DROP TABLE IF EXISTS public.agent_tasks;

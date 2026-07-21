@@ -9,9 +9,9 @@ export const inputSchema = z.object({
   repoName:     z.string().describe("Repository name of the Obsidian vault"),
   branch:       z.string().default("main"),
   changedPaths: z.array(z.string()).optional()
-    .describe("Specific file paths to sync — supplied by GitHub push webhook. Omit for full vault sync."),
+    .describe("Specific file paths to sync, supplied by GitHub push webhook. Omit for full vault sync."),
   removedPaths: z.array(z.string()).optional()
-    .describe("File paths deleted in this push — will be removed from the RAG index."),
+    .describe("File paths deleted in this push. These are removed from the RAG index."),
 });
 
 export const outputSchema = z.object({

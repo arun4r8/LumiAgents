@@ -6,7 +6,7 @@
 
 type Row = Record<string, any>;
 
-// ─── Build Evaluation Payload (n8n: "Code — Build Evaluation Payload") ─────────
+// ─── Build Evaluation Payload (n8n Code node "Build Evaluation Payload") ───────
 
 export function buildEvaluationPayload(args: {
   opp: Row;
@@ -190,7 +190,7 @@ export function computeWeightedScore(scored: Row, base: Row): Row {
   return scored;
 }
 
-// ─── Dimension prompt assembly (n8n: "Code — Build Dimension Context") ─────────
+// ─── Dimension prompt assembly (n8n Code node "Build Dimension Context") ───────
 
 function fillTemplate(template: string | undefined, vars: Record<string, any>): string {
   if (!template) return "";
@@ -291,7 +291,7 @@ export function buildD3Prompt(ctx: DimensionContext, snippets: string[]): { d3_p
   return { d3_prompt, incumbent_findings };
 }
 
-// ─── Engine 2 deterministic (n8n: "Code — Compute Strategic Scores") ───────────
+// ─── Engine 2 deterministic (n8n Code node "Compute Strategic Scores") ─────────
 
 export function computeStrategicScores(args: {
   d1: Row; d2: Row; d3: Row; d4: Row; ctx: DimensionContext;
@@ -327,7 +327,7 @@ export function computeStrategicScores(args: {
   };
 }
 
-// ─── Assemble Final Result (n8n: "Code — Assemble Final Result") ───────────────
+// ─── Assemble Final Result (n8n Code node "Assemble Final Result") ─────────────
 
 export function assembleFinalResult(scored: Row, execMemo: string, strategic: Row): Row {
   return {

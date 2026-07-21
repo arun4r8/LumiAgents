@@ -6,11 +6,11 @@ import { sendTeamsCard } from "./tools";
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 /*
- * One orchestration, three operations — selected by `operation`:
+ * One orchestration, three operations, selected by `operation`:
  *
- *  create  — parse a plain-language request, create a Jira ticket, notify Teams
- *  update  — transition status and/or add a comment to an existing ticket
- *  search  — run a JQL query and return structured results (useful for dashboards / reports)
+ *  create: parse a plain-language request, create a Jira ticket, notify Teams
+ *  update: transition status and/or add a comment to an existing ticket
+ *  search: run a JQL query and return structured results (useful for dashboards / reports)
  */
 
 export const inputSchema = z.discriminatedUnion("operation", [
@@ -19,7 +19,7 @@ export const inputSchema = z.discriminatedUnion("operation", [
     projectKey: z
       .string()
       .default("OPS")
-      .describe("Jira project key — OPS for ops tickets, BD for BD, HR for recruiting"),
+      .describe("Jira project key: OPS for ops tickets, BD for BD, HR for recruiting"),
     requestText: z
       .string()
       .min(10)
@@ -72,7 +72,7 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "patch/ticket-ops",
   version: 1,
-  description: "Create, update, or search Jira tickets for ops — Patch's primary ticketing interface",
+  description: "Create, update, or search Jira tickets for ops. Patch's primary ticketing interface",
   inputSchema,
   outputSchema,
   access: {
@@ -96,6 +96,7 @@ Rules:
 - issueType: Task for most things; Bug only if something is broken; Story for new features
 - priority: High if it blocks work or affects a client; Medium for normal requests; Low for nice-to-haves
 - labels: lowercase, hyphenated (e.g. ["database", "infrastructure", "client-facing"])
+- Do not use em dashes.
         `.trim(),
         input: {
           requestText: input.requestText,

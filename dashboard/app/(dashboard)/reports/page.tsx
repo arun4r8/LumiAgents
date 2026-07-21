@@ -9,7 +9,7 @@ const EMAIL_CONFIGURED = process.env.NEXT_PUBLIC_EMAIL_CONFIGURED === "true";
 const INTRO =
   "Beady emails opportunities scoring at or above each subscription's minimum fit score (matching any " +
   "filters) to its recipients. The fit threshold sets the range: 7+ is pursue-grade only, 5–6 also " +
-  "includes monitor-grade leads. A daily driver runs at 13:00 UTC — daily sends every run, weekly once " +
+  "includes monitor-grade leads. A daily driver runs at 13:00 UTC: daily sends every run, weekly once " +
   "every 7 days. Use Send now to dispatch the full current digest immediately.";
 
 export default async function ReportsPage() {

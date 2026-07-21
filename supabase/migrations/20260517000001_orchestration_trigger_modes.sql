@@ -3,7 +3,7 @@
 -- "agent"  = only triggerable via agent chat; card is informational in dashboard.
 --
 -- Also removes orchestrations that are not meaningful as dashboard-triggered
--- workflows — they stay in the runtime registry for agent dispatch.
+-- workflows. They stay in the runtime registry for agent dispatch.
 
 ALTER TABLE orchestration.orchestrations
   ADD COLUMN IF NOT EXISTS trigger_mode text NOT NULL DEFAULT 'manual';

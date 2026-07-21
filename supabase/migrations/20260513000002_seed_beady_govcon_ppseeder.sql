@@ -7,7 +7,7 @@ INSERT INTO orchestration.orchestrations
 VALUES
   (
     'beady/govcon-assessment', 1,
-    'Run a full GovCon qualification assessment via n8n — 5-dimensional scoring with RAG against past performance and capability statements',
+    'Run a full GovCon qualification assessment via n8n: 5-dimensional scoring with RAG against past performance and capability statements',
     '{}', '{}', true
   ),
   (

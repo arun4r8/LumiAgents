@@ -57,7 +57,7 @@ export async function requireOpsToken(
   if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
   const token = auth.slice(7);
 
-  // Primary: verify via Supabase Auth endpoint — works regardless of JWT secret format
+  // Primary: verify via Supabase Auth endpoint, which works regardless of JWT secret format
   // or key system version. The service role key is used as the apikey header (not the
   // user token) so Supabase trusts the request to read any user's profile.
   try {
@@ -70,11 +70,11 @@ export async function requireOpsToken(
     if (userRes.ok) {
       const user = await userRes.json() as { id: string; app_metadata?: { role?: string } };
       const role = user.app_metadata?.["role"];
-      if (role !== "ops") return json({ error: "Forbidden — ops role required" }, 403);
+      if (role !== "ops") return json({ error: "Forbidden: ops role required" }, 403);
       return { userId: user.id };
     }
   } catch {
-    // network error — fall through
+    // network error: fall through
   }
 
   // Secondary: internally-minted dispatch tokens (agent → orchestration calls).
@@ -134,7 +134,7 @@ export function schemaToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown
 }
 
 // ─── Per-user rate limiting (fixed window via claim_rate_limit RPC) ─────────────
-// Fails OPEN — a metrics/db outage must not lock users out. Internal
+// Fails OPEN, because a metrics/db outage must not lock users out. Internal
 // agent-dispatch calls are bounded by MAX_TOOL_ROUNDS, so they're never throttled.
 export async function claimRateLimit(
   env: Env, userId: string, bucket: string, limit: number, windowSeconds = 60,
@@ -162,5 +162,5 @@ export async function rateLimited(
   env: Env, userId: string, bucket: string, limit: number, windowSeconds = 60,
 ): Promise<Response | null> {
   const ok = await claimRateLimit(env, userId, bucket, limit, windowSeconds);
-  return ok ? null : json({ error: `Rate limit exceeded — max ${limit} ${bucket} requests per ${windowSeconds}s.` }, 429);
+  return ok ? null : json({ error: `Rate limit exceeded: max ${limit} ${bucket} requests per ${windowSeconds}s.` }, 429);
 }

@@ -27,9 +27,9 @@ export interface InvoiceRecord {
 }
 
 export interface SyncInvoicesOptions {
-  /** UUID of the contract to filter by — omit to fetch all invoices */
+  /** UUID of the contract to filter by; omit to fetch all invoices */
   contractId?: string;
-  /** ISO 8601 datetime — only return invoices modified after this timestamp */
+  /** ISO 8601 datetime. Only return invoices modified after this timestamp */
   since?: string;
 }
 
@@ -47,6 +47,6 @@ export async function syncInvoicesFromAccounting(
   assertAccountingConfigured(env);
   void options;
   throw new Error(
-    "TODO: implement accounting invoice sync — see integrations/accounting/invoices.ts",
+    "TODO: implement accounting invoice sync. See integrations/accounting/invoices.ts",
   );
 }

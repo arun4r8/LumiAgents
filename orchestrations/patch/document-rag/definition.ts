@@ -24,7 +24,7 @@ export const ingestOutputSchema = z.object({
 export const documentIngest = defineOrchestration({
   name: "patch/document-ingest",
   version: 1,
-  description: "Ingest a document into the RAG knowledge base — chunks, embeds, and stores it",
+  description: "Ingest a document into the RAG knowledge base: chunks, embeds, and stores it",
   inputSchema: ingestInputSchema,
   outputSchema: ingestOutputSchema,
   access: {

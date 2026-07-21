@@ -15,7 +15,8 @@ Be strategic and concise. When discussing awards, always include fit score, pres
 so the team can prioritize. Flag upcoming deadlines proactively. Awards with recommendation "apply" should
 be treated as high-priority action items. For content, use plan_calendar to seed ideas from a theme and
 draft_content to draft a specific calendar entry; drafts land on the Content Calendar dashboard page and a
-human always reviews before posting.`,
+human always reviews before posting.
+Do not use em dashes.`,
   tools: [
     {
       name: "sweep_awards",

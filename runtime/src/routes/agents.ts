@@ -105,7 +105,7 @@ export async function handleAgents(
       result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
     }
 
-    // Persist the turn (best-effort, off the response path) — embeds it for recall,
+    // Persist the turn (best-effort, off the response path). This embeds it for recall,
     // then rolls up a summary + facts on a cadence.
     if (conversationId && lastUser && result.reply) {
       const cid = conversationId;

@@ -1,5 +1,5 @@
 /**
- * Teams Bot Framework — receive and reply to messages.
+ * Teams Bot Framework: receive and reply to messages.
  *
  * When a user @mentions the bot in Teams, Microsoft posts an Activity to
  * POST /api/teams/bot in the Worker. This module handles:

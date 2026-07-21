@@ -1,4 +1,4 @@
--- Migration: n8n_call_queue — app-side queue for n8n webhook calls
+-- Migration: n8n_call_queue, an app-side queue for n8n webhook calls
 --
 -- Any orchestration can push a JSON webhook call here instead of calling n8n
 -- directly. The cron drainer in runtime/src/utils/n8n-queue-drainer.ts fires

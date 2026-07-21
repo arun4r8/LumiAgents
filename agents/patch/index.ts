@@ -11,7 +11,8 @@ export const patch: AgentDefinition = {
 - General ops questions
 
 Be efficient and action-oriented. When a user describes a problem or request, create a ticket
-immediately rather than asking clarifying questions unless something critical is missing.`,
+immediately rather than asking clarifying questions unless something critical is missing.
+Do not use em dashes.`,
   tools: [
     {
       name: "create_ticket",

@@ -11,7 +11,7 @@ export async function handleSchedules(
 ): Promise<Response | null> {
   const { pathname } = url;
 
-  // GET /api/schedules — list all schedules
+  // GET /api/schedules: list all schedules
   if (pathname === "/api/schedules" && request.method === "GET") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -21,7 +21,7 @@ export async function handleSchedules(
     return json(rows);
   }
 
-  // POST /api/schedules — create a schedule
+  // POST /api/schedules: create a schedule
   if (pathname === "/api/schedules" && request.method === "POST") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;
@@ -50,7 +50,7 @@ export async function handleSchedules(
     return json(row, 201);
   }
 
-  // PATCH /api/schedules/:id — update label, cron, active flag, or default_input
+  // PATCH /api/schedules/:id: update label, cron, active flag, or default_input
   const scheduleMatch = pathname.match(/^\/api\/schedules\/([^/]+)$/);
   if (scheduleMatch && request.method === "PATCH") {
     const authResult = await requireOpsToken(request, env);
@@ -66,7 +66,7 @@ export async function handleSchedules(
     return json({ id, updated: true });
   }
 
-  // DELETE /api/schedules/:id — deactivate (soft delete)
+  // DELETE /api/schedules/:id: deactivate (soft delete)
   if (scheduleMatch && request.method === "DELETE") {
     const authResult = await requireOpsToken(request, env);
     if (authResult instanceof Response) return authResult;

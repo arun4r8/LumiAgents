@@ -9,11 +9,12 @@ export const angie: AgentDefinition = {
 - Advising on job descriptions and interview criteria
 - Reformatting employee resumes for consulting client proposals
 
-Be concise and professional. When you trigger an orchestration, tell the user what you started and link them to the run.`,
+Be concise and professional. When you trigger an orchestration, tell the user what you started and link them to the run.
+Do not use em dashes.`,
   tools: [
     {
       name: "score_resumes",
-      description: "Score and rank candidate résumés against a job description using the AI pipeline. Attach the PDF résumés to this message (multiple allowed — batch processing is supported). Non-PDF files are converted automatically.",
+      description: "Score and rank candidate résumés against a job description using the AI pipeline. Attach the PDF résumés to this message (multiple allowed; batch processing is supported). Non-PDF files are converted automatically.",
       inputSchema: {
         type: "object",
         properties: {
@@ -25,7 +26,7 @@ Be concise and professional. When you trigger an orchestration, tell the user wh
     },
     {
       name: "source_candidates",
-      description: "Search Apollo for candidates matching a role — runs a sourcing workflow that scores and filters results.",
+      description: "Search Apollo for candidates matching a role. Runs a sourcing workflow that scores and filters results.",
       inputSchema: {
         type: "object",
         properties: {

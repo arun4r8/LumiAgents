@@ -115,7 +115,7 @@ GRANT EXECUTE ON FUNCTION orchestration.match_document_chunks TO service_role, a
 -- ─────────────────────────────────────────────────────────────
 -- Safe SQL execution for the Data Analyst agent
 -- Only allows SELECT statements. Runs as service_role so it can
--- read all tables — the Worker validates the query before calling this.
+-- read all tables; the Worker validates the query before calling this.
 -- ─────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION orchestration.analyst_query(query_sql text)
 RETURNS jsonb
@@ -145,4 +145,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION orchestration.analyst_query TO service_role;
--- Do NOT grant to authenticated — only the runtime (service_role) calls this
+-- Do NOT grant to authenticated; only the runtime (service_role) calls this

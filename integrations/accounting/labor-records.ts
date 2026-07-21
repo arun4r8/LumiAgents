@@ -6,7 +6,7 @@
 //   2. Set ACCOUNTING_API_URL and ACCOUNTING_API_KEY via `wrangler secret put`
 //   3. Replace the throw below with real HTTP calls and map timesheet/labor data
 //      onto LaborRecord
-//   4. Handle pagination — labor APIs often return large result sets
+//   4. Handle pagination: labor APIs often return large result sets
 
 import { assertAccountingConfigured, type AccountingEnv } from "./base";
 
@@ -28,9 +28,9 @@ export interface LaborRecord {
 }
 
 export interface SyncLaborRecordsOptions {
-  /** UUID of the contract to filter by — omit to fetch across all contracts */
+  /** UUID of the contract to filter by; omit to fetch across all contracts */
   contractId?: string;
-  /** YYYY-MM — only return labor records for this calendar month */
+  /** YYYY-MM. Only return labor records for this calendar month */
   month?: string;
 }
 
@@ -48,6 +48,6 @@ export async function syncLaborRecordsFromAccounting(
   assertAccountingConfigured(env);
   void options;
   throw new Error(
-    "TODO: implement accounting labor-record sync — see integrations/accounting/labor-records.ts",
+    "TODO: implement accounting labor-record sync. See integrations/accounting/labor-records.ts",
   );
 }

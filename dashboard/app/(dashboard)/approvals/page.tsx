@@ -119,7 +119,7 @@ function ApprovalCard({
   };
   decide: (formData: FormData) => Promise<void>;
 }) {
-  const orchName = approval.runs?.orchestrations?.name ?? "—";
+  const orchName = approval.runs?.orchestrations?.name ?? "-";
   const expiresMs = approval.expires_at
     ? new Date(approval.expires_at).getTime() - Date.now()
     : null;

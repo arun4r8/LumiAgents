@@ -6,8 +6,8 @@
 //   - Deltek Costpoint → use the Costpoint web services API
 //
 // Required Wrangler secrets (wrangler secret put <NAME>):
-//   CRM_API_URL   — base URL of the CRM REST API, e.g. https://yourinstance.salesforce.com
-//   CRM_API_KEY   — API key or bearer token for the CRM
+//   CRM_API_URL:    base URL of the CRM REST API, e.g. https://yourinstance.salesforce.com
+//   CRM_API_KEY:    API key or bearer token for the CRM
 //
 // Once the secrets are set, implement the actual HTTP calls in contracts.ts (and any
 // future files in this directory) and remove the "not configured" stubs.

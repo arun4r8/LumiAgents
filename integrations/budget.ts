@@ -2,7 +2,7 @@ import type { Env } from "../runtime/src/types";
 
 // Atomically claim one unit of a source's daily API budget. Returns true if the
 // call is within the cap, false if the day's limit is already reached. Fails
-// OPEN (returns true) if the counter is unreachable — never block real work on a
+// OPEN (returns true) if the counter is unreachable; never block real work on a
 // metrics outage.
 export async function claimBudget(env: Env, source: string, limit: number): Promise<boolean> {
   try {
@@ -22,7 +22,7 @@ export async function claimBudget(env: Env, source: string, limit: number): Prom
   }
 }
 
-// Per-source daily caps. SAM free tier is ~1,000/day — 200 leaves headroom for
+// Per-source daily caps. SAM free tier is ~1,000/day, so 200 leaves headroom for
 // on-demand. SBIR has no key limit (tracked for visibility). Tavily free tier is
 // ~1,000/month → ~30/day.
 export const DAILY_BUDGET = {

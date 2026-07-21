@@ -28,7 +28,7 @@ export default defineOrchestration({
   version: 1,
   triggerMode: "agent",
   description:
-    "Summarize the shared knowledge base — document counts by corpus and sensitivity, plus the most recent documents. Dewey's librarian overview.",
+    "Summarize the shared knowledge base: document counts by corpus and sensitivity, plus the most recent documents. Dewey's librarian overview.",
   inputSchema,
   outputSchema,
   access: {

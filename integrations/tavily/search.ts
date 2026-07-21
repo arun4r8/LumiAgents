@@ -9,7 +9,7 @@ export interface TavilyResult {
 
 // Thin wrapper over Tavily's /search. Used for GovCon incumbent research (D3).
 // Degrades gracefully: with no API key (or on error) it returns [] so the
-// assessment still completes — D3 then scores on "insufficient data".
+// assessment still completes; D3 then scores on "insufficient data".
 export async function tavilySearch(
   env: Env,
   opts: { query: string; includeDomains?: string[]; maxResults?: number },

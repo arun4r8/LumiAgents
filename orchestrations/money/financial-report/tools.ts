@@ -1,2 +1,2 @@
-// financial-report uses the data analyst agent directly — no n8n tools needed
+// financial-report uses the data analyst agent directly, so no n8n tools are needed
 export {};

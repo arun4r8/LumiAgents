@@ -69,7 +69,7 @@ const AGENTS = [
     id: "angie",
     label: "Angie",
     role: "HR & Recruiting",
-    description: "Sources candidates via Apollo, scores them against job requirements, manages resume formatting, and drafts outreach — with a human approval gate before any message is sent.",
+    description: "Sources candidates via Apollo, scores them against job requirements, manages resume formatting, and drafts outreach, with a human approval gate before any message is sent.",
     color: "oklch(62% 0.18 280)",
     bg: "oklch(97% 0.03 280)",
   },
@@ -217,7 +217,7 @@ function AgentSection({
       {/* Capability cards */}
       {orchestrations.length === 0 ? (
         <div className="muted" style={{ fontSize: 12.5, padding: "10px 4px" }}>
-          No capabilities registered yet — deploy the runtime to seed this agent&apos;s orchestrations.
+          No capabilities registered yet. Deploy the runtime to seed this agent&apos;s orchestrations.
         </div>
       ) : (
         <div className="orch-grid">
@@ -449,7 +449,7 @@ function OrchCard({
                           {isRequired && <span style={{ color: "var(--err)" }}> *</span>}
                           {prop.description && (
                             <span style={{ color: "var(--ink-3)", fontWeight: 400, marginLeft: 4 }}>
-                              — {prop.description}
+                              ({prop.description})
                             </span>
                           )}
                         </label>
@@ -496,7 +496,7 @@ function OrchCard({
                             value={(values[key] as string) ?? ""}
                             onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
                           >
-                            <option value="">—</option>
+                            <option value="">-</option>
                             {prop.enum.map((opt) => (
                               <option key={opt} value={opt}>{opt}</option>
                             ))}
@@ -517,7 +517,7 @@ function OrchCard({
                 </div>
               ) : (
                 <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 12 }}>
-                  No inputs required — this orchestration runs with defaults.
+                  No inputs required; this orchestration runs with defaults.
                 </div>
               )}
 

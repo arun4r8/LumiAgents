@@ -80,7 +80,7 @@ export default async function RfiDraftsPage() {
     .order("response_deadline", { ascending: true, nullsFirst: false })
     .limit(60);
 
-  // Trigger a draft: fires beady/rfi-draft (async) — it lands in rfi_drafts.
+  // Trigger a draft: fires beady/rfi-draft (async); it lands in rfi_drafts.
   async function generateDraft(formData: FormData) {
     "use server";
     const samNoticeId = formData.get("samNoticeId") as string;

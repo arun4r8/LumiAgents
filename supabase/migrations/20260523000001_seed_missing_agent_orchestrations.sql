@@ -8,12 +8,12 @@
 -- agent tool that maps to these orchestrations fail at dispatch. Two newer
 -- Beady orchestrations (sbir-topic-search, opportunity-sweep) were never seeded.
 --
--- Fix: (re)insert all six with trigger_mode='agent' — the established mode for
+-- Fix: (re)insert all six with trigger_mode='agent', the established mode for
 -- "exists in the registry, callable by agents, no dashboard Run button"
 -- (same as angie/resume-formatting, angie/resume-scoring, beady/past-performance-seed).
 -- This restores agent-callability without re-adding a manual dashboard trigger.
 --
--- Idempotent via ON CONFLICT — safe to re-run.
+-- Idempotent via ON CONFLICT; safe to re-run.
 --
 -- Rollback (deliberate, manual):
 --   DELETE FROM orchestration.orchestrations WHERE name IN (
@@ -37,7 +37,7 @@ VALUES
     '{}', '{}', true, 'agent'),
 
   ('patch/inbound-triage', 1,
-    'Triage inbound email or Teams messages — classify, extract action items, route or auto-respond',
+    'Triage inbound email or Teams messages: classify, extract action items, route or auto-respond',
     '{}', '{}', true, 'agent'),
 
   ('beady/sbir-topic-search', 1,
@@ -45,7 +45,7 @@ VALUES
     '{}', '{}', true, 'agent'),
 
   ('beady/opportunity-sweep', 1,
-    'Parallel sweep of SAM.gov and DoD SBIR/STTR in one pass — unified scoring and a saved shortlist',
+    'Parallel sweep of SAM.gov and DoD SBIR/STTR in one pass: unified scoring and a saved shortlist',
     '{}', '{}', true, 'agent')
 
 ON CONFLICT (name, version) DO UPDATE SET

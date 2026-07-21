@@ -14,7 +14,7 @@ export async function step<T>(
 
   // ── Cloudflare Workflows mode ─────────────────────────────────────────────
   // When running inside a Workflow, delegate durability and retry to the
-  // platform. Each step.do() is checkpointed — if the Worker crashes, the
+  // platform. Each step.do() is checkpointed, so if the Worker crashes the
   // Workflow resumes from the last completed step automatically.
   if (ctx.workflowStep) {
     const wf = ctx.workflowStep;
@@ -35,7 +35,7 @@ export async function step<T>(
 
     try {
       // Cloudflare Workflows requires Serializable<T> but fn is generic () => Promise<T>.
-      // The cast is intentional — step values must be JSON-serializable by convention.
+      // The cast is intentional: step values must be JSON-serializable by convention.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const output = (await wf.do(`step-${idx}-run`, { retries: { limit: 3, delay: "5 seconds", backoff: "exponential" } }, fn as () => Promise<any>)) as T;
 

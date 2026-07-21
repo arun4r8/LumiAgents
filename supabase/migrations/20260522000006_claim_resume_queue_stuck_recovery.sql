@@ -1,4 +1,4 @@
--- Migration: claim_resume_queue — recover items stuck in 'processing'
+-- Migration: claim_resume_queue, recovering items stuck in 'processing'
 --
 -- If an n8n Worker execution crashes mid-batch, claimed items remain in
 -- 'processing' with locked_at set but never advance to 'done'. The old

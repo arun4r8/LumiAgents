@@ -9,7 +9,7 @@ export const sbirSearchInputSchema = z.object({
   component: z
     .array(z.string())
     .optional()
-    .describe("DoD branch filter — e.g. ['ARMY', 'USAF', 'NAVY', 'SOCOM']"),
+    .describe("DoD branch filter, e.g. ['ARMY', 'USAF', 'NAVY', 'SOCOM']"),
   topicStatus: z
     .enum(["Open", "Closed", "Pre-Release"])
     .default("Open")
@@ -67,7 +67,7 @@ interface RawSbirPage {
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
 // The DoD SBIR/STTR Topics portal migrated from dodsbirsttr.mil to
-// www.defensesbirsttr.mil — the old apex's DNS A record was pulled, so requests to it
+// www.defensesbirsttr.mil. The old apex's DNS A record was pulled, so requests to it
 // fail to resolve. The new host sits behind Akamai, which blocks non-browser clients,
 // so we send browser-like headers. Overridable via SBIR_API_BASE (no redeploy needed
 // if the endpoint shifts again).
@@ -91,7 +91,7 @@ export const sbirTopicSearch = defineTool({
     if (!(await claimBudget(ctx.env, "sbir", DAILY_BUDGET.sbir))) {
       return { totalElements: 0, topics: [] };
     }
-    // Fetch up to `limit` topics in one page — the portal has ~100-200 open at any time
+    // Fetch up to `limit` topics in one page; the portal has ~100-200 open at any time
     const params = new URLSearchParams({
       page: "0",
       size: String(input.limit),

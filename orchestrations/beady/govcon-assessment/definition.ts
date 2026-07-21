@@ -24,10 +24,10 @@ import {
 
 export const inputSchema = z.object({
   opportunityId: z.string().uuid().optional().describe("Existing opportunities row to assess (e.g. from beady/opportunity-search). If omitted or not found, a new row is created from the intake text/PDF."),
-  opportunityName: z.string().optional().describe("Opportunity title — used when creating a new opportunity"),
+  opportunityName: z.string().optional().describe("Opportunity title, used when creating a new opportunity"),
   summaryText: z.string().optional().describe("Solicitation abstract / analyst summary"),
   notes: z.string().optional().describe("Extra analyst context"),
-  solicitationPdfBase64: z.string().optional().describe("Base64 solicitation PDF — injected automatically from chat attachments (single file)"),
+  solicitationPdfBase64: z.string().optional().describe("Base64 solicitation PDF, injected automatically from chat attachments (single file)"),
 });
 
 export const outputSchema = z.object({
@@ -228,13 +228,13 @@ export default defineOrchestration({
       retrievedEvidence: context.retrievedEvidence,
     });
 
-    // ── 3. Engine 1 — Qualification (9-category) ───────────────────────────────
+    // ── 3. Engine 1: Qualification (9-category) ─────────────────────────────────
     const qualParsed = await step(ctx, "qualification-score", () =>
       scoreQualification(env, base.evaluation_payload, model),
     );
     const scored = computeWeightedScore(qualParsed, base);
 
-    // ── 4. Engine 2 — Strategic dimensions D1–D5 ───────────────────────────────
+    // ── 4. Engine 2: Strategic dimensions D1–D5 ─────────────────────────────────
     const ppRowText = context.pp
       .map((p: any, i: number) => `[Score: ${(0.9 - i * 0.05).toFixed(2)}] ${p.title || ""}\nCustomer: ${p.customer || ""}\nDomain: ${p.domain || ""}\nScope: ${p.scope_summary || ""}`)
       .join("\n---\n");

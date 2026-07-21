@@ -2,7 +2,7 @@ import type { Env } from "../../runtime/src/types";
 import { sendEmail } from "./send";
 
 // Operational failure alerts (sweep health, content-calendar nudge, …) go out by
-// email to *the people subscribed* — the recipients of the active digests, pulled live
+// email to *the people subscribed*: the recipients of the active digests, pulled live
 // from orchestration.subscriptions. An optional ALERT_EMAIL env var adds fixed
 // recipients on top. Degrades gracefully: if there are no recipients or RESEND_API_KEY
 // is unset, it logs and returns { sent: false } so a run never breaks.
@@ -42,7 +42,7 @@ export async function sendAlertEmail(
 ): Promise<{ sent: boolean; recipients: number; error?: string }> {
   const to = [...new Set([...opts.to.map((e) => e.trim().toLowerCase()), ...envRecipients(env)])].filter(Boolean);
   if (to.length === 0) {
-    console.warn(`[alert] no recipients — alert not emailed: ${opts.subject}`);
+    console.warn(`[alert] no recipients, alert not emailed: ${opts.subject}`);
     return { sent: false, recipients: 0, error: "no recipients" };
   }
   const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111">

@@ -96,7 +96,7 @@ export const samGovOpportunitySearch = defineTool({
     });
 
     if (input.activeOnly) params.set("status", "active");
-    // SAM v2 has no free-text "keywords" param (it was silently ignored) — `title`
+    // SAM v2 has no free-text "keywords" param (it was silently ignored); `title`
     // is the supported text search, matching against the notice title.
     if (input.keywords) params.set("title", input.keywords);
     if (input.naicsCodes && input.naicsCodes.length > 0) {
@@ -125,7 +125,7 @@ export const samGovOpportunitySearch = defineTool({
       : rawOpps;
 
     const opportunities: SamOpportunity[] = filtered.map((o) => {
-      // Parse agency hierarchy — take last meaningful segment
+      // Parse agency hierarchy: take last meaningful segment
       const pathParts = (o.fullParentPathName ?? "")
         .split(">")
         .map((s) => s.trim())

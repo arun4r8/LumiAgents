@@ -34,7 +34,7 @@ export default async function RunDetailPage({
     .eq("run_id", id)
     .order("step_index");
 
-  // Fetch tool_calls for all steps (batched — avoids N+1)
+  // Fetch tool_calls for all steps (batched, avoids N+1)
   const stepIds = (steps ?? []).map((s) => s.id);
   const { data: toolCalls } =
     stepIds.length > 0

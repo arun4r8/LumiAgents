@@ -28,7 +28,7 @@ export function ApprovalsClient({ decided }: { decided: Decided[] }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {decided.map((a) => {
             const ok = a.status === "approved";
-            const orchName = a.runs?.orchestrations?.name ?? "—";
+            const orchName = a.runs?.orchestrations?.name ?? "-";
             return (
               <div key={a.id} className="decided-row">
                 <span className={`chip ${ok ? "ok" : "warn"}`}>{a.status}</span>

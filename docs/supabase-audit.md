@@ -2,9 +2,9 @@
 
 Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 
-**Project:** Lumiture (`cuaknazkpmwvnkmwtamp`) — East US (North Virginia)  
+**Project:** Lumiture (`cuaknazkpmwvnkmwtamp`), East US (North Virginia)  
 **Postgres:** 17.6  
-**pgvector:** Enabled — embeddings at 3072 dimensions (Gemini text-embedding models)
+**pgvector:** Enabled; embeddings at 3072 dimensions (Gemini text-embedding models)
 
 ---
 
@@ -65,7 +65,7 @@ Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 | `email_logs` | Email records | 0 | |
 | `sms_logs` | SMS records | 0 | |
 
-### Auth (custom — see security note)
+### Auth (custom; see security note)
 | Table | Purpose | Rows | Notes |
 |-------|---------|------|-------|
 | `users` | Custom user table | 0 | Has username + password columns ⚠️ |
@@ -74,7 +74,7 @@ Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 
 ## RLS status
 
-Anon key returns `[]` for all tables including those with data (agent_tasks has 3 rows, invisible to anon). This indicates RLS is enabled with deny-all defaults on at least the data tables. **Full RLS audit requires direct Postgres access** (currently blocked by IPv6 — see below).
+Anon key returns `[]` for all tables including those with data (agent_tasks has 3 rows, invisible to anon). This indicates RLS is enabled with deny-all defaults on at least the data tables. **Full RLS audit requires direct Postgres access** (currently blocked by IPv6; see below).
 
 Working assumption: RLS is partially configured but untested at the app layer. Phase 1 will write explicit, tested RLS policies for all orchestration schema tables.
 
@@ -100,7 +100,7 @@ The `agent_tasks` and `agent_logs` tables are n8n's predecessor to what the orch
 
 ## pgvector
 
-Extension enabled. All vector columns are 3072 dimensions, consistent with Gemini `text-embedding-004` (or OpenAI `text-embedding-3-large`). New orchestration tables do not need vector columns — embeddings stay in the domain tables.
+Extension enabled. All vector columns are 3072 dimensions, consistent with Gemini `text-embedding-004` (or OpenAI `text-embedding-3-large`). New orchestration tables do not need vector columns; embeddings stay in the domain tables.
 
 ---
 

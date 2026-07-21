@@ -2,7 +2,7 @@
 --
 -- What changes:
 --   Adds a govcon_assessments table to store the full output of each
---   beady/govcon-assessment run — score, go/no-go, exec memo, and per-factor
+--   beady/govcon-assessment run: score, go/no-go, exec memo, and per-factor
 --   scoring breakdown. One row per orchestration run so assessment history is
 --   preserved. Previously all assessment logic lived inside n8n with no DB
 --   record; this migration is part of migrating that logic into the runtime.

@@ -6,7 +6,7 @@
 //   2. Set HR_API_URL and HR_API_KEY via `wrangler secret put`
 //   3. Replace the throw below with real HTTP calls and map the HR response
 //      fields onto EmployeeRecord
-//   4. Handle pagination — most HR APIs return results in pages of 50–100
+//   4. Handle pagination: most HR APIs return results in pages of 50–100
 
 import { assertHrConfigured, type HrEnv } from "./base";
 
@@ -45,6 +45,6 @@ export async function syncEmployeesFromHr(
   assertHrConfigured(env);
   void options;
   throw new Error(
-    "TODO: implement HR employee sync — see integrations/hr/employees.ts",
+    "TODO: implement HR employee sync. See integrations/hr/employees.ts",
   );
 }

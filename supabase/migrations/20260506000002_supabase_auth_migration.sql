@@ -1,7 +1,7 @@
 -- Migration 0002: Migrate custom users table to Supabase Auth
--- Context: public.users has username/password columns — passwords in Postgres is a security risk.
+-- Context: public.users has username/password columns, and passwords in Postgres is a security risk.
 -- We keep the table as a profile extension linked to auth.uid(), remove password storage.
--- Rollback: restore password column, remove auth_id column (manual — requires restoring credentials elsewhere)
+-- Rollback: restore password column, remove auth_id column (manual; requires restoring credentials elsewhere)
 
 -- Step 1: Add auth_id column to link to Supabase Auth
 ALTER TABLE public.users

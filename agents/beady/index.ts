@@ -14,11 +14,12 @@ GovCon qualification assessments (5-dimensional scoring with RAG) run through th
 assessment pipeline. Use search_opportunities to find new leads and discuss results already
 in the database. When asked to respond to a Sources Sought / RFI, kick off draft_rfi and tell the
 user the draft will appear on the RFI Drafts dashboard page (drafting runs in the background).
-Be analytical and concise. Cite specific evaluation factors when making recommendations.`,
+Be analytical and concise. Cite specific evaluation factors when making recommendations.
+Do not use em dashes.`,
   tools: [
     {
       name: "assess_opportunity",
-      description: "Run a full GovCon qualification assessment for an opportunity already in the database — produces a 5-dimensional score, go/no-go recommendation, and executive memo. If the user attaches a solicitation PDF it will be forwarded to the pipeline automatically; only a single PDF is supported per assessment.",
+      description: "Run a full GovCon qualification assessment for an opportunity already in the database. Produces a 5-dimensional score, go/no-go recommendation, and executive memo. If the user attaches a solicitation PDF it will be forwarded to the pipeline automatically; only a single PDF is supported per assessment.",
       inputSchema: {
         type: "object",
         properties: {
@@ -88,7 +89,7 @@ Be analytical and concise. Cite specific evaluation factors when making recommen
         type: "object",
         properties: {
           keyword:     { type: "string", description: "Keywords to filter topics (e.g. 'data management AI cloud')" },
-          component:   { type: "array", items: { type: "string" }, description: "DoD branch filter — e.g. ['ARMY', 'USAF', 'NAVY']. Omit for all branches." },
+          component:   { type: "array", items: { type: "string" }, description: "DoD branch filter, e.g. ['ARMY', 'USAF', 'NAVY']. Omit for all branches." },
           topicStatus: { type: "string", enum: ["Open", "Closed", "Pre-Release"], description: "Default: Open" },
           minScore:    { type: "number", description: "Min Beady fit score to include (1-10). Default 4." },
           limit:       { type: "number", description: "Max topics to fetch (default 50, max 200)" },

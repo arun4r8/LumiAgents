@@ -106,7 +106,7 @@ export default async function ContentCalendarPage() {
     revalidatePath("/content-calendar");
   }
 
-  // Draft with Cleo: fires cleo/content-draft (async) — the draft lands back on the row.
+  // Draft with Cleo: fires cleo/content-draft (async); the draft lands back on the row.
   async function draftWithCleo(formData: FormData): Promise<void> {
     "use server";
     const id = formData.get("id") as string;
@@ -126,7 +126,7 @@ export default async function ContentCalendarPage() {
     revalidatePath("/content-calendar");
   }
 
-  // Plan with Cleo: fires cleo/content-plan (async) — seeds idea rows from a theme.
+  // Plan with Cleo: fires cleo/content-plan (async); seeds idea rows from a theme.
   async function planWithCleo(formData: FormData): Promise<void> {
     "use server";
     const theme = str(formData.get("theme"));
@@ -145,7 +145,7 @@ export default async function ContentCalendarPage() {
     revalidatePath("/content-calendar");
   }
 
-  // Import CSV (from the team's planning spreadsheet). Idempotent via source_key —
+  // Import CSV (from the team's planning spreadsheet). Idempotent via source_key:
   // re-uploading an edited sheet updates rows; existing drafts/status are preserved
   // (they aren't in the upsert payload).
   async function importCsv(formData: FormData): Promise<{ imported: number; skipped: number }> {

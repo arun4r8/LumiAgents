@@ -11,7 +11,7 @@ Agent orchestration platform built on Cloudflare Workers and Supabase. Six AI ag
 | **Data** | Supabase (Postgres + RLS) | Runs, steps, artifacts, domain tables; auth backbone |
 | **Integrations** | Direct API wrappers (legacy n8n webhooks being phased out) | External systems wrapped as typed, idempotent tools |
 
-The runtime routes agent chat requests via `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. Four agents — Angie, Beady, Patch, Money — run as their own Cloudflare Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) reached over a Service Binding, so their metrics, logs, and deploys are isolated. Cleo and Dewey have no dedicated Worker: they run inline inside `lumiagents-runtime` via the fallback path (`if (workerBinding) {...} else { runAgentChat(...) }`).
+The runtime routes agent chat requests via `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. Four agents (Angie, Beady, Patch, Money) run as their own Cloudflare Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) reached over a Service Binding, so their metrics, logs, and deploys are isolated. Cleo and Dewey have no dedicated Worker: they run inline inside `lumiagents-runtime` via the fallback path (`if (workerBinding) {...} else { runAgentChat(...) }`).
 
 ```
 Dashboard → lumiagents-runtime (gateway + orchestrations + cron)
@@ -36,20 +36,20 @@ Angie, Beady, Patch, and Money each run as a dedicated Worker; Cleo and Dewey ru
 ## Repo layout
 
 ```
-/agents/              — Agent entrypoints and tool definitions
-/orchestrations/      — Workflow definitions, one folder per orchestration
-/integrations/        — Typed wrappers around external APIs (and legacy n8n webhooks, being phased out)
-/runtime/             — Cloudflare Worker engine (routes, step runner, LLM primitives)
+/agents/              # Agent entrypoints and tool definitions
+/orchestrations/      # Workflow definitions, one folder per orchestration
+/integrations/        # Typed wrappers around external APIs (and legacy n8n webhooks, being phased out)
+/runtime/             # Cloudflare Worker engine (routes, step runner, LLM primitives)
   src/
-  workers/            — Wrangler configs for the dedicated agent Workers (angie, beady, patch, money)
-/dashboard/           — Next.js app deployed via opennextjs-cloudflare
+  workers/            # Wrangler configs for the dedicated agent Workers (angie, beady, patch, money)
+/dashboard/           # Next.js app deployed via opennextjs-cloudflare
 /supabase/
-  migrations/         — Forward-only Supabase migrations (canonical location)
-/docs/                — Architecture decisions and contracts (read before coding)
-/.claude/             — Claude Code skills, agents, and slash commands
+  migrations/         # Forward-only Supabase migrations (canonical location)
+/docs/                # Architecture decisions and contracts (read before coding)
+/.claude/             # Claude Code skills, agents, and slash commands
 ```
 
-The `/agents/`, `/orchestrations/`, and `/integrations/` directories are TypeScript source bundled into the runtime Worker — they are **not** separate packages. Only `runtime/` and `dashboard/` are pnpm workspace packages.
+The `/agents/`, `/orchestrations/`, and `/integrations/` directories are TypeScript source bundled into the runtime Worker; they are **not** separate packages. Only `runtime/` and `dashboard/` are pnpm workspace packages.
 
 ## Local development
 
@@ -65,13 +65,13 @@ pnpm install
 **2. Set up runtime secrets**
 ```bash
 cp runtime/.dev.vars.example runtime/.dev.vars   # or copy the template comments as a guide
-# Fill in values — see "Runtime secrets" table below
+# Fill in values; see "Runtime secrets" table below
 ```
 
 **3. Set up dashboard env**
 ```bash
 cp dashboard/.env.local.example dashboard/.env.local   # or create manually
-# Fill in values — see "Dashboard env vars" table below
+# Fill in values; see "Dashboard env vars" table below
 ```
 
 **4. Start everything**
@@ -117,15 +117,15 @@ Non-secret vars (`SUPABASE_URL`, `JIRA_BASE_URL`, `ENVIRONMENT`) are already set
 
 The `.claude/skills/` directory has step-by-step playbooks for common tasks:
 
-- **New orchestration** — clone closest existing one in `/orchestrations/`, register in `/runtime/src/registry.ts`, add to agent tool list in `/agents/<name>/index.ts`, write a DB migration to insert it into `orchestration.orchestrations`
-- **New integration** — add a typed wrapper in `/integrations/`, follow the `defineTool` pattern and include an idempotency key
-- **New migration** — always add a new file in `supabase/migrations/`, never edit applied ones; include RLS policy in the same migration
+- **New orchestration**: clone closest existing one in `/orchestrations/`, register in `/runtime/src/registry.ts`, add to agent tool list in `/agents/<name>/index.ts`, write a DB migration to insert it into `orchestration.orchestrations`
+- **New integration**: add a typed wrapper in `/integrations/`, follow the `defineTool` pattern and include an idempotency key
+- **New migration**: always add a new file in `supabase/migrations/`, never edit applied ones; include RLS policy in the same migration
 
 When using Claude Code: plan mode (Shift+Tab) for schema changes, runtime/engine changes, or anything spanning more than 3 files.
 
 ## Deploying
 
-Push to `main` — everything deploys automatically via GitHub Actions.
+Push to `main` and everything deploys automatically via GitHub Actions.
 
 | Workflow | Triggers on | Steps |
 |---|---|---|
@@ -167,10 +167,10 @@ wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name lumiagents-angie
 
 These docs contain decisions that should not be relitigated without discussion:
 
-1. `docs/architecture.md` — the layer model, major technology choices and why
-2. `docs/data-model.md` — Supabase schema (`orchestrations`, `runs`, `run_steps`, `tool_calls`, `artifacts`)
-3. `docs/workflow-contract.md` — how an orchestration is defined; the `step`, `llm_decide`, `llm_extract` primitives
-4. `docs/roadmap.md` — phases and what is in/out of scope
+1. `docs/architecture.md`: the layer model, major technology choices and why
+2. `docs/data-model.md`: Supabase schema (`orchestrations`, `runs`, `run_steps`, `tool_calls`, `artifacts`)
+3. `docs/workflow-contract.md`: how an orchestration is defined; the `step`, `llm_decide`, `llm_extract` primitives
+4. `docs/roadmap.md`: phases and what is in/out of scope
 
 ## Conventions
 

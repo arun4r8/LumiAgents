@@ -60,7 +60,7 @@ export function RfiDraftsClient({ drafts, opportunities, generateDraft, submitAn
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 760 }}>
         Cleo drafts Sources Sought / RFI responses grounded in Lumiture&apos;s profile and past performance.
-        Pick an opportunity and generate — drafting runs in the background (~20–40s), then the draft appears
+        Pick an opportunity and generate. Drafting runs in the background (~20–40s), then the draft appears
         below. Review, copy, and finish it before submitting.
       </p>
 
@@ -72,7 +72,7 @@ export function RfiDraftsClient({ drafts, opportunities, generateDraft, submitAn
             {opportunities.map((o) => (
               <option key={o.sam_notice_id} value={o.sam_notice_id}>
                 {(o.notice_type ? `[${o.notice_type}] ` : "") + (o.title ?? o.sam_notice_id)}
-                {o.response_deadline ? ` — due ${o.response_deadline.slice(0, 10)}` : ""}
+                {o.response_deadline ? ` (due ${o.response_deadline.slice(0, 10)})` : ""}
               </option>
             ))}
           </select>
@@ -88,7 +88,7 @@ export function RfiDraftsClient({ drafts, opportunities, generateDraft, submitAn
       {error && <div className="card" style={{ padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "var(--err)" }}>{error}</div>}
       {justStarted && (
         <div className="card" style={{ padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "var(--ink-2)" }}>
-          ✨ Draft started — it runs in the background. Refresh in ~30 seconds and it&apos;ll appear below.
+          ✨ Draft started. It runs in the background; refresh in ~30 seconds and it&apos;ll appear below.
         </div>
       )}
 

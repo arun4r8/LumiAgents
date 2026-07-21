@@ -90,12 +90,12 @@ export default function OverviewClient({
       setRuns((prev) => {
         const idx = prev.findIndex((r) => r.id === incoming.id);
         if (idx === -1) {
-          // New run arrived via INSERT — we don't have full data, so just
+          // New run arrived via INSERT; we don't have full data, so just
           // trigger a router refresh to pull the full row from the server.
           router.refresh();
           return prev;
         }
-        // UPDATE — patch just the status field in local state
+        // UPDATE: patch just the status field in local state
         const next = [...prev];
         next[idx] = { ...next[idx], status: incoming.status };
         return next;
@@ -295,7 +295,7 @@ export default function OverviewClient({
         <section className="card pad">
           <div className="sec-h">
             <h3>Spend by agent · today</h3>
-            <div className="muted mono" style={{ fontSize: 11.5 }}>—</div>
+            <div className="muted mono" style={{ fontSize: 11.5 }}>-</div>
           </div>
           <SpendPlaceholder orchestrations={orchestrations} />
         </section>
@@ -425,7 +425,7 @@ function ActivityStream({ steps }: { steps: RecentStep[] }) {
           : s.status === "completed" ? "ok"
           : s.status === "running" ? "info"
           : "info";
-        const orch = s.runs?.orchestrations?.name ?? "—";
+        const orch = s.runs?.orchestrations?.name ?? "-";
         const age = s.started_at
           ? Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000)
           : null;
@@ -474,7 +474,7 @@ function MiniApproval({
     }
   };
 
-  const orchName = a.runs?.orchestrations?.name ?? "—";
+  const orchName = a.runs?.orchestrations?.name ?? "-";
 
   return (
     <div className={`mini-ap${expiring ? " expiring" : urgent ? " urgent" : ""}`}>
@@ -602,8 +602,8 @@ function SpendPlaceholder({ orchestrations }: { orchestrations: Orchestration[] 
             <div className="spend-bar">
               <div className="fill" style={{ width: 0 }} />
             </div>
-            <div className="spend-tok" style={{ color: "var(--ink-3)" }}>—</div>
-            <div className="spend-cost" style={{ color: "var(--ink-3)" }}>—</div>
+            <div className="spend-tok" style={{ color: "var(--ink-3)" }}>-</div>
+            <div className="spend-cost" style={{ color: "var(--ink-3)" }}>-</div>
           </div>
         );
       })}
@@ -642,7 +642,7 @@ function SlaBoard({ approvals }: { approvals: Approval[] }) {
         ? `${Math.round(
             (100 * decided.filter((a) => a.status === "approved").length) / decided.length
           )}%`
-        : "—",
+        : "-",
       tone: "ok",
     },
   ];

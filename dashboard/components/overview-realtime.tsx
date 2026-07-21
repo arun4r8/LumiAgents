@@ -13,7 +13,7 @@ interface OverviewRealtimeProps {
 }
 
 /**
- * Headless subscription manager — renders nothing, just subscribes to
+ * Headless subscription manager: renders nothing, just subscribes to
  * `orchestration.runs` for INSERT and UPDATE events across all runs and
  * calls `onRunChange` when one arrives.
  */
@@ -54,6 +54,6 @@ export function OverviewRealtime({ onRunChange }: OverviewRealtimeProps) {
     };
   }, [onRunChange]);
 
-  // Headless — no rendered output
+  // Headless: no rendered output
   return null;
 }

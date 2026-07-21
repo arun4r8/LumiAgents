@@ -72,6 +72,7 @@ requestType context:
 Output a concise Jira ticket summary (imperative, ≤ 100 chars) and a full description
 with enough context for HR or ops to act without asking follow-up questions.
 Labels should be lowercase, hyphenated, relevant (e.g. ["hiring", "cleared", "contract-support"]).
+Do not use em dashes.
       `.trim(),
       input: {
         requestType: input.requestType,

@@ -13,14 +13,14 @@ export const inputSchema = z.object({
     .string()
     .uuid()
     .optional()
-    .describe("Scope report to a single contract — omit for all active contracts"),
+    .describe("Scope report to a single contract. Omit for all active contracts"),
   fiscalYear: z
     .number()
     .int()
     .min(2020)
     .max(2030)
     .optional()
-    .describe("Fiscal year to report on — defaults to current year"),
+    .describe("Fiscal year to report on. Defaults to current year"),
 });
 
 export const outputSchema = z.object({
@@ -115,6 +115,8 @@ Output format:
 - narrative: full markdown report with sections for each analysis area
 - alerts: a bulleted list of anything requiring immediate attention
   (e.g. contract > 90% burned, invoice 60+ days overdue, labour over budget)
+
+Do not use em dashes.
       `.trim(),
       input: {
         reportType: input.reportType,

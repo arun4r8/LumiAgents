@@ -1,7 +1,7 @@
 -- Rename the award orchestrations beady/award-* -> cleo/award-* now that they belong
 -- to the Cleo (eminence & awards) agent rather than Beady. Renames the live registry
 -- rows and their schedules so the meta-cron keeps dispatching them under the new name.
--- (schedules.orchestration_name is plain text — no FK — so a straight UPDATE is safe.)
+-- (schedules.orchestration_name is plain text with no FK, so a straight UPDATE is safe.)
 --
 -- Rollback: swap 'cleo/award-' back to 'beady/award-' in the same rows.
 

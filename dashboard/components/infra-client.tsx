@@ -117,15 +117,15 @@ function SetupCard() {
       >
         <div>
           <span style={{ color: "var(--ok)" }}>CLOUDFLARE_ACCOUNT_ID</span>
-          {"   "}— your CF account ID
+          {":  "}your CF account ID
         </div>
         <div>
           <span style={{ color: "var(--ok)" }}>CLOUDFLARE_API_TOKEN</span>
-          {"    "}— API token with Workers Scripts Read + Edit permissions
+          {":   "}API token with Workers Scripts Read + Edit permissions
         </div>
         <div>
           <span style={{ color: "var(--ok)" }}>CF_WORKER_SCRIPT_NAME</span>
-          {"  "}— defaults to &quot;lumiagents-runtime&quot;
+          {":  "}defaults to &quot;lumiagents-runtime&quot;
         </div>
       </div>
       <p
@@ -248,7 +248,7 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* KPI strip — orchestration run stats */}
+      {/* KPI strip: orchestration run stats */}
       <div className="kpis">
         <MetricKpi label="Total Runs · 24h" value={(runStats?.total ?? 0).toLocaleString()} tone="info" />
         <MetricKpi label="Succeeded" value={(runStats?.succeeded ?? 0).toLocaleString()} tone={runStats && runStats.succeeded > 0 ? "ok" : "muted"} />
@@ -256,7 +256,7 @@ function MetricsTab() {
         <MetricKpi label="Cron-triggered" value={(runStats?.cronTriggered ?? 0).toLocaleString()} tone="muted" />
         <MetricKpi
           label="LLM Cost · 24h"
-          value={runStats ? formatCost(runStats.estimatedCostUsd) : "—"}
+          value={runStats ? formatCost(runStats.estimatedCostUsd) : "-"}
           tone="muted"
           subLabel={runStats ? `${((runStats.totalInputTokens + runStats.totalOutputTokens) / 1000).toFixed(1)}k tokens` : undefined}
         />
@@ -533,7 +533,7 @@ function LogsTab() {
       };
 
       ws.onerror = () => {
-        setStatusMsg("WebSocket error — check browser console");
+        setStatusMsg("WebSocket error. Check browser console.");
       };
 
       ws.onclose = () => {
@@ -727,13 +727,13 @@ function DeploymentsTab() {
                   <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
                     {d.metadata?.created_on
                       ? new Date(d.metadata.created_on).toLocaleString()
-                      : "—"}
+                      : "-"}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
-                    {d.metadata?.source ?? "—"}
+                    {d.metadata?.source ?? "-"}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
-                    {d.metadata?.author_email ?? "—"}
+                    {d.metadata?.author_email ?? "-"}
                   </td>
                   <td>
                     {isCurrent ? (
@@ -858,7 +858,7 @@ function SecretsTab() {
           style={{ width: 16, height: 16, color: "var(--warn)", flexShrink: 0, marginTop: 2 }}
         />
         <span style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6 }}>
-          <strong>Secret values are write-only</strong> — they cannot be read after creation.
+          <strong>Secret values are write-only</strong> and cannot be read after creation.
           Rotating a secret overwrites it.
         </span>
       </div>
@@ -895,7 +895,7 @@ function SecretsTab() {
                     {s.type ?? "secret_text"}
                   </td>
                   <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
-                    {s.created_on ? new Date(s.created_on).toLocaleString() : "—"}
+                    {s.created_on ? new Date(s.created_on).toLocaleString() : "-"}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <button
@@ -1045,7 +1045,7 @@ export function InfraClient() {
         <div>
           <h1>Infrastructure</h1>
           <div className="sub">
-            Cloudflare Workers management — metrics, logs, deployments, secrets, cron
+            Cloudflare Workers management: metrics, logs, deployments, secrets, cron
           </div>
         </div>
       </div>

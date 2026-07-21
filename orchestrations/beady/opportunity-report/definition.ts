@@ -120,12 +120,12 @@ async function loadDigestOpps(
 
   // The fit-score threshold is the gate: fit >= 7 is pursue-only, fit 5-6 pulls in
   // monitor-rated items too (the sweep only persists opportunities scoring >= 5,
-  // so that's the floor). No hard recommendation filter — the subscriber's
+  // so that's the floor). No hard recommendation filter; the subscriber's
   // min_fit_score decides their range.
   const params = new URLSearchParams({
     select: "title,agency,set_aside,response_deadline,source,source_url,notice_type,fit_score,fit_reason,recommendation,last_scored_at",
     fit_score: `gte.${sub.min_fit_score}`,
-    // Never surface 'pass' — an opportunity re-scored down to pass (an amendment
+    // Never surface 'pass': an opportunity re-scored down to pass (an amendment
     // narrowed its fit) is out of scope regardless of the fit threshold.
     recommendation: "neq.pass",
     order: "fit_score.desc,last_scored_at.desc",
@@ -178,7 +178,7 @@ function escapeHtml(s: string): string {
 }
 
 function fmtDeadline(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return escapeHtml(iso);
   return d.toISOString().slice(0, 10);
@@ -192,8 +192,8 @@ function tierColor(recommendation: string | null): { bg: string; fg: string } {
 }
 
 // Notice-type badge. Market-research notices (Sources Sought / Presolicitation /
-// RFI) are highlighted amber — they take a capability statement, not a bid — while
-// full solicitations get a neutral indigo tag.
+// RFI) are highlighted amber, because they take a capability statement rather than
+// a bid, while full solicitations get a neutral indigo tag.
 function noticeTag(noticeType: string | null): string {
   if (!noticeType) return "";
   const t = noticeType.toLowerCase();
@@ -211,7 +211,7 @@ function noticeTag(noticeType: string | null): string {
 function sourceLabel(source: string | null): string {
   if (source === "sam_gov") return "SAM.gov";
   if (source === "sbir") return "SBIR/STTR";
-  return escapeHtml(source ?? "—");
+  return escapeHtml(source ?? "-");
 }
 
 function renderEmail(
@@ -229,7 +229,7 @@ function renderEmail(
   if (sub.agencies?.length) filterBits.push(`agency: ${sub.agencies.join(", ")}`);
   if (sub.set_asides?.length) filterBits.push(`set-aside: ${sub.set_asides.join(", ")}`);
 
-  // Single-column stacked cards — render cleanly on phone and desktop (a wide
+  // Single-column stacked cards render cleanly on phone and desktop (a wide
   // multi-column table overflowed narrow mobile clients). One card per opportunity.
   const kv = (label: string, value: string): string =>
     `<tr><td style="color:#6b7280;font-size:12px;padding:2px 14px 2px 0;white-space:nowrap;vertical-align:top;">${label}</td><td style="color:#374151;font-size:13px;padding:2px 0;vertical-align:top;">${value}</td></tr>`;
@@ -252,7 +252,7 @@ function renderEmail(
         <div style="font-size:16px;font-weight:700;line-height:1.3;margin-bottom:6px;color:#111827;">${titleHtml}</div>
         <div style="color:#6b7280;font-size:13px;line-height:1.5;margin-bottom:12px;">${escapeHtml(o.fit_reason ?? "")}</div>
         <table role="presentation" style="border-collapse:collapse;margin-bottom:10px;">
-          ${kv("Agency", escapeHtml(o.agency ?? "—"))}
+          ${kv("Agency", escapeHtml(o.agency ?? "-"))}
           ${kv("Deadline", fmtDeadline(o.response_deadline))}
           ${kv("Source", sourceLabel(o.source))}
         </table>
@@ -330,7 +330,7 @@ export default defineOrchestration({
         const { subject, html } = renderEmail(sub, opps, { manual });
         const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html, from: senderFor(ctx.env, "beady") });
 
-        // Only advance last_sent_at on a real send — a failed/disabled send is
+        // Only advance last_sent_at on a real send; a failed/disabled send is
         // retried next run rather than silently dropping these opportunities.
         if (result.sent) {
           await markSent(ctx.env, sub.id, sentAt);

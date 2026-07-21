@@ -6,9 +6,9 @@
 //   - Deltek Vision    → use the Vision REST API (API key + base URL)
 //
 // Required Wrangler secrets (wrangler secret put <NAME>):
-//   ACCOUNTING_API_URL   — base URL of the accounting system REST API
+//   ACCOUNTING_API_URL:    base URL of the accounting system REST API
 //                          e.g. https://sandbox-quickbooks.api.intuit.com
-//   ACCOUNTING_API_KEY   — API key or bearer token for the accounting system
+//   ACCOUNTING_API_KEY:    API key or bearer token for the accounting system
 //
 // Once the secrets are set, implement the actual HTTP calls in the sibling files
 // (invoices.ts, budget-lines.ts, labor-records.ts) and remove the "not configured" stubs.

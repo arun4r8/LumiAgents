@@ -6,7 +6,7 @@
 -- and re-inserts with fresh embeddings. The unique constraint prevents duplicate
 -- ingestion if a webhook fires twice for the same file.
 --
--- Existing rows (manually ingested documents) keep source_uri = NULL — the
+-- Existing rows (manually ingested documents) keep source_uri = NULL; the
 -- unique constraint uses NULLS NOT DISTINCT so multiple NULL values are allowed.
 --
 -- Rollback:

@@ -2,9 +2,9 @@
 -- includes, beyond the global min_fit_score. All null/empty => no filter on that
 -- dimension (current behavior preserved).
 --
---   sources    — restrict to specific sources ('sam_gov', 'sbir'). NULL => all.
---   agencies   — case-insensitive substring match against opportunities.agency.
---   set_asides — case-insensitive substring match against opportunities.set_aside.
+--   sources:     restrict to specific sources ('sam_gov', 'sbir'). NULL => all.
+--   agencies:    case-insensitive substring match against opportunities.agency.
+--   set_asides:  case-insensitive substring match against opportunities.set_aside.
 --
 -- Rollback:
 --   ALTER TABLE orchestration.report_subscriptions

@@ -7,7 +7,7 @@
 export class PauseSignal extends Error {
   readonly approvalId: string;
   constructor(approvalId: string) {
-    super(`Run paused — awaiting approval ${approvalId}`);
+    super(`Run paused, awaiting approval ${approvalId}`);
     this.name = "PauseSignal";
     this.approvalId = approvalId;
   }

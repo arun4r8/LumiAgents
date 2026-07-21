@@ -10,7 +10,7 @@ export const inputSchema = z.object({
   pdfBase64s: z
     .array(z.string())
     .min(1)
-    .describe("Base64-encoded PDF résumés — injected automatically from chat attachments"),
+    .describe("Base64-encoded PDF résumés, injected automatically from chat attachments"),
 });
 
 export const outputSchema = z.object({

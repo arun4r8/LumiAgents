@@ -28,7 +28,7 @@ export default defineOrchestration({
   name: "cleo/content-nudge",
   version: 1,
   description:
-    "Daily nudge — emails subscribers about content-calendar posts due soon that are not yet drafted/ready.",
+    "Daily nudge that emails subscribers about content-calendar posts due soon that are not yet drafted/ready.",
   inputSchema,
   outputSchema,
   access: {
@@ -60,7 +60,7 @@ export default defineOrchestration({
         .join("\n");
       const text = `Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due within ${withinDays} days still not drafted:\n\n${lines}\n\nDraft them with Cleo from the Content Calendar page.`;
 
-      // No content-specific subscriber list — notify all active digest subscribers.
+      // No content-specific subscriber list, so notify all active digest subscribers.
       const to = await subscriptionRecipients(env);
       const result = await sendAlertEmail(env, { to, subject: `🗓️ Content calendar: ${due.length} post${due.length === 1 ? "" : "s"} due soon`, text, from: senderFor(env, "cleo") });
       return result.sent;

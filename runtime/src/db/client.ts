@@ -1,6 +1,6 @@
 import type { Env, Run, RunStep, Schedule } from "../types";
 
-// Minimal typed Supabase REST client — no Node deps, pure fetch.
+// Minimal typed Supabase REST client: no Node deps, pure fetch.
 
 export class SupabaseClient {
   private url: string;

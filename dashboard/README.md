@@ -8,7 +8,7 @@ Live at: `https://lumiagents-dashboard.lumiture.workers.dev`
 
 | Section | Purpose |
 |---|---|
-| **Agents** | Chat with Angie, Beady, Patch, and Money — triggers orchestrations, attaches files |
+| **Agents** | Chat with Angie, Beady, Patch, and Money; triggers orchestrations, attaches files |
 | **Runs** | Live view of all orchestration runs with step-by-step status |
 | **Orchestrations** | Browse available orchestrations, trigger ad-hoc runs |
 | **Data** | Domain records (resume results, GovCon assessments, candidates, staff requests) |
@@ -32,7 +32,7 @@ cp dashboard/.env.local.example dashboard/.env.local   # or create manually (see
 cd dashboard && pnpm dev
 ```
 
-Dashboard runs at `http://localhost:3000`. You also need the runtime running at `http://localhost:8787` — see the root README for `pnpm dev:all`.
+Dashboard runs at `http://localhost:3000`. You also need the runtime running at `http://localhost:8787`; see the root README for `pnpm dev:all`.
 
 ### Required env vars (`dashboard/.env.local`)
 
@@ -61,7 +61,7 @@ npx @opennextjs/cloudflare build
 npx wrangler deploy
 ```
 
-`NEXT_PUBLIC_*` vars are baked into the client bundle at build time — always set them explicitly when building for production.
+`NEXT_PUBLIC_*` vars are baked into the client bundle at build time, so always set them explicitly when building for production.
 
 ## Key architecture notes
 

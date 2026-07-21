@@ -13,7 +13,7 @@ Prepare a PR for the current branch. Steps:
 <one paragraph>
 
 ## Why
-<one paragraph — link to issue if exists>
+<one paragraph; link to issue if exists>
 
 ## How
 <bullet list of the substantive changes>
@@ -36,4 +36,4 @@ Prepare a PR for the current branch. Steps:
 ```
 
 4. If schema changed, invoke the `schema-reviewer` subagent on the migration files and append its verdict to the PR.
-5. Print the description for the user to review. Do not push or open the PR — that's the user's job.
+5. Print the description for the user to review. Do not push or open the PR; that's the user's job.

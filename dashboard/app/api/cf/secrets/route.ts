@@ -20,7 +20,7 @@ async function authCheck(): Promise<boolean> {
   return user != null;
 }
 
-// GET /api/cf/secrets — list secret names
+// GET /api/cf/secrets: list secret names
 export async function GET(): Promise<NextResponse> {
   if (!(await authCheck())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -63,7 +63,7 @@ const CreateSecretSchema = z.object({
   text: z.string().min(1),
 });
 
-// POST /api/cf/secrets — create or update a secret
+// POST /api/cf/secrets: create or update a secret
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!(await authCheck())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -118,7 +118,7 @@ const DeleteSecretSchema = z.object({
   name: z.string().min(1),
 });
 
-// DELETE /api/cf/secrets — delete a secret by name
+// DELETE /api/cf/secrets: delete a secret by name
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   if (!(await authCheck())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

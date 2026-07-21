@@ -16,7 +16,7 @@
 --     'no-go'       → 'pass'
 --     'conditional' → 'monitor'
 --
--- fit_reason and red_flags are NOT synced here — the assessments table does not
+-- fit_reason and red_flags are NOT synced here; the assessments table does not
 -- store a short justification string. Those columns remain available for manual
 -- entry or a future n8n node update.
 --
@@ -51,7 +51,7 @@ END;
 $$;
 
 -- Ops and service_role can invoke this trigger function indirectly via INSERT/UPDATE.
--- No direct GRANT needed — SECURITY DEFINER runs as the function owner.
+-- No direct GRANT needed: SECURITY DEFINER runs as the function owner.
 
 DROP TRIGGER IF EXISTS assessments_sync_opportunity ON public.assessments;
 

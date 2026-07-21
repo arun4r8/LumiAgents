@@ -8,7 +8,7 @@
 --   DELETE FROM orchestration.schedules WHERE orchestration_name IN ('beady/award-sweep','beady/award-report');
 --   DELETE FROM orchestration.orchestrations WHERE name IN ('beady/award-sweep','beady/award-report');
 
--- ─── Awards table (public schema — ops dashboard reads it via RLS) ─────────────
+-- ─── Awards table (public schema; ops dashboard reads it via RLS) ──────────────
 
 CREATE TABLE IF NOT EXISTS public.awards (
   id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),

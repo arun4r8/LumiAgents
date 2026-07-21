@@ -96,7 +96,7 @@ export function AwardsClient({ awards, dismissAward }: Props) {
         <div className="empty">
           <div className="ico"><Trophy /></div>
           <h4>No awards yet.</h4>
-          <p>Cleo&apos;s weekly award sweep hasn&apos;t surfaced anything yet — or run a sweep from the Cleo chat.</p>
+          <p>Cleo&apos;s weekly award sweep hasn&apos;t surfaced anything yet, or run a sweep from the Cleo chat.</p>
         </div>
       ) : (
         <div className="card" style={{ overflow: "hidden" }}>
@@ -136,18 +136,18 @@ function AwardRow({ award: a, dismissAward }: { award: Award; dismissAward: Prop
           ) : a.title}
         </div>
         <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
-          {[a.sponsor, a.category].filter(Boolean).join(" · ") || "—"}
+          {[a.sponsor, a.category].filter(Boolean).join(" · ") || "-"}
         </div>
       </td>
       <td style={{ padding: "12px 14px" }}>
         <Badge text={a.award_type === "government" ? "Gov" : "Industry"} bg="#eef2ff" fg="#4338ca" />
       </td>
-      <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{deadline ?? "—"}</td>
+      <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{deadline ?? "-"}</td>
       <td style={{ padding: "12px 14px" }}>
-        <span style={{ display: "inline-block", background: fit.bg, color: fit.fg, borderRadius: 0, padding: "2px 10px", fontWeight: 700, fontSize: 12.5 }}>{a.fit_score ?? "—"}</span>
+        <span style={{ display: "inline-block", background: fit.bg, color: fit.fg, borderRadius: 0, padding: "2px 10px", fontWeight: 700, fontSize: 12.5 }}>{a.fit_score ?? "-"}</span>
       </td>
-      <td style={{ padding: "12px 14px" }}>{a.prestige ? <Badge text={a.prestige} {...(PRESTIGE_COLORS[a.prestige] ?? PRESTIGE_COLORS.low)} /> : "—"}</td>
-      <td style={{ padding: "12px 14px" }}>{a.effort ? <Badge text={a.effort} {...(EFFORT_COLORS[a.effort] ?? EFFORT_COLORS.medium)} /> : "—"}</td>
+      <td style={{ padding: "12px 14px" }}>{a.prestige ? <Badge text={a.prestige} {...(PRESTIGE_COLORS[a.prestige] ?? PRESTIGE_COLORS.low)} /> : "-"}</td>
+      <td style={{ padding: "12px 14px" }}>{a.effort ? <Badge text={a.effort} {...(EFFORT_COLORS[a.effort] ?? EFFORT_COLORS.medium)} /> : "-"}</td>
       <td style={{ padding: "12px 14px" }}><Badge text={a.recommendation} {...(REC_COLORS[a.recommendation] ?? REC_COLORS.skip)} /></td>
       <td style={{ padding: "12px 14px", textAlign: "right" }}>
         <form action={(fd) => start(async () => { await dismissAward(fd); })} style={{ display: "inline" }}>

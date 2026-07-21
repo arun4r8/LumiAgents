@@ -4,7 +4,7 @@ import type { Env } from "../../runtime/src/types";
 
 const DEFAULT_MODEL = "claude-haiku-4-5";
 
-// Scoring rubric — ported verbatim from the n8n "HR Expert LLM" system message so
+// Scoring rubric, ported verbatim from the n8n "HR Expert LLM" system message so
 // scores stay comparable with historical results.
 const RUBRIC_SYSTEM = `You are a strict professional resume evaluator used by enterprise hiring systems and senior recruiters for the specified role above.
 If the specified role is Lumiture, refer to the Lumiture job description to assess applicant.
@@ -68,10 +68,11 @@ Output:
   15) overall_score
   16) rationale`;
 
-// Lumiture job description — ported verbatim from the n8n flow. Used only when the
-// specified role is "Lumiture" (or when no role is given), matching the original.
+// Lumiture job description, ported from the n8n flow (punctuation normalized to
+// drop em dashes). Used only when the specified role is "Lumiture" (or when no
+// role is given), matching the original.
 const LUMITURE_JD = `About us-
-At Lumiture, we’re building next-generation solutions that fuse AI, data, and modern engineering to power intelligent experiences across industries. We’re not just coding apps — we’re shaping how technology helps businesses think, learn, and evolve.
+At Lumiture, we’re building next-generation solutions that fuse AI, data, and modern engineering to power intelligent experiences across industries. We’re not just coding apps; we’re shaping how technology helps businesses think, learn, and evolve.
 If you love solving big problems, experimenting with cutting-edge tools, and making an impact from day one, you’ll feel right at home here.
 
 The Role-
@@ -91,7 +92,7 @@ What We're Looking For:
 2. SQL / NoSQL databases
 3. Cloud platforms (AWS, GCP, Azure)
 4. Machine Learning or AI frameworks (OpenAI API, TensorFlow, PyTorch, LangChain, etc.)
-* A builder’s mindset — you love figuring things out, trying new tools, and taking ideas from zero to one.
+* A builder’s mindset: you love figuring things out, trying new tools, and taking ideas from zero to one.
 * Excellent communication and teamwork skills.
 Why Join Lumiture
 * Be part of a growing startup where your code has an immediate impact.
@@ -99,7 +100,7 @@ Why Join Lumiture
 * Access mentorship from experienced engineers and data scientists.
 * Enjoy flexibility, growth opportunities, and a culture built around learning fast and thinking bold.`;
 
-// Output contract — same 16 keys the n8n HR scorer returned.
+// Output contract: the same 16 keys the n8n HR scorer returned.
 export const scoredResumeSchema = z.object({
   name: z.string(),
   email: z.string(),

@@ -246,7 +246,7 @@ export function DataClient({
       <div className="page-h">
         <div>
           <h1>Data</h1>
-          <div className="sub">Business records — three ways in: manual entry, CSV import, or wire an integration.</div>
+          <div className="sub">Business records. Three ways in: manual entry, CSV import, or wire an integration.</div>
         </div>
       </div>
 
@@ -291,7 +291,7 @@ export function DataClient({
 // ─── Score badge ──────────────────────────────────────────────────────────────
 
 function ScoreBadge({ score, max = 10 }: { score: unknown; max?: number }) {
-  if (score == null) return <span style={{ color: "var(--ink-3)", fontSize: 12 }}>—</span>;
+  if (score == null) return <span style={{ color: "var(--ink-3)", fontSize: 12 }}>-</span>;
   const n = Number(score);
   const color = n >= 7 ? "var(--ok)" : n >= 4 ? "var(--warn, #f59e0b)" : "var(--err)";
   return (
@@ -323,7 +323,7 @@ function OpportunitiesPanel({ opportunities }: { opportunities: Record<string, u
 
       {opportunities.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No opportunities yet — run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-search</code> to populate.
+          No opportunities yet. Run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-search</code> to populate.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -457,7 +457,7 @@ function ResumeResultsPanel({
 
       {resumeJobs.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No scoring jobs yet — ask Angie to score résumés to populate.
+          No scoring jobs yet. Ask Angie to score résumés to populate.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -539,7 +539,7 @@ function CandidatesPanel({ candidates }: { candidates: Record<string, unknown>[]
 
       {candidates.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No candidates yet — run <code className="mono" style={{ fontSize: 12 }}>angie/candidate-sourcing</code> to populate.
+          No candidates yet. Run <code className="mono" style={{ fontSize: 12 }}>angie/candidate-sourcing</code> to populate.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -640,7 +640,7 @@ function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, u
 
       {staffRequests.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No staff requests yet — run <code className="mono" style={{ fontSize: 12 }}>patch/staff-request</code> to populate.
+          No staff requests yet. Run <code className="mono" style={{ fontSize: 12 }}>patch/staff-request</code> to populate.
         </div>
       ) : (
         <div className="card" style={{ overflow: "auto", marginBottom: 4 }}>
@@ -664,18 +664,18 @@ function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, u
                 const stColor = status === "fulfilled" ? "ok" : status === "open" ? "accent" : "muted";
                 return (
                   <tr key={(r.id as string) ?? i}>
-                    <td style={{ fontWeight: 500 }}>{(r.title as string) ?? "—"}</td>
-                    <td><span className="chip muted" style={{ fontSize: 11 }}>{(r.request_type as string) ?? "—"}</span></td>
+                    <td style={{ fontWeight: 500 }}>{(r.title as string) ?? "-"}</td>
+                    <td><span className="chip muted" style={{ fontSize: 11 }}>{(r.request_type as string) ?? "-"}</span></td>
                     <td>{urgency && <span className={`chip ${urgColor}`} style={{ fontSize: 11 }}>{urgency}</span>}</td>
                     <td>{status && <span className={`chip ${stColor}`} style={{ fontSize: 11 }}>{status}</span>}</td>
-                    <td style={{ fontSize: 12.5 }}>{(r.requested_by as string) ?? "—"}</td>
+                    <td style={{ fontSize: 12.5 }}>{(r.requested_by as string) ?? "-"}</td>
                     <td>
                       {r.jira_key ? (
                         <span className="mono chip" style={{ fontSize: 11 }}>{r.jira_key as string}</span>
-                      ) : <span style={{ color: "var(--ink-3)" }}>—</span>}
+                      ) : <span style={{ color: "var(--ink-3)" }}>-</span>}
                     </td>
                     <td style={{ fontSize: 12 }}>
-                      {r.created_at ? new Date(r.created_at as string).toLocaleDateString() : "—"}
+                      {r.created_at ? new Date(r.created_at as string).toLocaleDateString() : "-"}
                     </td>
                   </tr>
                 );
@@ -758,7 +758,7 @@ function TableSection({
       {rows.length === 0 ? (
         <div className="empty" style={{ padding: "32px 0" }}>
           <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-            No records yet — add rows manually, import a CSV, or wire in a sync integration.
+            No records yet. Add rows manually, import a CSV, or wire in a sync integration.
           </div>
         </div>
       ) : (
@@ -829,7 +829,7 @@ function DataTable({
 }
 
 function CellValue({ value, col }: { value: unknown; col: string }) {
-  if (value == null) return <span style={{ color: "var(--ink-3)" }}>—</span>;
+  if (value == null) return <span style={{ color: "var(--ink-3)" }}>-</span>;
   const s = String(value);
 
   if (col.includes("value") || col.includes("amount") || col.includes("budgeted") ||
@@ -945,7 +945,7 @@ function FieldInput({ field, value, onChange }: { field: Field; value: string; o
   if (field.type === "select") {
     return (
       <select {...base} className="sel" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">—</option>
+        <option value="">-</option>
         {field.options?.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     );
@@ -1091,7 +1091,7 @@ function CsvImportPanel({
                   value={mapping[field.key] ?? ""}
                   onChange={(e) => setMapping((m) => ({ ...m, [field.key]: e.target.value }))}
                 >
-                  <option value="">— skip —</option>
+                  <option value="">(skip)</option>
                   {csvHeaders.map((h) => <option key={h} value={h}>{h}</option>)}
                 </select>
               </div>
@@ -1162,7 +1162,7 @@ function IntegrationCard({ integration, onClose }: { integration: IntegrationDef
       </div>
       <p style={{ fontSize: 12.5, color: "var(--ink-2)", marginBottom: 14 }}>
         Sync data automatically from <strong>{integration.systems}</strong>.
-        The typed integration stub is scaffolded — wire it in when you have credentials.
+        The typed integration stub is scaffolded; wire it in when you have credentials.
       </p>
 
       <div style={{ marginBottom: 14 }}>
@@ -1195,7 +1195,7 @@ function IntegrationCard({ integration, onClose }: { integration: IntegrationDef
             {integration.stub}
           </code>
           <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-            — implement the fetch, the types are already there
+            implement the fetch, the types are already there
           </span>
         </div>
       </div>

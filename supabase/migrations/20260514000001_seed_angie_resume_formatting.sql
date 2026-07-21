@@ -1,5 +1,5 @@
 -- Add angie/resume-formatting to the orchestration registry.
--- Idempotent via ON CONFLICT — safe to re-run.
+-- Idempotent via ON CONFLICT; safe to re-run.
 
 INSERT INTO orchestration.orchestrations
   (name, version, description, input_schema, output_schema, is_active)
