@@ -322,7 +322,7 @@ export default function AnalystPage() {
           padding: 7px 12px;
           background: oklch(97% 0.01 240);
           border: 1px solid oklch(88% 0.03 240);
-          border-radius: 8px;
+          border-radius: 0;
           font-size: 12.5px;
           color: var(--ink-2);
           margin-bottom: 10px;
@@ -335,20 +335,20 @@ export default function AnalystPage() {
         .csv-badge-rm {
           margin-left: auto; background: none; border: none; cursor: pointer;
           color: var(--ink-3); display: flex; align-items: center; padding: 2px;
-          border-radius: 3px;
+          border-radius: 0;
         }
         .csv-badge-rm:hover { color: var(--err); background: var(--err-soft); }
         .advanced-panel {
           padding: 12px 14px;
           background: var(--bg-2);
           border-top: 1px solid var(--line);
-          border-radius: 0 0 8px 8px;
+          border-radius: 0;
         }
         .err-banner {
           margin-top: 12px;
           padding: 10px 14px;
           border: 1px solid var(--err-line);
-          border-radius: 8px;
+          border-radius: 0;
           background: var(--err-soft);
           color: var(--err);
           font-size: 13px;

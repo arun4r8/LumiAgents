@@ -325,7 +325,7 @@ function EditorTab() {
             display: "flex", alignItems: "center", gap: 6,
             padding: "4px 8px", width: "100%", textAlign: "left",
             background: isSelected ? "var(--accent-soft, oklch(95% 0.04 260))" : "none",
-            border: "none", cursor: "pointer", borderRadius: 4,
+            border: "none", cursor: "pointer", borderRadius: 0,
             fontSize: 12.5, color: isSelected ? "var(--accent)" : "var(--ink)",
           }}
         >
@@ -365,7 +365,7 @@ function EditorTab() {
               placeholder="path/to/note.md"
               style={{
                 width: "100%", fontSize: 12, padding: "4px 6px",
-                border: "1px solid var(--line)", borderRadius: 4,
+                border: "1px solid var(--line)", borderRadius: 0,
                 background: "var(--surface)", color: "var(--ink)",
                 boxSizing: "border-box",
               }}
@@ -437,7 +437,7 @@ function EditorTab() {
           {loadingFile && (
             <div style={{
               position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-              background: "var(--surface)", opacity: 0.8, borderRadius: 8, zIndex: 1,
+              background: "var(--surface)", opacity: 0.8, borderRadius: 0, zIndex: 1,
             }}>
               <Loader2 style={{ width: 20, height: 20, animation: "spin 1s linear infinite", color: "var(--ink-3)" }} />
             </div>
@@ -455,7 +455,7 @@ function EditorTab() {
               lineHeight: 1.6,
               padding: "14px 16px",
               border: "1px solid var(--line)",
-              borderRadius: 8,
+              borderRadius: 0,
               background: "var(--surface)",
               color: "var(--ink)",
               resize: "vertical",
@@ -515,7 +515,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
       {syncResult && syncResult !== "error" && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 14px", borderRadius: 8, marginBottom: 20,
+          padding: "10px 14px", borderRadius: 0, marginBottom: 20,
           background: "var(--ok-soft, oklch(97% 0.02 145))",
           border: "1px solid oklch(88% 0.06 145)",
           fontSize: 13, color: "var(--ok)",
@@ -527,7 +527,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
       {syncResult === "error" && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 14px", borderRadius: 8, marginBottom: 20,
+          padding: "10px 14px", borderRadius: 0, marginBottom: 20,
           background: "var(--err-soft)", border: "1px solid var(--err-line)",
           fontSize: 13, color: "var(--err)",
         }}>

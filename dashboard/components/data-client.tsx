@@ -1173,7 +1173,7 @@ function IntegrationCard({ integration, onClose }: { integration: IntegrationDef
           {integration.envVars.map((v) => (
             <code key={v} className="mono" style={{
               fontSize: 12, padding: "4px 8px",
-              background: "var(--bg-2)", borderRadius: 5,
+              background: "var(--bg-2)", borderRadius: 0,
               border: "1px solid var(--line)", color: "var(--ink)",
             }}>
               wrangler secret put {v}
@@ -1189,7 +1189,7 @@ function IntegrationCard({ integration, onClose }: { integration: IntegrationDef
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <code className="mono" style={{
             fontSize: 12, padding: "4px 8px",
-            background: "var(--bg-2)", borderRadius: 5,
+            background: "var(--bg-2)", borderRadius: 0,
             border: "1px solid var(--line)", color: "var(--ink)",
           }}>
             {integration.stub}
