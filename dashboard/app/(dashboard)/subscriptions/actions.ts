@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 // Shared, kind-aware subscription actions. Used by the aggregate /subscriptions page
-// and by the per-area surfaces (Reports = opportunity, Awards = award). Every write
-// goes to the unified orchestration.subscriptions table; `kind` comes from the form.
+// and by the contextual award-digest section on /awards. Every write goes to the
+// unified orchestration.subscriptions table; `kind` comes from the form.
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -80,7 +80,6 @@ export async function createSubscription(formData: FormData) {
     });
   if (error) throw new Error(error.message);
   revalidatePath("/subscriptions");
-  revalidatePath("/reports");
   revalidatePath("/awards");
 }
 
@@ -105,7 +104,6 @@ export async function updateSubscription(formData: FormData) {
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/subscriptions");
-  revalidatePath("/reports");
   revalidatePath("/awards");
 }
 
@@ -120,7 +118,6 @@ export async function toggleSubscription(formData: FormData) {
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/subscriptions");
-  revalidatePath("/reports");
   revalidatePath("/awards");
 }
 
@@ -130,7 +127,6 @@ export async function deleteSubscription(formData: FormData) {
   const { error } = await supabase.schema("orchestration").from("subscriptions").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/subscriptions");
-  revalidatePath("/reports");
   revalidatePath("/awards");
 }
 
@@ -147,6 +143,5 @@ export async function sendNow(formData: FormData) {
   });
   if (!res.ok) throw new Error(`Send failed (${res.status}): ${await res.text()}`);
   revalidatePath("/subscriptions");
-  revalidatePath("/reports");
   revalidatePath("/awards");
 }

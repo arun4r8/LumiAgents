@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // Orchestrations that have a dedicated dashboard surface and shouldn't also appear
 // in the raw catalogue. beady/opportunity-report is managed entirely from the
-// Reports page (subscriptions + "Send now"); triggering it here with raw input
+// Subscriptions page (subscriptions + "Send now"); triggering it here with raw input
 // would just be a confusing duplicate.
 const HIDDEN_FROM_CATALOGUE = ["beady/opportunity-report"];
 
