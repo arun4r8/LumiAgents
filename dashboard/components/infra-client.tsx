@@ -108,7 +108,7 @@ function SetupCard() {
         style={{
           background: "var(--surface-2, var(--bg-2, #111))",
           border: "1px solid var(--line)",
-          borderRadius: 8,
+          borderRadius: 0,
           padding: "14px 16px",
           fontSize: 12.5,
           lineHeight: 2,
@@ -287,14 +287,14 @@ function MetricsTab() {
               </div>
               <div style={{
                 height: 8,
-                borderRadius: 4,
+                borderRadius: 0,
                 background: "var(--line)",
                 overflow: "hidden",
               }}>
                 <div style={{
                   height: "100%",
                   width: `${reqPct}%`,
-                  borderRadius: 4,
+                  borderRadius: 0,
                   background: reqPct > 90
                     ? "var(--err)"
                     : reqPct > 70
@@ -613,7 +613,7 @@ function LogsTab() {
           fontSize: 12,
           lineHeight: 1.7,
           background: "var(--surface-2, #0d0d0d)",
-          borderRadius: 10,
+          borderRadius: 0,
         }}
       >
         {lines.length === 0 ? (
@@ -937,7 +937,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 6,
+              borderRadius: 0,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,
@@ -952,7 +952,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 6,
+              borderRadius: 0,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,

@@ -150,7 +150,7 @@ function DocsQuery() {
       )}
 
       {error && (
-        <div style={{ padding: "12px 16px", border: "1px solid var(--err-line)", borderRadius: 8, background: "var(--err-soft)", color: "var(--err)", fontSize: 13, marginBottom: 14 }}>
+        <div style={{ padding: "12px 16px", border: "1px solid var(--err-line)", borderRadius: 0, background: "var(--err-soft)", color: "var(--err)", fontSize: 13, marginBottom: 14 }}>
           {error}
         </div>
       )}
@@ -286,7 +286,7 @@ function FileIngest() {
             display: "flex", flexDirection: "column", alignItems: "center",
             justifyContent: "center", gap: 8, padding: "28px 20px",
             border: `2px dashed ${dragging ? "var(--accent)" : file ? "oklch(58% 0.17 145)" : "var(--line)"}`,
-            borderRadius: 10, cursor: "pointer", textAlign: "center",
+            borderRadius: 0, cursor: "pointer", textAlign: "center",
             background: dragging ? "var(--accent-soft)" : file ? "oklch(97% 0.02 145)" : "var(--bg-2)",
             transition: "all 120ms",
           }}
@@ -427,7 +427,7 @@ function TextIngest() {
             <div>
               <label htmlFor="csv-upload" style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 8,
+                padding: "10px 14px", border: "1px dashed var(--line)", borderRadius: 0,
                 cursor: "pointer", fontSize: 13.5, color: content ? "var(--ink)" : "var(--ink-3)",
                 background: "var(--bg-2)",
               }}>

@@ -462,7 +462,7 @@ export default function AgentChatClient({
         .msg-bubble {
           max-width: 78%;
           padding: 10px 14px;
-          border-radius: 12px;
+          border-radius: 0;
           font-size: 13.5px;
           line-height: 1.6;
           white-space: pre-wrap;
@@ -501,7 +501,7 @@ export default function AgentChatClient({
           padding: 2px 7px;
           background: rgba(255,255,255,.18);
           border: 1px solid rgba(255,255,255,.25);
-          border-radius: 4px;
+          border-radius: 0;
           font-size: 11px;
           max-width: 180px;
         }
@@ -519,7 +519,7 @@ export default function AgentChatClient({
           background: var(--accent-soft);
           color: var(--accent-ink);
           border: 1px solid var(--accent-line);
-          border-radius: 5px;
+          border-radius: 0;
           font-size: 11.5px;
           font-weight: 500;
           text-decoration: none;
@@ -533,14 +533,14 @@ export default function AgentChatClient({
           padding: 8px 12px;
           background: var(--bg-1);
           border: 1px solid var(--line);
-          border-radius: 8px;
+          border-radius: 0;
         }
         .file-chip {
           display: inline-flex; align-items: center; gap: 5px;
           padding: 3px 6px 3px 8px;
           background: var(--bg);
           border: 1px solid var(--line-2);
-          border-radius: 5px;
+          border-radius: 0;
           font-size: 12px;
           color: var(--ink-1);
           max-width: 200px;
@@ -548,14 +548,14 @@ export default function AgentChatClient({
         .file-chip-rm {
           background: none; border: none; cursor: pointer;
           color: var(--ink-3); display: flex; align-items: center;
-          padding: 1px; border-radius: 3px; flex-shrink: 0;
+          padding: 1px; border-radius: 0; flex-shrink: 0;
         }
         .file-chip-rm:hover { color: var(--err); background: var(--err-soft); }
 
         /* input bar */
         .agent-input {
           border: 1px solid var(--line-2);
-          border-radius: 12px;
+          border-radius: 0;
           background: var(--bg);
           padding: 12px 14px;
           box-shadow: var(--shadow-md);
@@ -583,7 +583,7 @@ export default function AgentChatClient({
         .agent-error {
           padding: 10px 14px;
           border: 1px solid var(--err-line);
-          border-radius: 8px;
+          border-radius: 0;
           background: var(--err-soft);
           color: var(--err);
           font-size: 13px;

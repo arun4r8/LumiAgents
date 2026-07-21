@@ -116,8 +116,8 @@ export function SettingsClient({
         @keyframes spin { to { transform: rotate(360deg); } }
         .settings-section { margin-bottom: 28px; }
         .settings-heading { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
-        .seg-ctrl { display: flex; gap: 4px; background: var(--surface-2, var(--bg-2)); border: 1px solid var(--line); border-radius: 8px; padding: 3px; }
-        .seg-btn { display: flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 5px; border: none; background: transparent; color: var(--ink-2); font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background 120ms, color 120ms; white-space: nowrap; }
+        .seg-ctrl { display: flex; gap: 4px; background: var(--surface-2, var(--bg-2)); border: 1px solid var(--line); border-radius: 0; padding: 3px; }
+        .seg-btn { display: flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 0; border: none; background: transparent; color: var(--ink-2); font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background 120ms, color 120ms; white-space: nowrap; }
         .seg-btn:hover { color: var(--ink); }
         .seg-btn.active { background: var(--bg); color: var(--ink); box-shadow: 0 1px 3px oklch(0% 0 0 / .10); }
         .settings-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -183,7 +183,7 @@ function AgentCard({ agentId, meta, config, updateAgentConfig }: {
         background: `color-mix(in oklch, ${meta.color} 6%, var(--bg))`,
       }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+          width: 36, height: 36, borderRadius: 0, flexShrink: 0,
           background: meta.color, display: "flex", alignItems: "center",
           justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 15,
         }}>
@@ -210,7 +210,7 @@ function AgentCard({ agentId, meta, config, updateAgentConfig }: {
                 type="button"
                 onClick={() => setModel(m.value)}
                 style={{
-                  padding: "8px 14px", borderRadius: 8, cursor: "pointer",
+                  padding: "8px 14px", borderRadius: 0, cursor: "pointer",
                   border: `1.5px solid ${model === m.value ? meta.color : "var(--line)"}`,
                   background: model === m.value ? `color-mix(in oklch, ${meta.color} 10%, var(--bg))` : "var(--bg-2)",
                   transition: "all 120ms", textAlign: "left",
@@ -292,7 +292,7 @@ function OrchestrationsTab({ orchestrations, agentConfigs, updateOrchestrationCo
           <div key={agentId}>
             <div style={{
               display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 14px", borderRadius: 8, marginBottom: 8,
+              padding: "10px 14px", borderRadius: 0, marginBottom: 8,
               background: `color-mix(in oklch, ${meta.color} 8%, var(--bg-2))`,
               border: `1px solid color-mix(in oklch, ${meta.color} 20%, transparent)`,
             }}>
@@ -398,7 +398,7 @@ function OrchRow({ orch, agentColor, agentDefaultModel, updateOrchestrationConfi
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setModel("")}
                 style={{
-                  padding: "6px 12px", borderRadius: 7, cursor: "pointer", fontSize: 12.5, fontWeight: 500,
+                  padding: "6px 12px", borderRadius: 0, cursor: "pointer", fontSize: 12.5, fontWeight: 500,
                   border: `1.5px solid ${!model ? agentColor : "var(--line)"}`,
                   background: !model ? `color-mix(in oklch, ${agentColor} 10%, var(--bg))` : "var(--bg-2)",
                   color: !model ? agentColor : "var(--ink-2)",
@@ -408,7 +408,7 @@ function OrchRow({ orch, agentColor, agentDefaultModel, updateOrchestrationConfi
               {MODELS.map((m) => (
                 <button key={m.value} type="button" onClick={() => setModel(m.value)}
                   style={{
-                    padding: "6px 12px", borderRadius: 7, cursor: "pointer", fontSize: 12.5, fontWeight: 500,
+                    padding: "6px 12px", borderRadius: 0, cursor: "pointer", fontSize: 12.5, fontWeight: 500,
                     border: `1.5px solid ${model === m.value ? agentColor : "var(--line)"}`,
                     background: model === m.value ? `color-mix(in oklch, ${agentColor} 10%, var(--bg))` : "var(--bg-2)",
                     color: model === m.value ? agentColor : "var(--ink-2)",

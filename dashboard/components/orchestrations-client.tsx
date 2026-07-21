@@ -185,13 +185,13 @@ function AgentSection({
       {/* Agent header */}
       <div style={{
         display: "flex", alignItems: "flex-start", gap: 14,
-        padding: "14px 18px", borderRadius: 10,
+        padding: "14px 18px", borderRadius: 0,
         background: agent.bg,
         border: `1px solid color-mix(in oklch, ${agent.color} 20%, transparent)`,
         marginBottom: 14,
       }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+          width: 40, height: 40, borderRadius: 0, flexShrink: 0,
           background: agent.color, display: "flex", alignItems: "center",
           justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16,
         }}>
@@ -349,7 +349,7 @@ function OrchCard({
               type="submit"
               title={orch.is_active ? "Pause schedule" : "Resume schedule"}
               style={{
-                width: 34, height: 20, borderRadius: 10, border: "none",
+                width: 34, height: 20, borderRadius: 0, border: "none",
                 cursor: "pointer", padding: 0, flexShrink: 0,
                 background: orch.is_active ? agentColor : "var(--ink-4, #ccc)",
                 position: "relative", transition: "background 0.2s",
@@ -549,7 +549,7 @@ function OrchCard({
         }
         .run-result {
           display: flex; align-items: flex-start; gap: 8px;
-          padding: 10px 12px; border-radius: 7px;
+          padding: 10px 12px; border-radius: 0;
           font-size: 12.5px; margin-bottom: 12px;
         }
         .run-result.ok { background: var(--ok-soft, oklch(97% 0.02 145)); color: var(--ok); border: 1px solid oklch(88% 0.06 145); }
