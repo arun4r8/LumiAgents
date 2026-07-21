@@ -1,0 +1,17 @@
+<svg viewBox="0 0 320 320" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+            <rect width="320" height="320" fill="#e5e5e9"/>
+            <circle cx="160" cy="150" r="118" fill="#d8d8de"/>
+            <path d="M74 320c0-52 40-92 86-92s86 40 86 92z" fill="#33333a"/>
+            <path d="M100 320c0-38 27-68 60-68s60 30 60 68z" fill="#57575f"/>
+            <rect x="150" y="196" width="20" height="34" fill="#dcb58f"/>
+            <path d="M116 130c0-28 20-50 44-50s44 22 44 50v18c0 28-20 48-44 48s-44-20-44-48z" fill="#dcb58f"/>
+            <path d="M110 132c-2-34 24-58 50-58s52 24 50 58c-12-8-18-22-18-22s-24 12-52 6c0 0-16 8-30 16z" fill="#2f2b29"/>
+            <rect x="132" y="138" width="24" height="16" rx="2" fill="none" stroke="#2f2b29" stroke-width="3"/>
+            <rect x="176" y="138" width="24" height="16" rx="2" fill="none" stroke="#2f2b29" stroke-width="3"/>
+            <line x1="156" y1="145" x2="176" y2="145" stroke="#2f2b29" stroke-width="3"/>
+            <path d="M150 172c6 4 14 4 20 0" stroke="#8a5c3a" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <g transform="translate(0 4)">
+              <rect x="196" y="196" width="70" height="16" fill="#E3A210"/>
+              <rect x="202" y="180" width="70" height="16" fill="#8a8f86"/>
+              <rect x="196" y="164" width="70" height="16" fill="#57575f"/>
+            </g></svg>
