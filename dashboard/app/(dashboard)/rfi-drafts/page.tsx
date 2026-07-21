@@ -13,9 +13,39 @@ export interface RfiDraft {
   agency: string | null;
   notice_type: string | null;
   response_deadline: string | null;
-  draft_markdown: string;
+  draft_markdown: string | null;
   model: string | null;
   created_at: string;
+  status: "intake" | "drafting" | "ready";
+  analysis: RfiAnalysis | null;
+  intake: RfiIntake | null;
+  answers: Record<string, string> | null;
+  assessment: RfiAssessment | null;
+}
+
+export interface RfiAnalysis {
+  requiredContent: Array<{ item: string; note: string }>;
+  risks: Array<{ kind: string; detail: string }>;
+  sufficient: boolean;
+  sufficiencyReason: string;
+  questions: Array<{ question: string; why: string; mustAnswer: boolean }>;
+  matrix: Array<{ engagement: string; requirement: string; strength: string; how: string }>;
+}
+
+export interface RfiIntake {
+  sufficiencyReason: string;
+  questions: Array<{ question: string; why: string; mustAnswer: boolean }>;
+  matrix: Array<{ engagement: string; requirement: string; strength: string; how: string }>;
+  risks: Array<{ kind: string; detail: string }>;
+  requiredContent: Array<{ item: string; note: string }>;
+}
+
+export interface RfiAssessment {
+  compliance: Array<{ item: string; pass: boolean; note: string }>;
+  factors: Array<{ factor: string; rating: string; weakness: string }>;
+  accuracy: Array<{ issue: string; severity: string }>;
+  mustFix: string[];
+  wouldStrengthen: string[];
 }
 
 export interface OppOption {
@@ -68,6 +98,29 @@ export default async function RfiDraftsPage() {
     revalidatePath("/rfi-drafts");
   }
 
+  // Answer the intake gate: re-runs beady/rfi-draft with the confirmed answers, which
+  // clears the gate and proceeds to draft + assess on the same row.
+  async function submitAnswers(formData: FormData) {
+    "use server";
+    const draftId = formData.get("draftId") as string;
+    const samNoticeId = formData.get("samNoticeId") as string;
+    const raw = formData.get("answers") as string;
+    const answers = JSON.parse(raw || "{}") as Record<string, string>;
+    const filled = Object.fromEntries(Object.entries(answers).filter(([, v]) => v && v.trim()));
+    if (Object.keys(filled).length === 0) throw new Error("Answer at least one question before drafting.");
+    const token = await getToken();
+    const res = await fetch(
+      `${RUNTIME}/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ samNoticeId, answers: filled, draftId }),
+      },
+    );
+    if (!res.ok) throw new Error(`Draft failed (${res.status}): ${await res.text()}`);
+    revalidatePath("/rfi-drafts");
+  }
+
   async function deleteDraft(formData: FormData) {
     "use server";
     const supabase = await createClient();
@@ -82,6 +135,7 @@ export default async function RfiDraftsPage() {
       drafts={(drafts ?? []) as RfiDraft[]}
       opportunities={(opps ?? []) as OppOption[]}
       generateDraft={generateDraft}
+      submitAnswers={submitAnswers}
       deleteDraft={deleteDraft}
     />
   );
