@@ -1,10 +1,10 @@
 /**
  * Shared entry-point factory for per-agent Cloudflare Workers.
- * Each agent (angie, beady, patch, money) gets its own wrangler.toml that
+ * Each of the six agents gets its own wrangler.toml that
  * points to a tiny wrapper in this file. The runtime gateway forwards chat
  * requests here via a Service Binding; this file runs the chat loop and returns.
  */
-import { runAgentChat, type AgentChatRequest, type AgentEnv } from "../agents/agent-chat";
+import { runAgentChat, type AgentChatRequest, type AgentEnv, type AgentSlug } from "../agents/agent-chat";
 
 function corsHeaders(): HeadersInit {
   return {
@@ -21,7 +21,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-export function makeAgentWorker(slug: "angie" | "beady" | "cleo" | "patch" | "money") {
+export function makeAgentWorker(slug: AgentSlug) {
   return {
     async fetch(request: Request, env: AgentEnv, _ctx: ExecutionContext): Promise<Response> {
       if (request.method === "OPTIONS") {

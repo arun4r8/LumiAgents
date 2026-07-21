@@ -1,6 +1,6 @@
 import type { Env } from "../types";
 import { runAgentChat } from "../agents/agent-chat";
-import type { AgentChatRequest, AgentChatResponse, ChatMessage, FileAttachment } from "../agents/agent-chat";
+import type { AgentChatRequest, AgentChatResponse, AgentSlug, ChatMessage, FileAttachment } from "../agents/agent-chat";
 import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json, requireOpsToken, rateLimited } from "./helpers";
@@ -22,9 +22,11 @@ async function mintDispatchToken(jwtSecret: string): Promise<string> {
 }
 
 // Maps agent slug → which Env key holds its Service Binding.
-const AGENT_BINDINGS: Record<string, keyof Env> = {
+const AGENT_BINDINGS: Record<AgentSlug, keyof Env> = {
   angie: "ANGIE_WORKER",
   beady: "BEADY_WORKER",
+  cleo: "CLEO_WORKER",
+  dewey: "DEWEY_WORKER",
   patch: "PATCH_WORKER",
   money: "MONEY_WORKER",
 };
@@ -46,10 +48,10 @@ export async function handleAgents(
     const rl = await rateLimited(env, authResult.userId, "agent-chat", 20);
     if (rl) return rl;
 
-    const slug = agentMatch[1] as "angie" | "beady" | "patch" | "money";
+    const slug = agentMatch[1] as AgentSlug;
     const runtimeUrl = `${url.protocol}//${url.host}`;
 
-    const bindingKey = AGENT_BINDINGS[slug];
+    const bindingKey = AGENT_BINDINGS[slug] as keyof Env | undefined;
     const workerBinding = bindingKey ? (env[bindingKey] as Fetcher | undefined) : undefined;
 
     const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET);
@@ -80,7 +82,7 @@ export async function handleAgents(
     // Semantic recall over this user's prior conversations with this agent.
     const memoryPreamble = await recall(env, { userId: authResult.userId, agentSlug: slug, queryText: lastUser?.content ?? "" });
 
-    let result: AgentChatResponse;
+    let result: AgentChatResponse | null = null;
     if (workerBinding) {
       // Production: forward to the agent's own CF Worker via Service Binding, with the
       // (possibly server-rebuilt) messages + recalled memory. Headers as before.
@@ -94,11 +96,25 @@ export async function handleAgents(
         },
         body: JSON.stringify({ messages, files: body.files, memoryPreamble: memoryPreamble || undefined }),
       });
-      const resp = await workerBinding.fetch(forwarded);
-      if (!resp.ok) return resp;
-      result = await resp.json() as AgentChatResponse;
-    } else {
-      // Development fallback: run the chat loop locally.
+      // A newly-created agent Worker has no secrets until an operator runs
+      // `wrangler secret put`, and a Service Binding to a not-yet-deployed Worker throws.
+      // Treat either as "this agent is not ready yet" and degrade to the inline loop
+      // rather than handing the user a hard failure. Chat is user-facing; a slower path
+      // beats an outage. Logged loudly so a permanently broken worker is still visible.
+      try {
+        const resp = await workerBinding.fetch(forwarded);
+        if (resp.ok) {
+          result = await resp.json() as AgentChatResponse;
+        } else {
+          console.error(`[agents] ${slug} worker returned ${resp.status}; falling back to inline chat`);
+        }
+      } catch (err) {
+        console.error(`[agents] ${slug} worker dispatch failed; falling back to inline chat:`, err);
+      }
+    }
+
+    if (!result) {
+      // No dedicated worker bound (local dev), or the bound worker is not usable yet.
       const chatReq: AgentChatRequest = { agentSlug: slug, messages };
       if (body.files?.length) chatReq.files = body.files;
       if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
@@ -130,7 +146,7 @@ export async function handleAgents(
       return new Response(null, { status: 200 });
     }
 
-    const slug = (parsed.agentSlug ?? "patch") as "angie" | "beady" | "patch" | "money";
+    const slug = (parsed.agentSlug ?? "patch") as AgentSlug;
     const runtimeUrl = `${url.protocol}//${url.host}`;
 
     const chatPromise = (async () => {

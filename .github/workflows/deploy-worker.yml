@@ -86,13 +86,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Deploy Runtime
-        working-directory: runtime
-        run: pnpm exec wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
+      # Agent Workers deploy before the runtime: the runtime's Service Bindings name them,
+      # so on the first deploy of a new agent Worker the target must already exist.
       - name: Deploy Angie
         working-directory: runtime
         run: pnpm exec wrangler deploy --config workers/angie/wrangler.toml
@@ -124,6 +119,20 @@ jobs:
       - name: Deploy Cleo
         working-directory: runtime
         run: pnpm exec wrangler deploy --config workers/cleo/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Dewey
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/dewey/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Runtime
+        working-directory: runtime
+        run: pnpm exec wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

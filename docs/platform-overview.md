@@ -59,7 +59,7 @@ Both workflows are **fully automatic**: merging to `main` is the deployment mech
 
 Each agent is a named AI persona with a system prompt and a set of tools that map directly to orchestrations. When you chat with an agent, it decides which orchestrations to invoke based on your request.
 
-**Worker topology:** **Angie, Beady, Patch, and Money** each run as their own Cloudflare Worker (reached via Service Bindings). **Cleo and Dewey run inline** inside `lumiagents-runtime`; there is no dedicated worker for them, and they resolve through the fallback in `runtime/src/routes/agents.ts`.
+**Worker topology:** all six agents each run as their own Cloudflare Worker (reached via Service Bindings), mapped by slug in `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. If an agent's Worker is unreachable or errors, the runtime degrades to running that agent's chat loop inline rather than failing the request.
 
 ### Angie: HR & Recruiting
 Sourcing and resume work.

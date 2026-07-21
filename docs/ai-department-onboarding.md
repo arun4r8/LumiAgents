@@ -34,7 +34,8 @@ The key architectural bet: **deterministic workflow spine, LLM at decision point
 │  lumiagents-beady     Agent Worker (Service Binding) │
 │  lumiagents-patch     Agent Worker (Service Binding) │
 │  lumiagents-money     Agent Worker (Service Binding) │
-│  (Cleo + Dewey run INLINE inside lumiagents-runtime) │
+│  lumiagents-cleo      Agent Worker (Service Binding) │
+│  lumiagents-dewey     Agent Worker (Service Binding) │
 │  Cloudflare Workflows  Durable multi-step execution  │
 └──────────────────────────────────────────────────────┘
               │                        │
@@ -252,7 +253,7 @@ Browser message → Agent (LLM + tool list)
 
 There are **six agents** now. Their definitions all live in `agents/<slug>/index.ts` and are collected in `agents/index.ts`; the orchestration registry is `runtime/src/registry.ts`.
 
-**Worker topology: not every agent gets its own Worker.** Only **Angie, Beady, Patch, and Money** run as their own isolated Cloudflare Worker reached over a Service Binding (`lumiagents-angie`, `lumiagents-beady`, `lumiagents-patch`, `lumiagents-money`). **Cleo and Dewey run inline inside `lumiagents-runtime`**. There is no dedicated `lumiagents-cleo` or `lumiagents-dewey` Worker; the runtime handles their chat directly via the fallback in `runtime/src/routes/agents.ts`. Same programming model either way; the only difference is where the chat loop executes.
+**Worker topology: every agent gets its own Worker.** All six run as an isolated Cloudflare Worker reached over a Service Binding (`lumiagents-angie`, `lumiagents-beady`, `lumiagents-cleo`, `lumiagents-dewey`, `lumiagents-patch`, `lumiagents-money`), mapped by slug in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`). The runtime keeps its inline chat loop as a **degraded fallback**: if an agent's Worker is unreachable or errors (a Worker deployed before its `ANTHROPIC_API_KEY` secret is set, say), chat runs inside `lumiagents-runtime` instead of failing. Same programming model either way; the only difference is where the chat loop executes.
 
 The six agents, their domains, and their tools:
 
@@ -260,8 +261,8 @@ The six agents, their domains, and their tools:
 |---|---|---|---|
 | **Angie** | own Worker | HR & Recruiting | `score_resumes` (resume-scoring), `source_candidates` (candidate-sourcing), `format_resume` (resume-format) |
 | **Beady** | own Worker | GovCon BD: discovery, scoring **and** response drafting | `search_all_opportunities` (parallel SAM.gov + SBIR sweep), `search_opportunities`, `search_sbir_topics`, `assess_opportunity` (5-dimension go/no-go), `seed_past_performance`, `draft_rfi` (Sources Sought / RFI drafting, **moved here from Cleo**), `find_industry_days` (industry-day / vendor-outreach event discovery) |
-| **Cleo** | inline | Eminence, awards & proposals + content calendar | `sweep_awards` (Tavily award sweep), `send_award_digest`, `plan_calendar` (theme → content-calendar ideas), `draft_content` (LinkedIn post copy + asset brief) |
-| **Dewey** | inline | Knowledge librarian, steward of the shared corpus | `search_knowledge` (cited RAG), `retag_document` (curate corpus/sensitivity), `knowledge_inventory` |
+| **Cleo** | own Worker | Eminence, awards & proposals + content calendar | `sweep_awards` (Tavily award sweep), `send_award_digest`, `plan_calendar` (theme → content-calendar ideas), `draft_content` (LinkedIn post copy + asset brief) |
+| **Dewey** | own Worker | Knowledge librarian, steward of the shared corpus | `search_knowledge` (cited RAG), `retag_document` (curate corpus/sensitivity), `knowledge_inventory` |
 | **Patch** | own Worker | IT Ops & Knowledge | `create_ticket`, `update_ticket`, `search_tickets`, `staff_request`, `query_documents` |
 | **Money** | own Worker | Finance & Analytics | `generate_financial_report`, `query_data` (natural-language SQL) |
 

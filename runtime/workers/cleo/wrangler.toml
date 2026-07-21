@@ -7,6 +7,12 @@ compatibility_flags = ["nodejs_compat"]
 SUPABASE_URL = "https://cuaknazkpmwvnkmwtamp.supabase.co"
 ENVIRONMENT = "production"
 
+# Secrets (set via `wrangler secret put --name lumiagents-cleo`):
+# ANTHROPIC_API_KEY
+
 [[services]]
 binding = "RUNTIME_WORKER"
 service = "lumiagents-runtime"
+
+[dev]
+port = 8792

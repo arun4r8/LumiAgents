@@ -36,8 +36,12 @@ export interface FileAttachment {
   content: string;
 }
 
+/** The six agent slugs. Single source of truth so a new agent cannot be half-added:
+ *  routing, the worker entry-points, and the chat loop all narrow against this. */
+export type AgentSlug = "angie" | "beady" | "cleo" | "dewey" | "patch" | "money";
+
 export interface AgentChatRequest {
-  agentSlug: "angie" | "beady" | "cleo" | "patch" | "money";
+  agentSlug: AgentSlug;
   messages: ChatMessage[];
   files?: FileAttachment[];
   /** Recalled long-term memory, injected into the system prompt (reference, not instructions). */

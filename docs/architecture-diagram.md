@@ -17,8 +17,9 @@ flowchart TB
 
     Worker["lumiagents-runtime\nHTTP gateway · /api/* routes\ncron · orchestration engine"]
 
-    %% Four agents run as their own Worker, reached over a Service Binding
-    %% (AGENT_BINDINGS in runtime/src/routes/agents.ts).
+    %% Every agent runs as its own Worker, reached over a Service Binding
+    %% (AGENT_BINDINGS in runtime/src/routes/agents.ts). The runtime falls back to
+    %% running the chat loop inline if a bound Worker is unreachable or errors.
     subgraph Dedicated["Dedicated agent Workers · Service Binding (AGENT_BINDINGS)"]
       direction TB
 
@@ -51,12 +52,6 @@ flowchart TB
         FR["financial-report\naccounting data + Claude"]
         DA["data-analyst\nSQL agent + Claude"]
       end
-    end
-
-    %% Cleo and Dewey have no dedicated Worker; they run inline inside
-    %% lumiagents-runtime via the fallback path (else → runAgentChat).
-    subgraph Inline["Inline in lumiagents-runtime · fallback path (no dedicated Worker)"]
-      direction TB
 
       subgraph CleoAgent["Cleo · Eminence, awards & content"]
         AS["award-sweep\nawards data + Claude"]
@@ -124,8 +119,7 @@ flowchart TB
   ObsidianVault -->|"GitHub push webhook\nPOST /api/vault/webhook"| Worker
 
   %% ── Runtime → agents ─────────────────────────────────────────────────────
-  Worker -->|"Service Binding"| AngieAgent & BeadyAgent & PatchAgent & MoneyAgent
-  Worker -->|"inline runAgentChat()"| CleoAgent & DeweyAgent
+  Worker -->|"Service Binding"| AngieAgent & BeadyAgent & PatchAgent & MoneyAgent & CleoAgent & DeweyAgent
   Worker --> Workflow
   Workflow --> CS & RS & RF
   Workflow --> OS & OSW & SB & GA & PP & RFI & IDS & OR
@@ -166,7 +160,7 @@ flowchart TB
 
 ### Agent hosting
 
-Four agents run as their own Cloudflare Worker, reached over a Service Binding declared in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`): **Angie → `ANGIE_WORKER`**, **Beady → `BEADY_WORKER`**, **Patch → `PATCH_WORKER`**, **Money → `MONEY_WORKER`**. **Cleo** and **Dewey** have no dedicated Worker; chat for those slugs falls through the `else` branch and runs inline in `lumiagents-runtime` via `runAgentChat(...)`. Orchestrations for all six agents execute in the runtime's Workflow engine regardless of where the chat loop runs.
+All six agents run as their own Cloudflare Worker, reached over a Service Binding declared in `AGENT_BINDINGS` (`runtime/src/routes/agents.ts`): **Angie → `ANGIE_WORKER`**, **Beady → `BEADY_WORKER`**, **Cleo → `CLEO_WORKER`**, **Dewey → `DEWEY_WORKER`**, **Patch → `PATCH_WORKER`**, **Money → `MONEY_WORKER`**. If a bound Worker is unreachable or returns an error, the runtime degrades to running that agent's chat loop inline via `runAgentChat(...)` instead of failing the request. Orchestrations for all six agents execute in the runtime's Workflow engine regardless of where the chat loop runs.
 
 ### Legacy n8n flows (being phased out)
 
@@ -189,14 +183,14 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 | `beady/rfi-draft` | Beady | Worker | Sources Sought / RFI response drafting (moved here from Cleo) |
 | `beady/industry-day-sweep` | Beady | Worker | Industry-day discovery |
 | `beady/opportunity-report` | Beady | Worker | Opportunity digest |
-| `cleo/award-sweep` | Cleo | Inline | Awards discovery |
-| `cleo/award-report` | Cleo | Inline | Award digest email |
-| `cleo/content-plan` | Cleo | Inline | Content-calendar planning |
-| `cleo/content-draft` | Cleo | Inline | Draft calendar content |
-| `cleo/content-nudge` | Cleo | Inline | Content-calendar nudges |
-| `dewey/knowledge-search` | Dewey | Inline | Corpus-scoped knowledge retrieval |
-| `dewey/retag-document` | Dewey | Inline | Re-tag a document's corpus / sensitivity |
-| `dewey/knowledge-inventory` | Dewey | Inline | Corpus inventory |
+| `cleo/award-sweep` | Cleo | Worker | Awards discovery |
+| `cleo/award-report` | Cleo | Worker | Award digest email |
+| `cleo/content-plan` | Cleo | Worker | Content-calendar planning |
+| `cleo/content-draft` | Cleo | Worker | Draft calendar content |
+| `cleo/content-nudge` | Cleo | Worker | Content-calendar nudges |
+| `dewey/knowledge-search` | Dewey | Worker | Corpus-scoped knowledge retrieval |
+| `dewey/retag-document` | Dewey | Worker | Re-tag a document's corpus / sensitivity |
+| `dewey/knowledge-inventory` | Dewey | Worker | Corpus inventory |
 | `money/financial-report` | Money | Worker | Financial report generation |
 | `money/data-analyst` | Money | Worker | Natural-language SQL analyst |
 | `patch/inbound-triage` | Patch | Worker | Jira inbound ticket triage |

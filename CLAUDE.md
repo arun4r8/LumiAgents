@@ -28,7 +28,7 @@ Six named agents, each an LLM tool-loop that calls orchestrations. Defined in `/
 - **Money**: finance & analytics
 - **Patch**: IT ops & knowledge/RAG
 
-**Worker topology:** angie/beady/patch/money each run as their own Cloudflare Worker (reached via Service Bindings from the runtime). Cleo and Dewey run **inline** inside `lumiagents-runtime` (no dedicated worker) via the fallback in `runtime/src/routes/agents.ts`. "Each agent is its own worker" is no longer universally true.
+**Worker topology:** all six agents run as their own Cloudflare Worker (reached via Service Bindings from the runtime), one entry in `AGENT_BINDINGS` in `runtime/src/routes/agents.ts` each. The runtime keeps an inline `runAgentChat` path as a degraded fallback: if an agent's Worker is unreachable or returns an error (for example a freshly created Worker whose secrets are not set yet), chat runs inside `lumiagents-runtime` instead of failing.
 
 **Knowledge access:** all agents execute as Postgres `service_role` and bypass RLS, so *which agent may read which knowledge* is enforced in the runtime retrieval path (`runtime/src/agents/knowledge-access.ts`), not by Postgres roles. Each agent reads the `shared` corpus plus its own private corpus (by slug); `restricted`-sensitivity documents are ops-only and never returned to an agent. Dewey is the librarian.
 
