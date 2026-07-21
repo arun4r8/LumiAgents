@@ -16,9 +16,9 @@
 ┌─────────────────────────────────────────────────┐
 │  Agent layer                                    │
 │  Six named agents (LLM tool-loops)              │
-│  - angie / beady / patch / money = own Worker   │
+│  - each agent = its own Worker                  │
 │    (Service Bindings)                           │
-│  - cleo / dewey = inline in lumiagents-runtime  │
+│  - inline runAgentChat = degraded fallback      │
 │  - each invokes orchestrations as tools;        │
 │    reads knowledge as service_role (see below)  │
 └─────────────────────────────────────────────────┘
@@ -61,7 +61,7 @@ This means: when an n8n flow can do the job, it does. When we need judgment, we 
 
 The orchestrations stay deterministic; the **agent layer** is a conversational skin on top. There are six agents: **Angie** (HR/recruiting), **Beady** (GovCon BD), **Cleo** (eminence/awards/content), **Dewey** (knowledge librarian), **Money** (finance), **Patch** (IT ops/RAG). An agent is an LLM tool-loop whose tools are orchestrations; it does not reimplement workflow logic.
 
-Worker topology is deliberately not uniform: **angie, beady, patch, and money each run as their own Cloudflare Worker**, reached from the runtime over Service Bindings (`runtime/src/routes/agents.ts` maps slug → binding). **Cleo and Dewey have no dedicated Worker**; they run inline inside `lumiagents-runtime` via the same route's fallback. We split an agent into its own Worker when its tool surface or dependencies justify the isolation; otherwise inline is cheaper and simpler. So "each agent is its own worker" is a convention, not an invariant.
+Worker topology is now uniform: **all six agents run as their own Cloudflare Worker**, reached from the runtime over Service Bindings (`runtime/src/routes/agents.ts` maps slug → binding). Isolation is the point: per-agent metrics, logs, CPU budget, and deploys, so one agent's tool surface cannot destabilise another's. The runtime still keeps the inline `runAgentChat` loop, but only as a **degraded fallback**: if an agent's Worker is unreachable or returns an error, the runtime runs the chat loop itself rather than failing the user's request. That fallback is what makes standing up a new agent Worker safe, since a Worker deployed before its secrets are set simply degrades instead of breaking chat.
 
 **Knowledge access is enforced in the runtime, not the database.** Every agent executes as Postgres `service_role` and bypasses RLS, so we cannot lean on Postgres roles to scope retrieval. Instead `runtime/src/agents/knowledge-access.ts` defines the scope: each agent may read the `shared` corpus plus a private corpus keyed by its own slug, and never sees `restricted`-sensitivity documents (ops-only). `orchestration.match_document_chunks` takes `allowed_corpora` / `include_restricted` and filters accordingly. Dewey is the librarian that searches, re-tags, and inventories that corpus.
 

@@ -11,18 +11,19 @@ Agent orchestration platform built on Cloudflare Workers and Supabase. Six AI ag
 | **Data** | Supabase (Postgres + RLS) | Runs, steps, artifacts, domain tables; auth backbone |
 | **Integrations** | Direct API wrappers (legacy n8n webhooks being phased out) | External systems wrapped as typed, idempotent tools |
 
-The runtime routes agent chat requests via `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. Four agents (Angie, Beady, Patch, Money) run as their own Cloudflare Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) reached over a Service Binding, so their metrics, logs, and deploys are isolated. Cleo and Dewey have no dedicated Worker: they run inline inside `lumiagents-runtime` via the fallback path (`if (workerBinding) {...} else { runAgentChat(...) }`).
+The runtime routes agent chat requests via `AGENT_BINDINGS` in `runtime/src/routes/agents.ts`. All six agents run as their own Cloudflare Worker (`lumiagents-angie`, `lumiagents-beady`, etc.) reached over a Service Binding, so their metrics, logs, and deploys are isolated. If a bound Worker is unreachable or errors, the runtime degrades to running that agent's chat loop inline (`runAgentChat`) rather than failing the request.
 
 ```
 Dashboard → lumiagents-runtime (gateway + orchestrations + cron)
-                ↓ Service Bindings          ↳ inline (fallback path)
-     lumiagents-angie  lumiagents-beady      Cleo  Dewey
+                ↓ Service Bindings          ↳ inline runAgentChat (degraded fallback)
+     lumiagents-angie  lumiagents-beady
+     lumiagents-cleo   lumiagents-dewey
      lumiagents-patch  lumiagents-money
 ```
 
 ## Agents
 
-Angie, Beady, Patch, and Money each run as a dedicated Worker; Cleo and Dewey run inline in the runtime (see Architecture above).
+Each agent runs as a dedicated Worker, with the runtime's inline chat loop as a fallback (see Architecture above).
 
 | Agent | Domain | Key orchestrations |
 |---|---|---|

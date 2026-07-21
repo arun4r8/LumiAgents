@@ -37,6 +37,8 @@ export interface Env {
   // Per-agent Service Bindings: present in production, absent in local dev (fallback to local fn).
   ANGIE_WORKER?: Fetcher;
   BEADY_WORKER?: Fetcher;
+  CLEO_WORKER?: Fetcher;
+  DEWEY_WORKER?: Fetcher;
   PATCH_WORKER?: Fetcher;
   MONEY_WORKER?: Fetcher;
   // Teams integration (set via `wrangler secret put`)

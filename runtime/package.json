@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
-    "dev:all": "concurrently -n runtime,angie,beady,patch,money -c cyan,green,yellow,magenta,blue \"wrangler dev\" \"wrangler dev --config workers/angie/wrangler.toml\" \"wrangler dev --config workers/beady/wrangler.toml\" \"wrangler dev --config workers/patch/wrangler.toml\" \"wrangler dev --config workers/money/wrangler.toml\"",
+    "dev:all": "concurrently -n runtime,angie,beady,patch,money,cleo,dewey -c cyan,green,yellow,magenta,blue,red,white \"wrangler dev\" \"wrangler dev --config workers/angie/wrangler.toml\" \"wrangler dev --config workers/beady/wrangler.toml\" \"wrangler dev --config workers/patch/wrangler.toml\" \"wrangler dev --config workers/money/wrangler.toml\" \"wrangler dev --config workers/cleo/wrangler.toml\" \"wrangler dev --config workers/dewey/wrangler.toml\"",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
