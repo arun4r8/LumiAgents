@@ -17,7 +17,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Angie",
     emoji: "🧑‍💼",
     category: "HR & Recruiting",
-    description: "Resume screening, candidate sourcing, and hiring pipeline management.",
+    description: "Screens resumes, sources candidates, and runs the hiring pipeline.",
     suggestedPrompts: [
       "Screen this resume for a cleared IT PM role",
       "Find 5 senior Java developers in DC",
@@ -29,7 +29,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Beady",
     emoji: "🔭",
     category: "GovCon Intel",
-    description: "Opportunity assessment, SAM.gov search, and go/no-go analysis.",
+    description: "Assesses opportunities, searches SAM.gov, and runs go/no go calls.",
     suggestedPrompts: [
       "Assess this opportunity for go/no-go",
       "Find SBIR opportunities closing this month",
@@ -41,7 +41,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Patch",
     emoji: "🔧",
     category: "IT & Ops",
-    description: "Jira tickets, staff requests, document Q&A, and ops triage.",
+    description: "Handles Jira tickets, staff requests, doc Q&A, and ops triage.",
     suggestedPrompts: [
       "Create a ticket for the VPN issue affecting the BD team",
       "Search for open critical tickets",
@@ -53,7 +53,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Money",
     emoji: "💰",
     category: "Finance",
-    description: "Financial reports, budget analysis, and contract burn rates.",
+    description: "Builds financial reports, budget analysis, and contract burn rates.",
     suggestedPrompts: [
       "Summarize revenue by contract for Q1 2025",
       "Which contracts are burning over budget?",
@@ -65,7 +65,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Cleo",
     emoji: "🏆",
     category: "Eminence",
-    description: "Award research, recognition programs, and eminence tracking.",
+    description: "Researches awards, runs recognition programs, and tracks eminence.",
     suggestedPrompts: [
       "What awards should Lumiture apply for this quarter?",
       "Run a fresh award sweep",
@@ -77,7 +77,7 @@ export const AGENTS: AgentMeta[] = [
     name: "Dewey",
     emoji: "📚",
     category: "Knowledge",
-    description: "Steward of the shared knowledge base — cited answers, curation, and sensitivity tagging.",
+    description: "Curates the knowledge base with cited answers and sensitivity tags.",
     suggestedPrompts: [
       "What do we know about our past performance on cloud migrations?",
       "Give me an inventory of the knowledge base",
@@ -113,60 +113,19 @@ export default function AgentsPage() {
 
 function AgentCard({ agent }: { agent: AgentMeta }) {
   return (
-    <div className="orch-card agent-card">
-      {/* Header */}
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="agent-emoji" aria-hidden="true">{agent.emoji}</span>
-          <div className="nm">{agent.name}</div>
+    <Link href={`/agents/${agent.slug}`} className="orch-card ag-card">
+      <span className="ag-cat">{agent.category}</span>
+      <div className="ag-art">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/agents/${agent.slug}.svg`} alt="" aria-hidden="true" />
+      </div>
+      <div className="ag-body">
+        <div className="ag-h">
+          <h3 className="ag-name">{agent.name}</h3>
+          <span className="ag-chat">Chat <span aria-hidden="true">&rarr;</span></span>
         </div>
-        <span className="chip accent">{agent.category}</span>
+        <p className="ag-desc">{agent.description}</p>
       </div>
-
-      <div className="desc">{agent.description}</div>
-
-      {/* Suggested prompts */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, margin: "8px 0 4px" }}>
-        {agent.suggestedPrompts.slice(0, 2).map((p, i) => (
-          <span
-            key={i}
-            className="chip muted"
-            style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%", display: "block" }}
-            title={p}
-          >
-            "{p}"
-          </span>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div className="ft">
-        <span className="muted" style={{ fontSize: 11.5 }}>+{agent.suggestedPrompts.length} example prompts</span>
-        <Link href={`/agents/${agent.slug}`} className="btn accent sm">
-          Chat →
-        </Link>
-      </div>
-
-      <style>{`
-        .agent-emoji {
-          font-size: 22px;
-          line-height: 1;
-          flex-shrink: 0;
-        }
-        .agent-card .nm {
-          font-family: var(--sans);
-          font-size: 15px;
-          font-weight: 600;
-          letter-spacing: -0.01em;
-        }
-        .agent-card .ft {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-top: 1px solid var(--line);
-          padding-top: 10px;
-        }
-      `}</style>
-    </div>
+    </Link>
   );
 }
