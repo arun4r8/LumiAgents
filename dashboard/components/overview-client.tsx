@@ -152,7 +152,7 @@ export default function OverviewClient({
             <RefreshCw /> Refresh
           </button>
           <button className="btn primary sm" onClick={() => navigate("/approvals")}>
-            Inbox ({pending.length}) <ArrowRight />
+            Approvals ({pending.length}) <ArrowRight />
           </button>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function OverviewClient({
             expiringSoon > 0
               ? `${expiringSoon} expiring within 30m`
               : pending.length === 0
-              ? "Inbox clear"
+              ? "No pending approvals"
               : "All within window"
           }
           onClick={() => navigate("/approvals")}
