@@ -4,7 +4,7 @@ Who logs into the dashboard, what they can see, and what they can trigger. Drive
 
 Two roles are **enforced**: `ops` (full access) and `enduser` (own records only). Enforcement is belt-and-suspenders: Postgres RLS (via `public.is_ops()`, which reads the JWT) *and* runtime route guards (`requireOpsToken`) both gate access. Any other role string you see in orchestration `access` metadata (`role:analyst`, `role:hr`) is **declared but not enforced anywhere**; it is documentation-in-data, not a security boundary.
 
-Agents have **no database identity**. Every agent and every orchestration step executes as the Supabase `service_role`, which bypasses RLS by design (the runtime is trusted). This is precisely why per-agent *knowledge* access (which corpus an agent may read, whether it may see `restricted` documents) is enforced in the runtime retrieval path (the `match_document_chunks` RPC arguments) and **not** in Postgres roles: at the database layer there is nothing to distinguish one agent from another.
+Agents have **no database identity**. Every agent and every orchestration step executes as the Supabase `service_role`, which bypasses RLS by design (the runtime is trusted). This is precisely why per-agent *knowledge* access (which corpus an agent may read, whether it may see `restricted` documents) is enforced in the runtime retrieval path (the `match_document_chunks` RPC arguments) and **not** in Postgres roles: at the database layer there is nothing to distinguish one agent from another. A design and an inert phase-1 implementation for changing this live in `docs/agent-identity.md`; none of it is switched on, so everything described on this page remains current.
 
 ## Audiences
 

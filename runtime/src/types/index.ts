@@ -5,6 +5,14 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   SUPABASE_JWT_SECRET: string;
+  // Supabase anon/publishable key. Only used as the API-gateway `apikey` when a request
+  // authenticates as an agent JWT instead of the service role; the JWT, not this key,
+  // determines the Postgres role. Unset → the service role key is used as the gateway key.
+  SUPABASE_ANON_KEY?: string;
+  // Per-agent database identity switch (docs/agent-identity.md). Set to "enforce" to route
+  // agent knowledge retrieval through the agent's own JWT so Postgres RLS gates it. Any
+  // other value, including unset, keeps the runtime-only gate. Defaults OFF.
+  AGENT_DB_IDENTITY?: string;
   ANTHROPIC_API_KEY: string;
   N8N_WEBHOOK_SECRET?: string;  // optional: set when n8n webhooks have Header Auth configured
   APOLLO_API_KEY?: string;      // optional: set when Apollo API key is obtained

@@ -84,6 +84,9 @@ export const documentQuery = defineOrchestration({
         maxChunks: input.maxChunks,
         allowedCorpora: scope.allowedCorpora,
         includeRestricted: scope.includeRestricted,
+        // Names the principal so the database can enforce the same scope once
+        // AGENT_DB_IDENTITY is switched on. Ignored while it is off.
+        agentSlug: "patch",
       }),
     );
   },

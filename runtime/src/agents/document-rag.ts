@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import { chunkText } from "../utils/chunker";
+import { agentAuthHeaders, isAgentDbIdentityEnabled } from "./agent-identity";
 
 const MODEL = "claude-sonnet-4-6";
 const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
@@ -33,6 +34,12 @@ interface QueryRequest {
   allowedCorpora?: string[] | null;
   /** Allow restricted-sensitivity chunks through. Default false. */
   includeRestricted?: boolean;
+  /**
+   * Slug of the agent on whose behalf this query runs. Only consulted when
+   * AGENT_DB_IDENTITY=enforce, in which case retrieval authenticates as that agent and
+   * Postgres RLS does the corpus/sensitivity gating. Omit for ops / dashboard callers.
+   */
+  agentSlug?: string;
 }
 
 interface QueryResult {
@@ -73,7 +80,14 @@ async function sbPost<T>(env: Env, path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-async function sbRpc<T>(env: Env, fn: string, args: unknown): Promise<T> {
+async function sbRpc<T>(
+  env: Env,
+  fn: string,
+  args: unknown,
+  // When supplied, replaces the service-role apikey/Authorization pair so the call runs
+  // under a narrower identity. Everything else about the request is unchanged.
+  authHeaders?: Record<string, string>,
+): Promise<T> {
   // PostgREST doesn't accept schema-prefixed fn names in the URL path.
   // For non-public schemas, pass the schema via Content-Profile header.
   const dotIdx = fn.indexOf(".");
@@ -83,7 +97,7 @@ async function sbRpc<T>(env: Env, fn: string, args: unknown): Promise<T> {
 
   const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
     method: "POST",
-    headers: { ...sbHeaders(env), ...extraHeaders },
+    headers: { ...sbHeaders(env), ...extraHeaders, ...(authHeaders ?? {}) },
     body: JSON.stringify(args),
   });
   if (!res.ok) throw new Error(`Supabase RPC ${fn} → ${res.status}: ${await res.text()}`);
@@ -152,21 +166,49 @@ export async function queryDocuments(env: Env, req: QueryRequest): Promise<Query
   const [questionEmbedding] = await embed(env, [req.question]);
   if (!questionEmbedding) throw new Error("Failed to embed question");
 
-  // 2. Vector search via Supabase RPC
-  const chunks = await sbRpc<Array<{
+  // 2. Vector search via Supabase RPC.
+  //
+  // Two gates exist for corpus/sensitivity: the runtime one (allowed_corpora /
+  // include_restricted, computed by scopeForAgent) and, once switched on, the database
+  // one (agent JWT + RLS, see docs/agent-identity.md). While AGENT_DB_IDENTITY is unset
+  // this is byte-identical to the previous behaviour. When it is set to "enforce" for an
+  // agent-attributed call, both gates run: the database derives the scope from the
+  // agent's identity, and the runtime scope is passed as an additional narrowing filter
+  // that can only intersect, never widen.
+  const agentSlug = req.agentSlug;
+  const useAgentIdentity = agentSlug !== undefined && isAgentDbIdentityEnabled(env);
+  const embeddingLiteral = `[${questionEmbedding.join(",")}]`;
+  const matchCount = req.maxChunks ?? MAX_CONTEXT_CHUNKS;
+  const minSimilarity = req.minSimilarity ?? 0.4;
+
+  type MatchedChunk = {
     id: string;
     document_id: string;
     source_name: string;
     chunk_index: number;
     content: string;
     similarity: number;
-  }>>(env, "orchestration.match_document_chunks", {
-    query_embedding: `[${questionEmbedding.join(",")}]`,
-    match_count: req.maxChunks ?? MAX_CONTEXT_CHUNKS,
-    min_similarity: req.minSimilarity ?? 0.4,
-    allowed_corpora: req.allowedCorpora ?? null,
-    include_restricted: req.includeRestricted ?? false,
-  });
+  };
+
+  const chunks = useAgentIdentity
+    ? await sbRpc<MatchedChunk[]>(
+        env,
+        "orchestration.match_document_chunks_for_agent",
+        {
+          query_embedding: embeddingLiteral,
+          match_count: matchCount,
+          min_similarity: minSimilarity,
+          narrow_to_corpora: req.allowedCorpora ?? null,
+        },
+        await agentAuthHeaders(env, agentSlug),
+      )
+    : await sbRpc<MatchedChunk[]>(env, "orchestration.match_document_chunks", {
+        query_embedding: embeddingLiteral,
+        match_count: matchCount,
+        min_similarity: minSimilarity,
+        allowed_corpora: req.allowedCorpora ?? null,
+        include_restricted: req.includeRestricted ?? false,
+      });
 
   if (chunks.length === 0) {
     return {
