@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
+import { scopeForAgent } from "@/runtime/agents/knowledge-access";
 import {
   pdfToText,
   extractOpportunityFacts,
@@ -84,14 +85,23 @@ async function embed(env: Env, text: string): Promise<number[]> {
 }
 
 async function matchChunks(env: Env, queryText: string, k = 5): Promise<Array<{ content: string; similarity: number; source_name: string }>> {
+  const scope = scopeForAgent("beady");
   try {
     const emb = await embed(env, queryText);
     if (!emb.length) return [];
     const res = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/match_document_chunks`, {
       method: "POST",
       headers: headers(env, "orchestration"),
-      // Beady reads the shared corpus + its own private corpus, internal only.
-      body: JSON.stringify({ query_embedding: `[${emb.join(",")}]`, match_count: k, min_similarity: 0.3, allowed_corpora: ["shared", "beady"], include_restricted: false }),
+      // Scope comes from the shared helper so this call site cannot drift from the
+      // agent access policy. It previously hardcoded the corpora, which happened to
+      // match but would silently keep stale rules if the policy ever changed.
+      body: JSON.stringify({
+        query_embedding: `[${emb.join(",")}]`,
+        match_count: k,
+        min_similarity: 0.3,
+        allowed_corpora: scope.allowedCorpora,
+        include_restricted: scope.includeRestricted,
+      }),
     });
     if (!res.ok) return [];
     return (await res.json()) as any[];
