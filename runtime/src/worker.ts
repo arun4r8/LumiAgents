@@ -3,6 +3,7 @@ import { orchestrations } from "./registry";
 import { SupabaseClient } from "./db/client";
 import { scheduleDue } from "./utils/cron-match";
 import { drainN8nCallQueue } from "./utils/n8n-queue-drainer";
+import { failRun } from "./utils/run-failure-alert";
 import { handleOrchestrations } from "./routes/orchestrations";
 import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
@@ -66,10 +67,12 @@ async function dispatchCron(_cronExpr: string, env: Env): Promise<void> {
       await db.touchSchedule(schedule.id, now.toISOString());
       console.log(`[cron] ${orch.name} dispatched (run ${run.id})`);
     } catch (err) {
-      await db.updateRun(run.id, {
-        status: "failed",
-        error: { message: err instanceof Error ? err.message : String(err) },
-        ended_at: now.toISOString(),
+      // Dispatch never reached the Workflow, so this is the only place that can
+      // alert on it.
+      await failRun(db, env, {
+        runId: run.id,
+        orchestrationName: orch.name,
+        message: `Workflow dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
       });
       console.error(`[cron] ${orch.name} failed to dispatch (run ${run.id}):`, err);
     }

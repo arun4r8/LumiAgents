@@ -103,6 +103,8 @@ Shared: auth, notifications, search.
 
 Notifications run on a single unified `subscriptions` table (a `kind` discriminator separates opportunity vs. award digests, replacing the older per-domain subscription tables). Scheduled digests and **operational failure alerts go to subscribers by email via Resend, not Teams** (the Teams incoming webhook is no longer wired to alerts; the two-way Teams bot remains for chat).
 
+On top of the per-orchestration health checks, the runtime alerts on **every** run that transitions to `failed`, from one place (`runtime/src/utils/run-failure-alert.ts`, called by `workflow.ts` and the cron dispatcher). A new orchestration is covered without its author doing anything. Suppression state lives in `orchestration.run_failure_alerts`: one email on the first failure of a streak, one when the error changes, one reminder per 6h while it stays broken, and one when it recovers. Alerting is fail-open, so it can never break a run.
+
 The unlock is **schema-driven forms**. Every orchestration declares its input schema in `definition.ts`. The dashboard renders the form from the schema. Adding an orchestration adds a dashboard page automatically. Hand-built per-orchestration UI is a smell unless there's a real reason.
 
 ## Open architecture questions
