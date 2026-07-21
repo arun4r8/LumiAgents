@@ -151,6 +151,8 @@ Embeddings are Cloudflare Workers AI `@cf/baai/bge-large-en-v1.5` (1024-dim), st
 
 **Unified subscriptions.** A single `orchestration.subscriptions` table with a `kind` discriminator (`opportunity` | `award`) drives all digests; it holds the superset of filter columns (sources / agencies / set-asides for opportunity; award types for award). It replaces the old `report_subscriptions` + `award_subscriptions` tables, which still exist but are deprecated (kept only as a rollback net; all readers use `subscriptions`).
 
+**One surface.** All digests are created, edited, paused, deleted and sent from `/subscriptions` (All / Opportunity / Award tabs). Award digests are additionally editable in context at the bottom of `/awards`. The former `/reports` page rendered the same client component pre-filtered to `kind = 'opportunity'`, so it was folded into `/subscriptions` and now redirects there.
+
 **Digests.** Each agent's digest is its own scheduled orchestration (`beady/opportunity-report`, `cleo/award-report`), driven by the meta-cron, honoring each subscription's cadence (daily/weekly) and sending via the shared Resend `sendEmail` with a per-agent `from`. A dashboard "Send now" hits `/api/orchestrations/{name}/run` with `{subscriptionId}`, routed by kind.
 
 **Email alerts to subscribers.** Operational failure/health alerts go by **email to the live recipients of the active subscriptions** (Teams is no longer used for alerts). Beady's sweep-health alert emails opportunity subscribers when SAM fails; Cleo's content-nudge emails subscribers when posts are due. `ALERT_EMAIL` adds fixed recipients. The sweep alert deliberately stays quiet about the known SBIR outage so it doesn't spam.
@@ -187,8 +189,7 @@ The custom JWT hook (`public.custom_access_token_hook`) is deployed by migration
 | `/schedules` | Create, toggle, and delete cron schedules |
 | `/approvals` | Approve or reject paused human-in-the-loop steps |
 | `/agents/<slug>` | Chat with Angie, Beady, Cleo, Dewey, Money, or Patch |
-| `/subscriptions` | Unified digest subscriptions (All / Opportunity / Award tabs) |
-| `/reports` | Opportunity digests + subscriptions |
+| `/subscriptions` | Unified digest subscriptions (All / Opportunity / Award tabs). `/reports` redirects here, preselecting the Opportunity tab |
 | `/awards` | Award tracker with an embedded award-subscription section |
 | `/industry-days` | Discovered agency industry days |
 | `/documents` | Ingest documents into RAG and query the knowledge base |

@@ -20,6 +20,8 @@ export interface Subscription {
 
 type Kind = "opportunity" | "award";
 
+export type SubscriptionKind = Kind;
+
 interface Actions {
   createSubscription: (formData: FormData) => Promise<void>;
   toggleSubscription: (formData: FormData) => Promise<void>;
@@ -33,6 +35,8 @@ interface Props extends Actions {
   emailConfigured: boolean;
   /** When set, this surface manages only one kind (no tabs, create form fixed). */
   lockedKind?: Kind;
+  /** Which tab opens first when tabs are shown. Ignored when lockedKind is set. */
+  initialTab?: Kind | "all";
   title?: string;
   intro?: string;
   /** Render without the outer page chrome (for embedding in another page). */
@@ -69,9 +73,9 @@ function filterChips(s: Subscription): string[] {
 }
 
 export function SubscriptionsClient(props: Props) {
-  const { subscriptions, emailConfigured, lockedKind, title, intro, embedded } = props;
+  const { subscriptions, emailConfigured, lockedKind, initialTab, title, intro, embedded } = props;
   const [showCreate, setShowCreate] = useState(false);
-  const [tab, setTab] = useState<Kind | "all">(lockedKind ?? "all");
+  const [tab, setTab] = useState<Kind | "all">(lockedKind ?? initialTab ?? "all");
 
   const visible = subscriptions.filter((s) => (lockedKind ? s.kind === lockedKind : tab === "all" ? true : s.kind === tab));
   const active = visible.filter((s) => s.is_active).length;
