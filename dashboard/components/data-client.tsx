@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { AskDataPanel } from "./ask-data-panel";
 import {
   Plus, Upload, Plug, X, ChevronDown, ChevronUp,
   Check, Loader2, AlertTriangle, ExternalLink, Star,
@@ -167,6 +168,7 @@ interface DataClientProps {
   insertRow: (table: string, data: Record<string, unknown>) => Promise<{ error?: string }>;
   bulkInsert: (table: string, rows: Record<string, unknown>[]) => Promise<{ inserted: number; error?: string }>;
   deleteRow: (table: string, id: string) => Promise<{ error?: string }>;
+  initialTab?: "govcon" | "finance" | "people" | "ask";
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -175,9 +177,9 @@ export function DataClient({
   contracts, invoices, budgetLines, laborRecords, indirectRates,
   employees, pastPerformance, opportunities, candidates, staffRequests,
   resumeJobs, resumeResults,
-  insertRow, bulkInsert, deleteRow,
+  insertRow, bulkInsert, deleteRow, initialTab,
 }: DataClientProps) {
-  const [tab, setTab] = useState<"govcon" | "finance" | "people">("govcon");
+  const [tab, setTab] = useState<"govcon" | "finance" | "people" | "ask">(initialTab ?? "govcon");
 
   const govconSections: SectionDef[] = [
     {
@@ -263,7 +265,12 @@ export function DataClient({
           People
           <span className="count" style={{ marginLeft: 6 }}>{candidates.length + staffRequests.length + employees.length + resumeResults.length}</span>
         </button>
+        <button className={tab === "ask" ? "active" : ""} onClick={() => setTab("ask")}>
+          Ask Data
+        </button>
       </div>
+
+      {tab === "ask" && <AskDataPanel />}
 
       {tab === "govcon" && <OpportunitiesPanel opportunities={opportunities} />}
       {tab === "people" && (
@@ -274,7 +281,7 @@ export function DataClient({
         </>
       )}
 
-      {activeSections.map((section) => (
+      {tab !== "ask" && activeSections.map((section) => (
         <TableSection
           key={section.id}
           section={section}

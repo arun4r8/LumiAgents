@@ -4,7 +4,9 @@ import { insertRow, bulkInsert, deleteRow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function DataPage() {
+export default async function DataPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const initialTab = tab === "ask" ? "ask" : undefined;
   const supabase = await createClient();
 
   const [
@@ -62,6 +64,7 @@ export default async function DataPage() {
       insertRow={insertRow}
       bulkInsert={bulkInsert}
       deleteRow={deleteRow}
+      initialTab={initialTab}
     />
   );
 }
