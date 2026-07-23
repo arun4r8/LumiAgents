@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
         destination: "/subscriptions?kind=opportunity",
         permanent: true,
       },
+      // /documents was folded into the Knowledge Base page as its Document
+      // Corpus tab (same RAG index, same server actions). The 308 keeps old
+      // bookmarks alive and lands them on the corpus tab they expected.
+      {
+        source: "/documents",
+        destination: "/knowledge?tab=corpus",
+        permanent: true,
+      },
     ];
   },
 };

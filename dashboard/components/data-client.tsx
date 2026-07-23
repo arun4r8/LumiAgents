@@ -245,7 +245,7 @@ export function DataClient({
     <div className="page view-fade">
       <div className="page-h">
         <div>
-          <h1>Data</h1>
+          <h1>Records</h1>
           <div className="sub">Business records. Three ways in: manual entry, CSV import, or wire an integration.</div>
         </div>
       </div>

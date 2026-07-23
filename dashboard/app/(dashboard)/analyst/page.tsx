@@ -128,7 +128,7 @@ export default function AnalystPage() {
     <div className="page view-fade">
       <div className="page-h">
         <div>
-          <h1>Data Analyst</h1>
+          <h1>Ask Data</h1>
           <div className="sub">
             SQL over live Postgres tables: opportunities, contracts, candidates, runs & more. Read-only.
           </div>
