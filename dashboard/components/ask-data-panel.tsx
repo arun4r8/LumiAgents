@@ -1,5 +1,10 @@
 "use client";
 
+// Ask Data lives as a tab inside the Records page (natural-language SQL over the
+// same operational tables Records shows). Extracted from the former /analyst page so
+// the query tool sits next to the data it queries, mirroring how Corpus Query lives
+// inside Knowledge Base. No page chrome here: Records supplies the h1 and .page.
+
 import { useState, useRef, useCallback } from "react";
 import { Send, Loader2, Upload, X, Table, ChevronDown, ChevronUp } from "lucide-react";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
@@ -47,7 +52,7 @@ function genSessionKey(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export default function AnalystPage() {
+export function AskDataPanel() {
   const [q, setQ] = useState("");
   const [phase, setPhase] = useState<"idle" | "thinking" | "done">("idle");
   const [result, setResult] = useState<AnalystResult | null>(null);
@@ -125,13 +130,10 @@ export default function AnalystPage() {
   }
 
   return (
-    <div className="page view-fade">
-      <div className="page-h">
-        <div>
-          <h1>Ask Data</h1>
-          <div className="sub">
-            SQL over live Postgres tables: opportunities, contracts, candidates, runs & more. Read-only.
-          </div>
+    <div className="view-fade">
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div className="sub" style={{ maxWidth: 620 }}>
+          Natural-language SQL over the live Postgres tables above (opportunities, contracts, candidates, runs and more). Read-only, and you can upload a CSV to query alongside them.
         </div>
         {phase !== "idle" && (
           <button className="btn sm" onClick={reset}>New question</button>
@@ -139,7 +141,6 @@ export default function AnalystPage() {
       </div>
 
       <div className="analyst-shell">
-        {/* ── CSV context badge ── */}
         {csvUpload && (
           <div className="csv-badge">
             <Table style={{ width: 12, height: 12 }} />
@@ -154,7 +155,6 @@ export default function AnalystPage() {
           </div>
         )}
 
-        {/* ── Input ── */}
         <div className="analyst-input">
           <textarea
             ref={taRef}
@@ -170,7 +170,6 @@ export default function AnalystPage() {
           />
           <div className="ask-foot">
             <div className="row gap-sm" style={{ alignItems: "center" }}>
-              {/* CSV upload button */}
               <label className="btn sm" style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }} title="Upload CSV for analysis">
                 {csvLoading
                   ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
@@ -185,7 +184,6 @@ export default function AnalystPage() {
                 />
               </label>
 
-              {/* Advanced toggle */}
               <button
                 className="btn sm"
                 onClick={() => setShowAdvanced((v) => !v)}
@@ -216,7 +214,6 @@ export default function AnalystPage() {
             </div>
           </div>
 
-          {/* Advanced panel */}
           {showAdvanced && (
             <div className="advanced-panel">
               <label style={{ fontSize: 12.5, display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
@@ -241,11 +238,8 @@ export default function AnalystPage() {
           )}
         </div>
 
-        {csvError && (
-          <div className="err-banner">{csvError}</div>
-        )}
+        {csvError && <div className="err-banner">{csvError}</div>}
 
-        {/* ── Example chips ── */}
         {phase === "idle" && !csvUpload && (
           <div className="ex-chips">
             {EXAMPLES.map((ex) => (
@@ -268,9 +262,7 @@ export default function AnalystPage() {
           </div>
         )}
 
-        {error && (
-          <div className="err-banner">{error}</div>
-        )}
+        {error && <div className="err-banner">{error}</div>}
 
         {phase !== "idle" && (
           <div className="answer-card">

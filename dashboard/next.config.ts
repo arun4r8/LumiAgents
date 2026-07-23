@@ -19,6 +19,13 @@ const nextConfig: NextConfig = {
         destination: "/knowledge?tab=corpus",
         permanent: true,
       },
+      // Ask Data (natural-language SQL) moved into the Records page as a tab, next to
+      // the tables it queries. The 308 lands old bookmarks on that tab.
+      {
+        source: "/analyst",
+        destination: "/data?tab=ask",
+        permanent: true,
+      },
     ];
   },
 };
