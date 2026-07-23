@@ -6,6 +6,7 @@ import {
   Clock, BookOpen, Plus, Trash2, Save, ChevronRight, ChevronDown,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { DocumentCorpus, type OrcDocument, type CorpusDoc } from "@/components/document-corpus";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -33,28 +34,47 @@ interface VaultFile {
   sha: string;
 }
 
+type KnowledgeTab = "editor" | "sync" | "corpus";
+
+const TAB_LABELS: Record<KnowledgeTab, string> = {
+  editor: "Editor",
+  sync: "Sync",
+  corpus: "Document Corpus",
+};
+
 interface Props {
   recentRuns: VaultRun[];
   vaultDocs: VaultDoc[];
+  documents: OrcDocument[];
+  corpusDocs: CorpusDoc[];
+  deleteDocument: (id: string) => Promise<void>;
+  initialTab?: KnowledgeTab;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function KnowledgeClient({ recentRuns: initialRuns, vaultDocs }: Props) {
-  const [tab, setTab] = useState<"editor" | "sync">("editor");
+export function KnowledgeClient({
+  recentRuns: initialRuns,
+  vaultDocs,
+  documents,
+  corpusDocs,
+  deleteDocument,
+  initialTab = "editor",
+}: Props) {
+  const [tab, setTab] = useState<KnowledgeTab>(initialTab);
 
   return (
     <div className="page view-fade">
       <div className="page-h">
         <div>
           <h1>Knowledge Base</h1>
-          <div className="sub">Obsidian vault · synced to RAG on every push to LumiKnowledge</div>
+          <div className="sub">Obsidian vault editor and shared RAG document corpus</div>
         </div>
       </div>
 
       {/* Tab bar */}
       <div style={{ display: "flex", gap: 2, marginBottom: 20, borderBottom: "1px solid var(--line)", paddingBottom: 0 }}>
-        {(["editor", "sync"] as const).map((t) => (
+        {(["editor", "sync", "corpus"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -71,15 +91,19 @@ export function KnowledgeClient({ recentRuns: initialRuns, vaultDocs }: Props) {
               transition: "color .15s, border-color .15s",
             }}
           >
-            {t === "editor" ? "Editor" : "Sync"}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
 
-      {tab === "editor" ? (
-        <EditorTab />
-      ) : (
-        <SyncTab initialRuns={initialRuns} vaultDocs={vaultDocs} />
+      {tab === "editor" && <EditorTab />}
+      {tab === "sync" && <SyncTab initialRuns={initialRuns} vaultDocs={vaultDocs} />}
+      {tab === "corpus" && (
+        <DocumentCorpus
+          documents={documents}
+          corpusDocs={corpusDocs}
+          deleteDocument={deleteDocument}
+        />
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

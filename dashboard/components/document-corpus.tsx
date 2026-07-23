@@ -6,7 +6,7 @@ import { runtimeAuthHeader } from "@/lib/runtime-auth";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
-interface OrcDocument {
+export interface OrcDocument {
   id: string;
   source_name: string;
   source_kind: string;
@@ -14,7 +14,7 @@ interface OrcDocument {
   created_at: string;
 }
 
-interface CorpusDoc {
+export interface CorpusDoc {
   id: string;
   source_name: string;
   source_kind: string;
@@ -39,33 +39,53 @@ const EXAMPLES = [
   "NIST 800-53 account management controls",
 ];
 
+type Provenance = "vault" | "uploaded";
+
+// Vault notes are synced from the LumiKnowledge git repo, so they carry a
+// github: source_uri (older rows used the "vault" source_kind). Everything
+// else was uploaded or pasted directly through this page. We surface this so a
+// user can tell git-synced knowledge apart from ad-hoc uploads in one glance.
+function provenanceOf(sourceKind: string, sourceUri: string | null): Provenance {
+  if (sourceKind === "vault") return "vault";
+  if (sourceUri?.startsWith("github:")) return "vault";
+  return "uploaded";
+}
+
+function ProvenanceTag({ prov }: { prov: Provenance }) {
+  return prov === "vault" ? (
+    <span className="chip accent" style={{ fontSize: 10.5 }} title="Synced from the LumiKnowledge vault">Vault</span>
+  ) : (
+    <span className="chip muted" style={{ fontSize: 10.5 }} title="Uploaded or ingested through this page">Uploaded</span>
+  );
+}
+
 type DocTab = "query" | "ingest" | "corpus";
 
-export function DocumentsClient({
+export function DocumentCorpus({
   documents,
   corpusDocs,
   deleteDocument,
+  initialSubTab = "corpus",
 }: {
   documents: OrcDocument[];
   corpusDocs: CorpusDoc[];
   deleteDocument: (id: string) => Promise<void>;
+  initialSubTab?: DocTab;
 }) {
-  const [tab, setTab] = useState<DocTab>("query");
+  const [tab, setTab] = useState<DocTab>(initialSubTab);
 
   return (
-    <div className="page view-fade">
-      <div className="page-h">
-        <div>
-          <h1>Documents</h1>
-          <div className="sub">RAG corpus · {documents.length} document{documents.length !== 1 ? "s" : ""} ingested</div>
-        </div>
+    <div>
+      <div style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-3)" }}>
+        Shared RAG corpus · {(corpusDocs.length || documents.length)} document{(corpusDocs.length || documents.length) !== 1 ? "s" : ""} indexed
       </div>
 
+      {/* Sub-tabs: the general-corpus actions the former Documents page owned. */}
       <div className="tabs">
         <button className={tab === "query" ? "active" : ""} onClick={() => setTab("query")}>Query</button>
         <button className={tab === "ingest" ? "active" : ""} onClick={() => setTab("ingest")}>Ingest</button>
         <button className={tab === "corpus" ? "active" : ""} onClick={() => setTab("corpus")}>
-          Corpus
+          Browse
           <span className="count" style={{ marginLeft: 6 }}>{corpusDocs.length || documents.length}</span>
         </button>
       </div>
@@ -79,8 +99,6 @@ export function DocumentsClient({
           deleteDocument={deleteDocument}
         />
       )}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
@@ -472,20 +490,22 @@ function TextIngest() {
           <li>CSVs are chunked row-by-row, one chunk per row.</li>
           <li>For PDFs or images, use <strong>File upload (OCR)</strong> above.</li>
           <li>After ingesting, use <strong>Query</strong> to verify the content is retrievable.</li>
-          <li>Manage the corpus in the <strong>Corpus</strong> tab.</li>
+          <li>Manage the corpus in the <strong>Browse</strong> tab.</li>
         </ul>
       </div>
     </div>
   );
 }
 
-// ─── Corpus tab ───────────────────────────────────────────────────────────────
+// ─── Corpus browse tab ──────────────────────────────────────────────────────────
 
 function kindIcon(kind: string) {
   if (kind === "csv") return <FileSpreadsheet style={{ width: 14, height: 14, color: "var(--ink-3)" }} />;
   if (kind === "pdf") return <File style={{ width: 14, height: 14, color: "var(--err)" }} />;
   return <FileText style={{ width: 14, height: 14, color: "var(--accent)" }} />;
 }
+
+type ProvFilter = "all" | Provenance;
 
 function DocCorpus({
   documents,
@@ -498,6 +518,7 @@ function DocCorpus({
 }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [provFilter, setProvFilter] = useState<ProvFilter>("all");
   const [, startTransition] = useTransition();
 
   // Prefer the richer corpus list from the runtime; fall back to the Supabase list
@@ -523,11 +544,14 @@ function DocCorpus({
 
   if (useRich) {
     // Rich view: data from runtime /api/documents
-    const filtered = search.trim()
-      ? corpusDocs.filter((d) =>
-          d.source_name.toLowerCase().includes(search.trim().toLowerCase()),
-        )
-      : corpusDocs;
+    const vaultCount = corpusDocs.filter((d) => provenanceOf(d.source_kind, d.source_uri) === "vault").length;
+    const uploadedCount = corpusDocs.length - vaultCount;
+
+    const filtered = corpusDocs.filter((d) => {
+      if (provFilter !== "all" && provenanceOf(d.source_kind, d.source_uri) !== provFilter) return false;
+      if (search.trim() && !d.source_name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      return true;
+    });
 
     const totalChunks = corpusDocs.reduce((s, d) => s + d.chunk_count, 0);
     const totalChars = corpusDocs.reduce((s, d) => s + (d.char_count ?? 0), 0);
@@ -550,27 +574,40 @@ function DocCorpus({
           </div>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
             <div style={{ fontSize: 22, fontWeight: 700 }}>
-              {[...new Set(corpusDocs.map((d) => d.source_kind))].join(" · ") || "-"}
+              {vaultCount} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>/ {uploadedCount}</span>
             </div>
-            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>source kinds</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>vault / uploaded</div>
           </div>
         </div>
 
-        {/* Search */}
-        <div className="search" style={{ marginBottom: 14 }}>
-          <Search style={{ width: 14, height: 14 }} />
-          <input
-            placeholder="Filter by name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ height: 34 }}
-          />
+        {/* Provenance filter + search */}
+        <div className="row gap-sm" style={{ marginBottom: 14, alignItems: "center" }}>
+          <div className="tabs" style={{ marginBottom: 0 }}>
+            <button className={provFilter === "all" ? "active" : ""} onClick={() => setProvFilter("all")}>
+              All<span className="count" style={{ marginLeft: 6 }}>{corpusDocs.length}</span>
+            </button>
+            <button className={provFilter === "vault" ? "active" : ""} onClick={() => setProvFilter("vault")}>
+              Vault<span className="count" style={{ marginLeft: 6 }}>{vaultCount}</span>
+            </button>
+            <button className={provFilter === "uploaded" ? "active" : ""} onClick={() => setProvFilter("uploaded")}>
+              Uploaded<span className="count" style={{ marginLeft: 6 }}>{uploadedCount}</span>
+            </button>
+          </div>
+          <div className="search" style={{ flex: 1 }}>
+            <Search style={{ width: 14, height: 14 }} />
+            <input
+              placeholder="Filter by name…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ height: 34 }}
+            />
+          </div>
         </div>
 
         {/* Table */}
         {filtered.length === 0 ? (
           <div className="empty" style={{ paddingTop: 32 }}>
-            <p>No documents match &ldquo;{search}&rdquo;</p>
+            <p>No documents match the current filter.</p>
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -578,6 +615,7 @@ function DocCorpus({
               <thead>
                 <tr>
                   <th style={{ paddingLeft: 16 }}>Name</th>
+                  <th>Source</th>
                   <th>Kind</th>
                   <th style={{ textAlign: "right" }}>Chunks</th>
                   <th style={{ textAlign: "right" }}>Size</th>
@@ -586,47 +624,51 @@ function DocCorpus({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((doc) => (
-                  <tr key={doc.id}>
-                    <td style={{ paddingLeft: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {kindIcon(doc.source_kind)}
-                        <span style={{
-                          fontWeight: 500, fontSize: 13.5,
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                          maxWidth: 320,
-                        }}>
-                          {doc.source_name}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="chip muted" style={{ fontSize: 10.5 }}>{doc.source_kind}</span>
-                    </td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13 }}>
-                      {doc.chunk_count.toLocaleString()}
-                    </td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13, color: "var(--ink-2)" }}>
-                      {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "-"}
-                    </td>
-                    <td style={{ fontSize: 12.5, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
-                      {new Date(doc.created_at).toLocaleDateString()}
-                    </td>
-                    <td>
-                      <button
-                        className="btn ghost sm"
-                        style={{ color: "var(--err)", padding: "4px 8px" }}
-                        onClick={() => handleDelete(doc.id)}
-                        disabled={deletingId === doc.id}
-                        title="Delete document and all its chunks"
-                      >
-                        {deletingId === doc.id
-                          ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-                          : <Trash2 style={{ width: 12, height: 12 }} />}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((doc) => {
+                  const prov = provenanceOf(doc.source_kind, doc.source_uri);
+                  return (
+                    <tr key={doc.id}>
+                      <td style={{ paddingLeft: 16 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {kindIcon(doc.source_kind)}
+                          <span style={{
+                            fontWeight: 500, fontSize: 13.5,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            maxWidth: 320,
+                          }}>
+                            {doc.source_name}
+                          </span>
+                        </div>
+                      </td>
+                      <td><ProvenanceTag prov={prov} /></td>
+                      <td>
+                        <span className="chip muted" style={{ fontSize: 10.5 }}>{doc.source_kind}</span>
+                      </td>
+                      <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13 }}>
+                        {doc.chunk_count.toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13, color: "var(--ink-2)" }}>
+                        {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "-"}
+                      </td>
+                      <td style={{ fontSize: 12.5, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </td>
+                      <td>
+                        <button
+                          className="btn ghost sm"
+                          style={{ color: "var(--err)", padding: "4px 8px" }}
+                          onClick={() => handleDelete(doc.id)}
+                          disabled={deletingId === doc.id}
+                          title="Delete document and all its chunks"
+                        >
+                          {deletingId === doc.id
+                            ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
+                            : <Trash2 style={{ width: 12, height: 12 }} />}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -635,8 +677,13 @@ function DocCorpus({
     );
   }
 
-  // Legacy fallback view: data from Supabase (no chunk counts)
+  // Legacy fallback view: data from Supabase (no chunk counts, no source_uri).
+  // We only know provenance from source_kind here, which is enough to tag rows.
   const totalChars = documents.reduce((s, d) => s + (d.char_count ?? 0), 0);
+  const vaultCount = documents.filter((d) => provenanceOf(d.source_kind, null) === "vault").length;
+  const filtered = documents.filter((d) =>
+    provFilter === "all" ? true : provenanceOf(d.source_kind, null) === provFilter,
+  );
 
   return (
     <div>
@@ -651,14 +698,26 @@ function DocCorpus({
         </div>
         <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
           <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {[...new Set(documents.map((d) => d.source_kind))].join(" · ") || "-"}
+            {vaultCount} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>/ {documents.length - vaultCount}</span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>source kinds</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>vault / uploaded</div>
         </div>
       </div>
 
+      <div className="tabs" style={{ marginBottom: 14 }}>
+        <button className={provFilter === "all" ? "active" : ""} onClick={() => setProvFilter("all")}>
+          All<span className="count" style={{ marginLeft: 6 }}>{documents.length}</span>
+        </button>
+        <button className={provFilter === "vault" ? "active" : ""} onClick={() => setProvFilter("vault")}>
+          Vault<span className="count" style={{ marginLeft: 6 }}>{vaultCount}</span>
+        </button>
+        <button className={provFilter === "uploaded" ? "active" : ""} onClick={() => setProvFilter("uploaded")}>
+          Uploaded<span className="count" style={{ marginLeft: 6 }}>{documents.length - vaultCount}</span>
+        </button>
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {documents.map((doc) => (
+        {filtered.map((doc) => (
           <div key={doc.id} className="card" style={{
             padding: "10px 14px", display: "flex", alignItems: "center", gap: 12,
           }}>
@@ -672,6 +731,7 @@ function DocCorpus({
                 {new Date(doc.created_at).toLocaleDateString()}
               </div>
             </div>
+            <ProvenanceTag prov={provenanceOf(doc.source_kind, null)} />
             <span className="chip muted" style={{ fontSize: 10.5 }}>{doc.source_kind}</span>
             <button
               className="btn ghost sm"

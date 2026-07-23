@@ -130,7 +130,7 @@ export default function OverviewClient({
       {/* Page header */}
       <div className="page-h">
         <div>
-          <h1>Operations</h1>
+          <h1>Overview</h1>
           <div className="sub">
             <span className="row gap-sm" style={{ display: "inline-flex", alignItems: "center" }}>
               <span className="live-dot" />
