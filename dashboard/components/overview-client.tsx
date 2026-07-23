@@ -214,7 +214,7 @@ export default function OverviewClient({
               <span className="chip muted mono">{orchestrations.length} agents</span>
             </div>
             <button className="btn ghost sm" onClick={() => navigate("/orchestrations")}>
-              Catalogue <ArrowRight style={{ width: 12, height: 12 }} />
+              Orchestrations <ArrowRight style={{ width: 12, height: 12 }} />
             </button>
           </div>
           <div className="fleet">
