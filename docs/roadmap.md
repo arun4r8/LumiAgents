@@ -1,5 +1,7 @@
 # Roadmap
 
+> **Live board:** [Issue #65 — Project board](https://github.com/LumitureLabs/LumiAgents/issues/65) (pinned) mirrors this file's current state — phase status, live backlog, and the external blocker — with one issue per actionable item. This doc is authoritative; the board is re-synced from it.
+
 Five phases. When work spans phases, finish the current one first. As of 2026-07 Phases 0–3 are shipped and Phase 4 (ongoing migration) is the live one; a large body of capability has shipped on top of the plan; see "Shipped beyond the original plan" below.
 
 ## Phase 0: Decisions and inventory  [DONE]
