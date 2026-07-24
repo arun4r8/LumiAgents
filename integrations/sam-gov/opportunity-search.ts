@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineTool } from "../../runtime/src";
 import { claimBudget, DAILY_BUDGET } from "../budget";
+import { callJson } from "../http";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -104,16 +105,12 @@ export const samGovOpportunitySearch = defineTool({
     }
 
     const url = `https://api.sam.gov/opportunities/v2/search?${params.toString()}`;
-    const res = await ctx.fetch(url, {
-      headers: { Accept: "application/json" },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`SAM.gov API → ${res.status}: ${text}`);
-    }
-
-    const raw = await res.json() as RawSamResponse;
+    const raw = await callJson<RawSamResponse>(
+      ctx.fetch,
+      url,
+      { headers: { Accept: "application/json" } },
+      { label: "SAM.gov API" },
+    );
     const rawOpps = raw.opportunitiesData ?? [];
 
     // Optionally filter by agency name substring
