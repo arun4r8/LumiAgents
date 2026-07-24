@@ -706,7 +706,8 @@ function DeploymentsTab() {
       {deployments.length === 0 ? (
         <div className="muted" style={{ fontSize: 13, padding: "12px 0" }}>No deployments found.</div>
       ) : (
-        <table className="tbl" style={{ width: "100%" }}>
+        <div style={{ overflowX: "auto" }}>
+        <table className="tbl" style={{ width: "100%", minWidth: 850 }}>
           <thead>
             <tr>
               <th>ID</th>
@@ -751,6 +752,7 @@ function DeploymentsTab() {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </section>
   );
@@ -876,7 +878,8 @@ function SecretsTab() {
             No secrets configured.
           </div>
         ) : (
-          <table className="tbl" style={{ width: "100%" }}>
+          <div style={{ overflowX: "auto" }}>
+          <table className="tbl" style={{ width: "100%", minWidth: 600 }}>
             <thead>
               <tr>
                 <th>Name</th>
@@ -916,6 +919,7 @@ function SecretsTab() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
