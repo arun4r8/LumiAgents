@@ -63,8 +63,8 @@ Domain tables (the actual business data the orchestrations operate on) live in t
 
 - `opportunities` (`public`): the saved shortlist of SAM.gov + SBIR notices (fit ≥ min score). Key: `sam_notice_id` (raw SAM `noticeId`, or `sbir_<topicNumber>` for SBIR/STTR topics).
 - `orchestration.scored_notices`: dedup ledger of **every** notice the sweep has scored (pass or pursue), so nothing is ever re-scored (re-billed to the LLM). Columns: `notice_id` (PK, matches `opportunities.sam_notice_id`), `source`, `fit_score`, `recommendation`, `scored_at`.
-- `govcon_assessments` (`public`): 5-dimension go/no-go assessments.
-- `rfi_drafts` (`public`): Beady's Sources Sought / RFI response drafts (moved here from Cleo). Columns: `id`, `sam_notice_id`, `opportunity_title`, `agency`, `notice_type`, `response_deadline`, `draft_markdown` (NOT NULL), `model`, `created_at`. Grounded in company profile + past performance.
+- `govcon_assessments`: **DROPPED** (migration `20260512000001`). Go/no-go assessments now live in `public.assessments`; this table no longer exists.
+- `rfi_drafts` (`public`): Beady's Sources Sought / RFI response drafts (moved here from Cleo). Columns: `id`, `sam_notice_id`, `opportunity_title`, `agency`, `notice_type`, `response_deadline`, `draft_markdown` (nullable; empty while a row waits at the intake gate), `model`, `created_at`, plus the hybrid-workflow columns (migration `20260721000001`): `status` (`intake`|`drafting`|`ready`, default `ready`), `analysis` (jsonb: required-content list, risk flags, sufficiency verdict), `intake` (jsonb: questions/gaps/fit matrix surfaced when gated), `answers` (jsonb: the user's answers fed back into drafting), and `assessment` (jsonb: compliance / evaluation-factor / accuracy review of the draft). Grounded in company profile + past performance.
 - `industry_days` (`public`): government vendor-outreach events discovered from SAM.gov Special Notices (`ptype=s`) + a Tavily web sweep, scored for fit. Columns: `id`, `event_id` (UNIQUE: SAM notice id or `fnv1a(source_url)`), `title`, `agency`, `event_date`, `location`, `format`, `registration_url`, `source` (`sam_gov`|`web`), `source_url`, `description`, `fit_score` (1–10), `fit_reason`, `recommendation` (`attend`|`consider`|`skip`), `last_scored_at`, `created_at`.
 - `industry_day_scored` (`public`), the dedup ledger for the industry-day sweep: `event_id` (PK), `content_hash`, `scored_at`.
 
@@ -111,7 +111,7 @@ All in `orchestration`:
 Two roles matter at the database level: `ops` and `enduser`. The dashboard's Supabase client authenticates as the user; their JWT carries their role(s).
 
 - `orchestrations`: ops can read/write all. End users can read rows where `is_active = true` AND they are in the orchestration's allow-list (stored in a join table `orchestration_access`).
-- `runs`: ops can read/write all. End users can read runs where `triggered_by = auth.uid()` OR they have explicit access via `run_access` join table (used for runs assigned for approval).
+- `runs`: ops can read/write all. End users can read runs where `triggered_by = auth.uid()` OR an `EXISTS` subquery against `orchestration.approvals` matches (a row on this run whose `requested_from_user_id = auth.uid()`, i.e. runs assigned to them for approval). There is no `run_access` join table; the `enduser_read_own_or_approval` policy (migration `20260506000001`) does this inline. See `docs/auth-model.md`.
 - `run_steps`, `tool_calls`: same visibility as the parent `run`.
 - `artifacts`: same visibility as the parent `run`, with optional per-artifact override (some artifacts may be ops-only even within a visible run; e.g., raw API responses with PII).
 - `approvals`: ops can read all. End users can read/update rows where `requested_from = auth.uid()` or they hold the requested role.

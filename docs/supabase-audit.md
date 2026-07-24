@@ -1,5 +1,7 @@
 # Supabase Audit
 
+> **Historical snapshot (2026-05-06).** Superseded — see data-model.md for current schema.
+
 Current state of the Lumiture Supabase project. Last updated: 2026-05-06.
 
 **Project:** Lumiture (`cuaknazkpmwvnkmwtamp`), East US (North Virginia)  

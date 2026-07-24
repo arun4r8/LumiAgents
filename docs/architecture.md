@@ -5,7 +5,8 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │  Interface layer                                │
-│  Next.js dashboard on Cloudflare Pages          │
+│  Next.js dashboard on Cloudflare Workers        │
+│  (via OpenNext)                                 │
 │  - Ops surface (admins): runs, logs, retries    │
 │  - End-user surface (staff): catalog, forms,    │
 │    "my runs", approval inbox                    │
@@ -28,7 +29,7 @@
 │  Orchestration layer  (this repo)               │
 │  Cloudflare Workers + Workflows                 │
 │  - Typed workflow definitions                   │
-│  - Tool registry (n8n + direct integrations)    │
+│  - Tool registry (direct integrations)          │
 │  - llm_decide / llm_extract primitives          │
 │  - HTTP / cron / queue triggers                 │
 └─────────────────────────────────────────────────┘
@@ -37,7 +38,7 @@
             ▼                     ▼
 ┌────────────────────┐  ┌──────────────────────┐
 │  Execution layer   │  │  Data layer          │
-│  - n8n flows       │  │  Supabase (Postgres) │
+│  - Native Workers  │  │  Supabase (Postgres) │
 │  - Direct API      │  │  - runs, run_steps   │
 │    integrations    │  │  - tool_calls        │
 │                    │  │  - artifacts         │
@@ -51,11 +52,11 @@ The recurring shape is **domain table → orchestration → agent tool → dashb
 
 We considered three models:
 
-1. **LLM-driven agents** (model picks tools each step). Rejected as the default. Hard to debug, expensive, and most of our work is well-structured; n8n flows are already DAGs. Reaching for LLM judgment on every step is overkill.
+1. **LLM-driven agents** (model picks tools each step). Rejected as the default. Hard to debug, expensive, and most of our work is well-structured and maps cleanly to DAGs. Reaching for LLM judgment on every step is overkill.
 2. **Pure deterministic orchestration** (state machines only). Rejected as the only model. We have real cases (routing free-text input, exception handling, parameter extraction from messy data) where deterministic code is brittle.
 3. **Mix: deterministic spine, LLM at decision points.** Chosen. Each orchestration is a workflow with typed inputs/outputs. Steps are mostly deterministic; some are `llm_decide` or `llm_extract`. The model is invoked surgically where it earns its keep.
 
-This means: when an n8n flow can do the job, it does. When we need judgment, we wrap a narrow LLM call. The result is a system you can reason about at 2am.
+This means: when deterministic code can do the job, it does. When we need judgment, we wrap a narrow LLM call. The result is a system you can reason about at 2am.
 
 ## Agents as a thin layer over orchestrations
 
@@ -69,7 +70,7 @@ Worker topology is now uniform: **all six agents run as their own Cloudflare Wor
 
 - We're already paying for Cloudflare. No new vendor.
 - Workers + Workflows give durable multi-step execution out of the box, including retries, sleep-then-resume, and human-in-the-loop pauses. Rolling that ourselves on Durable Objects was the alternative; not worth it.
-- Edge runtime makes the dashboard fast globally without effort.
+- Running the dashboard on Cloudflare Workers (via OpenNext) keeps it fast globally without effort.
 - Workers' cold-start and cost profile beats putting a long-running Node server somewhere.
 
 Tradeoff: Workers' runtime constraints (no Node-only deps, 30s CPU limit per invocation) push some patterns. Workflows handles long-running cases. Direct fetch from Node-only libraries means picking Workers-compatible alternatives.
@@ -82,15 +83,13 @@ Tradeoff: Workers' runtime constraints (no Node-only deps, 30s CPU limit per inv
 
 The existing Supabase project's tables are partly n8n-shaped (per-flow tables, ad-hoc execution logs). We will **add** the new orchestration schema alongside those tables. We will **not** migrate n8n's tables. Application code (dashboard, runtime) reads only the new schema. The new schema becomes the source of truth.
 
-## Migration story: n8n today → Workers tomorrow
+## Migration story: n8n to Workers (complete)
 
-Phase A (now): Workers wrap n8n. Each n8n flow has a typed wrapper in `/integrations/n8n/<flow>.ts`. Orchestrations call the wrapper. n8n is still doing the actual work.
+The migration is done. Nothing runs in n8n in production, the `/integrations/n8n/` directory no longer exists, and every orchestration executes as native Worker code. GovCon scoring, resume scoring, and resume formatting were the last flows reimplemented in-Worker (see the `*_native_*` migrations).
 
-Phase B (per-flow): When an n8n flow becomes painful (flaky, expensive, hard to evolve), reimplement it as native Worker code. The wrapper's contract doesn't change, only its implementation. Orchestrations don't need to know.
+We never did a "big migration." Each flow was reimplemented on demand behind a stable orchestration contract, so callers never had to change as the underlying execution moved from n8n to native Workers.
 
-Phase C (eventual): n8n is left handling only the things it's uniquely good at: visual editing for non-devs, niche connectors. Most logic is in Workers.
-
-This means we never do a "big migration." We migrate per-flow, on demand, when ROI is obvious.
+n8n interop is now dormant-but-retained: the `drainN8nCallQueue` function drains the `n8n_call_queue` table, gated behind `N8N_QUEUE_ENABLED` (disabled by default), with `N8N_WEBHOOK_SECRET` kept for header auth. This lets a niche flow be re-enabled without a code change, but nothing uses it in production.
 
 ## Two audiences, one dashboard
 

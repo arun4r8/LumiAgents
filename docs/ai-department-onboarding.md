@@ -92,13 +92,11 @@ The runtime (Workers) uses the **service role key** and bypasses RLS. This is in
 
 LLM calls go through the Anthropic API using structured outputs (tool use). Every call is logged (prompt, response, and token counts) to the `run_steps` table so we have a full audit trail of every model decision.
 
-### n8n Cloud (transitional)
+### n8n interop (dormant-but-retained)
 
-Two n8n workflows remain active as execution-layer integrations:
-1. **Resume Worker**: queue-based; our Workers call n8n to process résumés
-2. **GovCon Qualification Assessment**: webhook-triggered, synchronous
+The n8n to Workers migration is complete. Nothing runs in n8n in production, and the `/integrations/n8n/` directory no longer exists. Every agent and orchestration now executes natively on Cloudflare Workers plus durable Workflows.
 
-n8n is wrapped with typed integration modules in `/integrations/n8n/`. Application code never calls n8n directly. As we mature, individual n8n flows get replaced with native Worker code inside the same integration contract; orchestrations never need to change.
+The interop path is kept dormant so a niche flow could be re-enabled without a code change: the `drainN8nCallQueue` function in `runtime/src/utils/n8n-queue-drainer.ts` drains the `n8n_call_queue` table, gated behind `N8N_QUEUE_ENABLED` (disabled unless set to `"true"`), and `N8N_WEBHOOK_SECRET` is retained for header auth. None of this is active in production.
 
 ### Next.js on Cloudflare Workers (opennextjs-cloudflare)
 
@@ -187,23 +185,38 @@ if (!decision.approved) return { status: "rejected", reason: decision.notes };
 
 ### 4.3 Tools: typed side-effect wrappers
 
-A tool is a typed wrapper around one side effect: calling n8n, hitting an external API, writing to Supabase. Tools live in `/integrations/` and are composed by orchestrations.
+A tool is a typed wrapper around one side effect: hitting an external API, calling the Anthropic API, or writing to Supabase. Tools live in `/integrations/` and are composed by orchestrations. Orchestrations themselves live under `orchestrations/<agent>/<name>/definition.ts` and drive tools from checkpointed steps.
 
 Every tool must be **idempotent** (safe to call twice) or carry an **idempotency key**. Cloudflare Workers retry on failure; duplicate tool execution must not corrupt state.
 
 ```ts
-// /integrations/n8n/score-resume.ts
-export const scoreResume = defineTool({
-  name: "scoreResume",
-  inputSchema: z.object({ resumeUrl: z.string(), jobDescription: z.string() }),
-  outputSchema: z.object({ score: z.number(), summary: z.string() }),
+// orchestrations/angie/resume-scoring/definition.ts
+import { defineOrchestration, step } from "@/runtime";
+import { scoreResume } from "../../../integrations/anthropic/score-resume";
+
+export default defineOrchestration({
+  name: "angie/resume-scoring",
+  version: 1,
+  triggerMode: "agent",
+  inputSchema,
+  outputSchema,
   async run(ctx, input) {
-    const key = ctx.idempotencyKey("score-resume", input.resumeUrl);
-    return ctx.fetch("https://n8n.internal/webhook/score-resume", {
-      method: "POST",
-      headers: { "Idempotency-Key": key },
-      body: JSON.stringify(input),
-    }).then(r => r.json());
+    const jobId = crypto.randomUUID();
+    // One checkpointed step per résumé: score with Claude, then persist.
+    // A durable Workflow replays completed steps on retry, so a mid-run
+    // failure resumes instead of re-scoring everything.
+    for (let i = 0; i < input.pdfBase64s.length; i++) {
+      await step(ctx, `score-${i}`, async () => {
+        const ev = await scoreResume(ctx.env, {
+          rolekey: input.jobDescription,
+          pdfBase64: input.pdfBase64s[i]!,
+          model: ctx.model,
+        });
+        // ...insert into resume_results, bump job progress...
+        return { name: ev.name, overall: ev.overall_score };
+      });
+    }
+    return { jobId, submitted: input.pdfBase64s.length };
   },
 });
 ```
