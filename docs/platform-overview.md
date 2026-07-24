@@ -69,9 +69,7 @@ Sourcing and resume work.
 
 ### Beady: GovCon Business Development
 Discovery, scoring, **and** response drafting (RFI drafting moved here from Cleo).
-- `search_all_opportunities` → parallel SAM.gov + SBIR sweep
-- `search_opportunities` → `beady/opportunity-search` (SAM.gov → LLM scoring → upsert)
-- `search_sbir_topics` → `beady/sbir-topic-search`
+- `search_all_opportunities` → `beady/opportunity-sweep` (parallel SAM.gov + SBIR sweep → LLM scoring → upsert)
 - `assess_opportunity` → `beady/govcon-assessment` (5-dimension go/no-go)
 - `seed_past_performance` → `beady/past-performance-seed` (embeds records into RAG)
 - `draft_rfi` → `beady/rfi-draft` (Sources Sought / RFI drafting)
@@ -121,7 +119,7 @@ Notable scheduled jobs:
 | `cleo/content-nudge` | Eminence | Daily, 09:00 UTC |
 | `system/memory-maintenance` | Platform | Daily |
 
-Manual/event orchestrations include `angie/candidate-sourcing`, `angie/resume-scoring`, `angie/resume-format`, `beady/opportunity-search`, `beady/sbir-topic-search`, `beady/govcon-assessment`, `beady/past-performance-seed`, `beady/rfi-draft`, `cleo/content-plan`, `cleo/content-draft`, `dewey/*`, `money/data-analyst`, `money/financial-report`, and `patch/*` (document-rag ingest+query, inbound-triage, staff-request, ticket-ops).
+Manual/event orchestrations include `angie/candidate-sourcing`, `angie/resume-scoring`, `angie/resume-format`, `beady/govcon-assessment`, `beady/past-performance-seed`, `beady/rfi-draft`, `cleo/content-plan`, `cleo/content-draft`, `dewey/*`, `money/data-analyst`, `money/financial-report`, and `patch/*` (document-rag ingest+query, inbound-triage, staff-request, ticket-ops).
 
 ### How every orchestration works under the hood
 

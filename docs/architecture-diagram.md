@@ -30,9 +30,7 @@ flowchart TB
       end
 
       subgraph BeadyAgent["Beady · GovCon BD: discovery · scoring · response drafting"]
-        OS["opportunity-search\nSAM.gov + Claude"]
         OSW["opportunity-sweep\nparallel SAM.gov + SBIR"]
-        SB["sbir-topic-search\nSBIR.gov + Claude"]
         GA["govcon-assessment\ngo/no-go, native Claude"]
         PP["past-performance-seed"]
         RFI["rfi-draft\nSources Sought / RFI drafting"]
@@ -122,7 +120,7 @@ flowchart TB
   Worker -->|"Service Binding"| AngieAgent & BeadyAgent & PatchAgent & MoneyAgent & CleoAgent & DeweyAgent
   Worker --> Workflow
   Workflow --> CS & RS & RF
-  Workflow --> OS & OSW & SB & GA & PP & RFI & IDS & OR
+  Workflow --> OSW & GA & PP & RFI & IDS & OR
   Workflow --> IT & TO & SR & DR & VS
   Workflow --> FR & DA
   Workflow --> AS & AR & CP & CD
@@ -130,15 +128,15 @@ flowchart TB
 
   %% ── Agents → Direct Integrations ────────────────────────────────────────
   CS --> ApolloAPI
-  OS & OSW --> SAMGovAPI
-  OSW & SB --> SBIRAPI
+  OSW --> SAMGovAPI
+  OSW --> SBIRAPI
   IDS & AS --> TavilyAPI
   VS --> GitHubAPI
   IT & TO & SR --> JiraAPI
   AR & OR --> ResendAPI
   Worker -->|"bot replies"| TeamsAPI
 
-  CS & OS & OSW & SB & GA & RFI & IDS & IT & SR & FR & DA & DR & VS & AS & CD & KS --> AnthropicAPI
+  CS & OSW & GA & RFI & IDS & IT & SR & FR & DA & DR & VS & AS & CD & KS --> AnthropicAPI
   DR & VS & KS --> CFAI
 
   %% ── Workers → Supabase ───────────────────────────────────────────────────
@@ -148,7 +146,7 @@ flowchart TB
   CS & SR --> People
   FR --> Finance
   DA -->|"analyst_query RPC"| PublicSchema
-  OS & OSW & GA & PP --> GovCon
+  OSW & GA & PP --> GovCon
   AS & CP & CD & RFI --> Awards
   AR --> SUBS
   Worker --> Budget
@@ -175,9 +173,7 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 | `angie/candidate-sourcing` | Angie | Worker | Apollo search → Claude scoring → approval gate → outreach drafts |
 | `angie/resume-scoring` | Angie | Worker | Native Claude resume scoring |
 | `angie/resume-formatting` | Angie | Worker | Reformat a resume to the house template |
-| `beady/opportunity-search` | Beady | Worker | SAM.gov search → LLM filtering |
 | `beady/opportunity-sweep` | Beady | Worker | Parallel SAM.gov + SBIR sweep |
-| `beady/sbir-topic-search` | Beady | Worker | SBIR.gov topic search |
 | `beady/govcon-assessment` | Beady | Worker | Native go/no-go assessment |
 | `beady/past-performance-seed` | Beady | Worker | Seed the past-performance corpus |
 | `beady/rfi-draft` | Beady | Worker | Sources Sought / RFI response drafting (moved here from Cleo) |

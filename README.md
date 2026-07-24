@@ -28,7 +28,7 @@ Each agent runs as a dedicated Worker, with the runtime's inline chat loop as a 
 | Agent | Domain | Key orchestrations |
 |---|---|---|
 | **Angie** | HR & Recruiting | candidate-sourcing, resume-formatting, resume-scoring |
-| **Beady** | GovCon BD (discovery, scoring & response drafting) | opportunity-search, opportunity-sweep (parallel SAM + SBIR), sbir-topic-search, govcon-assessment, past-performance-seed, rfi-draft, industry-day-sweep |
+| **Beady** | GovCon BD (discovery, scoring & response drafting) | opportunity-sweep (parallel SAM + SBIR), govcon-assessment, past-performance-seed, rfi-draft, industry-day-sweep |
 | **Cleo** | Eminence, awards & content | award-sweep, award-report, content-plan, content-draft |
 | **Dewey** | Knowledge librarian | knowledge-search, retag-document, knowledge-inventory |
 | **Patch** | IT Ops & Knowledge | ticket-ops, staff-request, document-query |

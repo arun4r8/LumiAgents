@@ -73,7 +73,7 @@ Capability that landed on top of the five-phase spine, all running on the Worker
 
 ## Known external blocker
 
-- **SBIR source unavailable:** the DoD SBIR/STTR portal migrated to `www.defensesbirsttr.mil` behind Akamai bot-protection (403 to server-side calls) and the SBIR.gov public API is disabled. `beady/sbir-topic-search` and the SBIR half of `beady/opportunity-sweep` are correct in code but externally blocked. The Beady sweep health alert deliberately does not page on this known outage.
+- **SBIR source unavailable:** the DoD SBIR/STTR portal migrated to `www.defensesbirsttr.mil` behind Akamai bot-protection (403 to server-side calls) and the SBIR.gov public API is disabled. The SBIR half of `beady/opportunity-sweep` is correct in code but externally blocked. The Beady sweep health alert deliberately does not page on this known outage.
 
 ## Open follow-ups
 

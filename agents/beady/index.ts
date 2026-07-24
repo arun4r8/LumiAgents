@@ -11,7 +11,7 @@ export const beady: AgentDefinition = {
 - Drafting Sources Sought / RFI responses for opportunities, grounded in Lumiture's profile and past performance
 
 GovCon qualification assessments (5-dimensional scoring with RAG) run through the dedicated
-assessment pipeline. Use search_opportunities to find new leads and discuss results already
+assessment pipeline. Use search_all_opportunities to find new leads and discuss results already
 in the database. When asked to respond to a Sources Sought / RFI, kick off draft_rfi and tell the
 user the draft will appear on the RFI Drafts dashboard page (drafting runs in the background).
 Be analytical and concise. Cite specific evaluation factors when making recommendations.
@@ -58,20 +58,6 @@ Do not use em dashes.`,
       },
     },
     {
-      name: "search_opportunities",
-      description: "Search SAM.gov for active contract opportunities.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          naicsCode: { type: "string" },
-          keywords: { type: "string" },
-          setAside: { type: "string", description: "e.g. 8(a), SDVOSB, WOSB" },
-          agency: { type: "string" },
-          daysAhead: { type: "number", description: "Opportunities closing within N days" },
-        },
-      },
-    },
-    {
       name: "seed_past_performance",
       description: "Embed a past performance record into the GovCon RAG index so it is available for future assessments.",
       inputSchema: {
@@ -80,20 +66,6 @@ Do not use em dashes.`,
           pastPerformanceId: { type: "string", description: "Supabase past_performance row ID (UUID)" },
         },
         required: ["pastPerformanceId"],
-      },
-    },
-    {
-      name: "search_sbir_topics",
-      description: "Search DoD SBIR/STTR topics only (dodsbirsttr.mil). Use search_all_opportunities instead when you want both SAM.gov and SBIR in one pass.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          keyword:     { type: "string", description: "Keywords to filter topics (e.g. 'data management AI cloud')" },
-          component:   { type: "array", items: { type: "string" }, description: "DoD branch filter, e.g. ['ARMY', 'USAF', 'NAVY']. Omit for all branches." },
-          topicStatus: { type: "string", enum: ["Open", "Closed", "Pre-Release"], description: "Default: Open" },
-          minScore:    { type: "number", description: "Min Beady fit score to include (1-10). Default 4." },
-          limit:       { type: "number", description: "Max topics to fetch (default 50, max 200)" },
-        },
       },
     },
     {
@@ -118,9 +90,7 @@ Do not use em dashes.`,
     assess_opportunity:      { orchestration: "beady/govcon-assessment" },
     draft_rfi:               { orchestration: "beady/rfi-draft" },
     find_industry_days:      { orchestration: "beady/industry-day-sweep" },
-    search_opportunities:    { orchestration: "beady/opportunity-search" },
     seed_past_performance:   { orchestration: "beady/past-performance-seed" },
-    search_sbir_topics:      { orchestration: "beady/sbir-topic-search" },
     search_all_opportunities: { orchestration: "beady/opportunity-sweep" },
   },
 };

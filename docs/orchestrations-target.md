@@ -22,9 +22,7 @@ Six agents own orchestrations today: **Angie** (HR/recruiting), **Beady** (GovCo
 Discover federal contracting opportunities across sources, score them, and produce go/no-go assessments with an executive memo. `assess_opportunity` runs a 5-dimension go/no-go against Lumiture's capability statements and past performance.
 
 **Registered orchestrations:**
-- `beady/opportunity-search`: on-demand opportunity search (form / agent).
 - `beady/opportunity-sweep`: **scheduled** consolidated SAM.gov + SBIR sweep that writes to `opportunities` and dedups via `orchestration.scored_notices`. Replaced the two older per-source Monday crons.
-- `beady/sbir-topic-search`: **scheduled** SBIR/STTR topic search. See external-blocker note below.
 - `beady/govcon-assessment`: the scored go/no-go assessment + memo (form / agent), saved to `govcon_assessments`.
 - `beady/past-performance-seed`: seeds past-performance docs used to ground assessments.
 

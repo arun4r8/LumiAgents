@@ -289,12 +289,12 @@ function OpportunitiesPanel({ opportunities }: { opportunities: Record<string, u
           <span className="chip muted" style={{ fontSize: 11 }}>{opportunities.length}</span>
           <span className="chip accent" style={{ fontSize: 11 }}>beady</span>
         </div>
-        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by beady/opportunity-search</span>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by beady/opportunity-sweep</span>
       </div>
 
       {opportunities.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No opportunities yet. Run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-search</code> to populate.
+          No opportunities yet. Run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-sweep</code> to populate.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

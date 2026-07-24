@@ -59,25 +59,6 @@ describe("Orchestration auth", () => {
   });
 });
 
-// ─── Beady: opportunity-search (SAM.gov) ──────────────────────────────────────
-// Skipped in automated CI: hits the SAM.gov API (free key, limited quota).
-// Run manually with: pnpm test:e2e --reporter=verbose tests/e2e/orchestrations.test.ts
-
-describe.skip("beady/opportunity-search", () => {
-  it("triggers and completes a SAM.gov search", async () => {
-    const runId = await triggerRun("beady/opportunity-search", {
-      query: "cybersecurity software development",
-      maxResults: 3,
-    });
-    expect(runId).toBeTruthy();
-
-    const run = await pollRun(runId, 150_000);
-    expect(run.status).toBe("completed");
-    const output = run.output as { opportunities?: unknown[] };
-    expect(Array.isArray(output.opportunities)).toBe(true);
-  }, 160_000);
-});
-
 // ─── Patch: document-ingest + ticket-ops ──────────────────────────────────────
 
 describe("patch/document-ingest", () => {

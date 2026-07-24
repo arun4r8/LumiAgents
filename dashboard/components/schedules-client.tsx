@@ -120,7 +120,7 @@ function CreateForm({
         <input
           className="input"
           name="orchestration_name"
-          placeholder="e.g. beady/opportunity-search"
+          placeholder="e.g. beady/opportunity-sweep"
           required
         />
         <span className="hint">Must exist in the runtime registry.</span>
