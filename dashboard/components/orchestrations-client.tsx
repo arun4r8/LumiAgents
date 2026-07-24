@@ -357,7 +357,7 @@ function OrchCard({
             >
               <span style={{
                 position: "absolute", top: 2, left: orch.is_active ? 16 : 2,
-                width: 16, height: 16, borderRadius: "50%", background: "#fff",
+                width: 16, height: 16, borderRadius: 0, background: "#fff",
                 transition: "left 0.2s",
               }} />
             </button>
