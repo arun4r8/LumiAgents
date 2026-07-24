@@ -14,7 +14,7 @@ The platform has four layers:
 |---|---|---|
 | **Runtime** | Cloudflare Workers + Cloudflare Workflows | Executes orchestrations durably; retries, survives crashes |
 | **Data** | Supabase (Postgres + RLS + Realtime) | Stores every run, step, LLM call, and artifact; enforces access control |
-| **Dashboard** | Next.js on Cloudflare Pages | Ops team interface: trigger runs, monitor, approve, subscribe, configure |
+| **Dashboard** | Next.js on Cloudflare Workers (via OpenNext) | Ops team interface: trigger runs, monitor, approve, subscribe, configure |
 | **Agents** | Anthropic Claude (`claude-sonnet-4-6`; `claude-haiku-4-5` for cheap OCR/scoring) | Six named agents that wrap orchestrations as tools for conversational use |
 
 ### The core pattern
@@ -33,7 +33,7 @@ Two GitHub Actions workflows live in `.github/workflows/`:
 Steps: install → typecheck → `wrangler deploy` → runtime is live on Cloudflare Workers.
 
 **`deploy-dashboard.yml`** fires on any push to `main` that touches `dashboard/`.
-Steps: install → `opennextjs-cloudflare build` → `opennextjs-cloudflare deploy` → dashboard is live on Cloudflare Pages.
+Steps: install → `opennextjs-cloudflare build` → `opennextjs-cloudflare deploy` → dashboard is live on Cloudflare Workers (via OpenNext).
 
 Both workflows are **fully automatic**: merging to `main` is the deployment mechanism. No manual steps.
 

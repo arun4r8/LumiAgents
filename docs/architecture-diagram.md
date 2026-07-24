@@ -6,7 +6,7 @@ flowchart TB
   %% ── Interface Layer ──────────────────────────────────────────────────────
   subgraph Interface["Interface Layer"]
     direction LR
-    Dashboard["Next.js Dashboard\nCloudflare Pages"]
+    Dashboard["Next.js Dashboard\nCloudflare Workers (via OpenNext)"]
     TeamsUI["MS Teams\nBot & Adaptive Cards"]
     ObsidianVault["Obsidian Vault\nlocal → GitHub repo"]
   end
