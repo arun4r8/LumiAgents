@@ -10,6 +10,12 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = "https://lumiagents-dashboard.lumiture.workers.dev"
 VAULT_OWNER = "LumitureLabs"
 VAULT_REPO  = "LumiKnowledge"
+# Content-calendar live sync (Microsoft Graph). Location of the planning workbook.
+# Fill in once the Excel file's Graph drive + item IDs are known; the worksheet
+# name is optional (unset → first sheet). Unset → cleo/content-sync stays disabled.
+# CONTENT_CALENDAR_DRIVE_ID = ""
+# CONTENT_CALENDAR_ITEM_ID  = ""
+# CONTENT_CALENDAR_WORKSHEET = ""
 
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_SERVICE_ROLE_KEY
@@ -32,6 +38,9 @@ VAULT_REPO  = "LumiKnowledge"
 # ALERT_EMAIL                  ← optional comma-separated extra recipients for operational failure alerts
 # SBIR_API_BASE                ← optional override for the DoD SBIR/STTR topics API base URL
 # N8N_QUEUE_ENABLED            ← gate for the n8n call-queue drainer; disabled unless === "true"
+# MSGRAPH_TENANT_ID            ← Azure AD tenant/directory GUID (content-calendar Graph sync)
+# MSGRAPH_CLIENT_ID            ← Azure AD app registration (application) client ID
+# MSGRAPH_CLIENT_SECRET        ← Azure AD app registration client secret (app-only, admin-consented Files.Read.All/Sites.Read.All)
 
 [[workflows]]
 name = "orchestration-workflow"

@@ -18,6 +18,7 @@ import cleoAwardReport         from "../../orchestrations/cleo/award-report/defi
 import cleoContentDraft        from "../../orchestrations/cleo/content-draft/definition";
 import cleoContentPlan         from "../../orchestrations/cleo/content-plan/definition";
 import cleoContentNudge        from "../../orchestrations/cleo/content-nudge/definition";
+import cleoContentSync         from "../../orchestrations/cleo/content-sync/definition";
 import deweyKnowledgeSearch    from "../../orchestrations/dewey/knowledge-search/definition";
 import deweyRetagDocument      from "../../orchestrations/dewey/retag-document/definition";
 import deweyKnowledgeInventory from "../../orchestrations/dewey/knowledge-inventory/definition";
@@ -50,6 +51,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(cleoContentDraft       as unknown as AnyOrch),
   reg(cleoContentPlan        as unknown as AnyOrch),
   reg(cleoContentNudge       as unknown as AnyOrch),
+  reg(cleoContentSync        as unknown as AnyOrch),
   reg(deweyKnowledgeSearch   as unknown as AnyOrch),
   reg(deweyRetagDocument     as unknown as AnyOrch),
   reg(deweyKnowledgeInventory as unknown as AnyOrch),

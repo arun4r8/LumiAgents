@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useRef, useState, useTransition } from "react";
-import { CalendarDays, Sparkles, Loader2, Trash2, Copy, Check, ChevronDown, ChevronRight, Plus, Wand2, Pencil, Upload } from "lucide-react";
+import { CalendarDays, Sparkles, Loader2, Trash2, Copy, Check, ChevronDown, ChevronRight, Plus, Wand2, Pencil, Upload, RefreshCw } from "lucide-react";
 import type { CalendarEntry } from "@/app/(dashboard)/content-calendar/page";
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
   draftWithCleo: (formData: FormData) => Promise<void>;
   planWithCleo: (formData: FormData) => Promise<void>;
   importCsv: (formData: FormData) => Promise<{ imported: number; skipped: number }>;
+  syncNow: () => Promise<{ started: boolean }>;
 }
 
 const STATUSES = ["idea", "drafting", "ready", "scheduled", "posted"] as const;
@@ -40,7 +41,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function ContentCalendarClient({
-  entries, createEntry, updateEntry, setStatus, deleteEntry, draftWithCleo, planWithCleo, importCsv,
+  entries, createEntry, updateEntry, setStatus, deleteEntry, draftWithCleo, planWithCleo, importCsv, syncNow,
 }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
@@ -67,6 +68,19 @@ export function ContentCalendarClient({
         setError(err instanceof Error ? err.message : "Import failed");
       } finally {
         if (fileRef.current) fileRef.current.value = "";
+      }
+    });
+  }
+
+  function handleSync() {
+    setError(null); setImportMsg(null);
+    startTransition(async () => {
+      try {
+        await syncNow();
+        setImportMsg("Live sync started from the M365 planning workbook. Synced rows appear here shortly — refresh to see them.");
+        setTimeout(() => setImportMsg(null), 8000);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Sync failed");
       }
     });
   }
@@ -100,6 +114,9 @@ export function ContentCalendarClient({
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleImport} style={{ display: "none" }} />
+          <button className="btn sm" onClick={handleSync} disabled={pending} title="Live-sync from the Microsoft 365 planning workbook (Graph API)">
+            {pending ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Sync now
+          </button>
           <button className="btn sm" onClick={() => fileRef.current?.click()} disabled={pending} title="Import from a spreadsheet CSV export">
             {pending ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV
           </button>
@@ -116,8 +133,9 @@ export function ContentCalendarClient({
         The eminence plan as a living calendar. Add posts, or have Cleo propose a run of ideas from a theme.
         Cleo drafts the post copy + asset brief for any entry (grounded in the company profile), and the draft lands
         here with status <b>ready</b>. A human always reviews before posting; nothing publishes automatically.
-        Or <b>Import CSV</b> from the team's planning spreadsheet (export to CSV first): rows sync in and
-        re-importing an edited sheet updates them without touching existing drafts.
+        <b>Sync now</b> live-pulls the team's Microsoft 365 planning workbook via the Graph API; rows sync in and
+        re-syncing an edited sheet updates them without touching existing drafts. <b>Import CSV</b> stays as a manual
+        fallback (export the sheet to CSV first) — both paths key on the same rows, so they stay interchangeable.
       </p>
 
       {importMsg && <div className="chip ok" style={{ marginBottom: 12 }}>{importMsg}</div>}
