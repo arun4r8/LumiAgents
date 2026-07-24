@@ -20,27 +20,36 @@ function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
   );
 }
 
+// Semantic tokens from app/lumi.css: good → ok, caution → warn, risk → err,
+// highlight → accent, neutral → muted/info.
+const OK = { bg: "var(--ok-soft)", fg: "var(--ok)" };
+const WARN = { bg: "var(--warn-soft)", fg: "var(--warn)" };
+const ERR = { bg: "var(--err-soft)", fg: "var(--err)" };
+const INFO = { bg: "var(--info-soft)", fg: "var(--info)" };
+const ACCENT = { bg: "var(--accent-soft)", fg: "var(--accent-ink)" };
+const MUTED = { bg: "var(--muted-soft)", fg: "var(--ink-2)" };
+
 const REC_COLORS: Record<string, { bg: string; fg: string }> = {
-  apply: { bg: "#dcfce7", fg: "#166534" },
-  consider: { bg: "#fef9c3", fg: "#854d0e" },
-  skip: { bg: "#f3f4f6", fg: "#6b7280" },
+  apply: OK,
+  consider: WARN,
+  skip: MUTED,
 };
 const PRESTIGE_COLORS: Record<string, { bg: string; fg: string }> = {
-  high: { bg: "#e0e7ff", fg: "#3730a3" },
-  medium: { bg: "#dbeafe", fg: "#1e40af" },
-  low: { bg: "#f3f4f6", fg: "#6b7280" },
+  high: ACCENT,
+  medium: INFO,
+  low: MUTED,
 };
 const EFFORT_COLORS: Record<string, { bg: string; fg: string }> = {
-  low: { bg: "#dcfce7", fg: "#166534" },
-  medium: { bg: "#fef9c3", fg: "#854d0e" },
-  high: { bg: "#fee2e2", fg: "#991b1b" },
+  low: OK,
+  medium: WARN,
+  high: ERR,
 };
 
 function fitColor(score: number | null): { bg: string; fg: string } {
-  if (score == null) return { bg: "#f3f4f6", fg: "#6b7280" };
-  if (score >= 7) return { bg: "#dcfce7", fg: "#166534" };
-  if (score >= 5) return { bg: "#fef9c3", fg: "#854d0e" };
-  return { bg: "#f3f4f6", fg: "#6b7280" };
+  if (score == null) return MUTED;
+  if (score >= 7) return OK;
+  if (score >= 5) return WARN;
+  return MUTED;
 }
 
 export function AwardsClient({ awards, dismissAward }: Props) {
@@ -140,7 +149,7 @@ function AwardRow({ award: a, dismissAward }: { award: Award; dismissAward: Prop
         </div>
       </td>
       <td style={{ padding: "12px 14px" }}>
-        <Badge text={a.award_type === "government" ? "Gov" : "Industry"} bg="#eef2ff" fg="#4338ca" />
+        <Badge text={a.award_type === "government" ? "Gov" : "Industry"} bg="var(--info-soft)" fg="var(--info)" />
       </td>
       <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{deadline ?? "-"}</td>
       <td style={{ padding: "12px 14px" }}>

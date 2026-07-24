@@ -153,7 +153,7 @@ function ConversationRow({
                     {detail.messages.length === 0 && <span style={{ color: "var(--ink-3)", fontSize: 13 }}>No messages.</span>}
                     {detail.messages.map((m) => (
                       <div key={m.id} style={{ fontSize: 13, lineHeight: 1.45 }}>
-                        <span style={{ fontWeight: 700, color: m.role === "user" ? "var(--accent, #2563eb)" : "var(--ink-1)", textTransform: "capitalize" }}>{m.role}: </span>
+                        <span style={{ fontWeight: 700, color: m.role === "user" ? "var(--accent)" : "var(--ink-1)", textTransform: "capitalize" }}>{m.role}: </span>
                         <span style={{ color: "var(--ink-2)" }}>{m.content}</span>
                       </div>
                     ))}
@@ -165,7 +165,7 @@ function ConversationRow({
                     {detail.chunks.length === 0 && <span style={{ color: "var(--ink-3)", fontSize: 13 }}>No summaries or facts yet.</span>}
                     {detail.chunks.map((ch) => (
                       <div key={ch.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, lineHeight: 1.45 }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: ch.kind === "summary" ? "#e0e7ff" : "#fef9c3", color: ch.kind === "summary" ? "#3730a3" : "#854d0e", borderRadius: 0, padding: "1px 6px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", whiteSpace: "nowrap", marginTop: 1 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: ch.kind === "summary" ? "var(--info-soft)" : "var(--warn-soft)", color: ch.kind === "summary" ? "var(--info)" : "var(--warn)", borderRadius: 0, padding: "1px 6px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", whiteSpace: "nowrap", marginTop: 1 }}>
                           {ch.kind === "summary" ? <Sparkles style={{ width: 10, height: 10 }} /> : <Tag style={{ width: 10, height: 10 }} />}
                           {ch.kind}
                         </span>
