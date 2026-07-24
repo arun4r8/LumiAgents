@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
+import { MODELS } from "@/runtime/config/models";
 import {
   analyzeSolicitation, draftRfiResponse, assessRfiDraft, reviseRfiDraft,
   type RfiAnalysis, type RfiGrounding,
@@ -171,7 +172,7 @@ export default defineOrchestration({
             requiredContent: analysis.requiredContent,
             technicalApproach: analysis.technicalApproach,
           },
-          model: ctx.model ?? "claude-sonnet-4-6",
+          model: ctx.model ?? MODELS.sonnet,
         }),
       );
 
@@ -213,7 +214,7 @@ export default defineOrchestration({
         analysis,
         assessment,
         ...(answers ? { answers } : {}),
-        model: ctx.model ?? "claude-sonnet-4-6",
+        model: ctx.model ?? MODELS.sonnet,
       }),
     );
 

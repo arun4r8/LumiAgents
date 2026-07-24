@@ -1,8 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import { chunkText } from "../utils/chunker";
+import { MODELS } from "../config/models";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL: string = MODELS.sonnet;
 const EMBEDDING_MODEL = "@cf/baai/bge-large-en-v1.5";
 const MAX_CONTEXT_CHUNKS = 8;
 

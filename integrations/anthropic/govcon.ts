@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../../runtime/src/types";
+import { MODELS } from "../../runtime/src/config/models";
 
 // All GovCon assessment LLM calls. Prompts are ported VERBATIM from the n8n
 // "GovCon Qualification Assessment" flow so scores stay comparable. The D1–D4
 // dimension prompt *bodies* are read live from the prompt_bank table (as n8n did);
 // only the system messages (which lived inside n8n nodes) are embedded here.
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function client(env: Env): Anthropic {
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -216,7 +217,7 @@ export async function scoreDimension(env: Env, system: string, prompt: string, m
 
 export async function pdfToText(env: Env, base64: string): Promise<string> {
   const resp = await client(env).messages.create({
-    model: "claude-haiku-4-5",
+    model: MODELS.haiku,
     max_tokens: 8192,
     messages: [{
       role: "user",

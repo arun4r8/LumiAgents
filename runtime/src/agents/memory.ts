@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import type { ChatMessage } from "./agent-chat";
+import { MODELS } from "../config/models";
 
 const sbHeaders = (env: Env, extra: Record<string, string> = {}): Record<string, string> => ({
   "Content-Type": "application/json",
@@ -178,7 +179,7 @@ export async function persistTurn(
   }
 }
 
-const SUMMARY_MODEL = "claude-haiku-4-5"; // cheap; summarization isn't the hard part
+const SUMMARY_MODEL: string = MODELS.haiku; // cheap; summarization isn't the hard part
 const SUMMARIZE_EVERY = 12;               // messages (≈6 turns)
 
 async function insertMemoryChunk(

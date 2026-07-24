@@ -1,7 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
+import { MODELS } from "../config/models";
 
-const MODEL = "claude-sonnet-4-6";
+const MODEL: string = MODELS.sonnet;
 
 // Tables the analyst can query: a curated list to keep the schema prompt focused.
 // Add tables here as the business needs grow.

@@ -17,6 +17,7 @@ import type { Env, RunContext } from "./types";
 import { SupabaseClient } from "./db/client";
 import { orchestrations } from "./registry";
 import { failRun, notifyRunSuccess } from "./utils/run-failure-alert";
+import { MODELS } from "./config/models";
 
 export interface RunWorkflowParams {
   runId: string;
@@ -52,7 +53,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
     }
 
     // Resolve model: per-orchestration override → agent default → fallback
-    const DEFAULT_MODEL = "claude-sonnet-4-6";
+    const DEFAULT_MODEL: string = MODELS.sonnet;
     const agentId = orchestrationName.split("/")[0] ?? "";
     let resolvedModel = DEFAULT_MODEL;
     try {

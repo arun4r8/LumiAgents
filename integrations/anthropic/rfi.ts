@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../../runtime/src/types";
+import { MODELS } from "../../runtime/src/config/models";
 
 // Beady's Sources Sought / RFI response workflow: analyze the solicitation, decide
 // whether we know enough to draft, draft, then assess the draft as an evaluator would
@@ -9,7 +10,7 @@ import type { Env } from "../../runtime/src/types";
 // The discipline here is accuracy: a federal submission that overstates experience or
 // asserts unconfirmed facts is a real liability, so the workflow is built to prevent it.
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function firstText(resp: Anthropic.Message): string {
   const b = resp.content.find((x) => x.type === "text");
