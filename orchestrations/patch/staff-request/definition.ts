@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { createJiraIssue, sendTeamsCard } from "./tools";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -117,12 +118,7 @@ Do not use em dashes.
 
       const res = await ctx.fetch(`${ctx.env.SUPABASE_URL}/rest/v1/staff_requests`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-          Prefer: "return=representation",
-        },
+        headers: sbHeaders(ctx.env, { extra: { Prefer: "return=representation" } }),
         body: JSON.stringify(row),
       });
 

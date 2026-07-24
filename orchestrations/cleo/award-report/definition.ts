@@ -3,6 +3,8 @@ import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { sendEmail } from "./tools";
 import { senderFor } from "../../../integrations/resend/sender";
+import { sbHeaders } from "@/runtime/utils/supabase";
+import { escapeHtml as esc, fmtDate } from "@/runtime/utils/format";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -52,19 +54,10 @@ const SUB_COLS = "id,label,cadence,recipients,award_types,min_fit_score,last_sen
 
 // ─── Supabase helpers ──────────────────────────────────────────────────────────
 
-function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey:          env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization:   `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    ...extra,
-  };
-}
-
 async function loadActiveSubscriptions(env: Env): Promise<AwardSubscription[]> {
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.award&is_active=eq.true&select=${SUB_COLS}`,
-    { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
+    { headers: sbHeaders(env, { profile: "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load award subscriptions → ${res.status}: ${await res.text()}`);
   return (await res.json()) as AwardSubscription[];
@@ -73,7 +66,7 @@ async function loadActiveSubscriptions(env: Env): Promise<AwardSubscription[]> {
 async function loadSubscriptionById(env: Env, id: string): Promise<AwardSubscription | null> {
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.award&select=${SUB_COLS}`,
-    { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
+    { headers: sbHeaders(env, { profile: "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load award subscription ${id} → ${res.status}: ${await res.text()}`);
   const rows = (await res.json()) as AwardSubscription[];
@@ -85,7 +78,7 @@ async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
     `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
     {
       method: "PATCH",
-      headers: sbHeaders(env, { "Content-Profile": "orchestration", Prefer: "return=minimal" }),
+      headers: sbHeaders(env, { profile: "orchestration", extra: { Prefer: "return=minimal" } }),
       body: JSON.stringify({ last_sent_at: sentAt, updated_at: sentAt }),
     },
   );
@@ -130,17 +123,6 @@ function isDue(sub: AwardSubscription, now: number): boolean {
 
 // ─── HTML rendering ───────────────────────────────────────────────────────────
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-function fmtDate(val: string | null): string {
-  if (!val) return "TBD";
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return esc(val);
-  return d.toISOString().slice(0, 10);
-}
-
 function prestigeBadge(prestige: string | null): string {
   if (!prestige) return "";
   const styles: Record<string, string> = {
@@ -176,7 +158,7 @@ function renderEmail(
 ): { subject: string; html: string } {
   const heading   = opts.manual ? "Matching award opportunities" : "New award opportunities";
   const adj       = opts.manual ? "" : "new ";
-  const subject   = `Beady Awards: ${awards.length} ${adj}${awards.length === 1 ? "opportunity" : "opportunities"} (fit ≥ ${sub.min_fit_score})`;
+  const subject   = `Cleo Awards: ${awards.length} ${adj}${awards.length === 1 ? "opportunity" : "opportunities"} (fit ≥ ${sub.min_fit_score})`;
 
   const filterBits = [`fit ≥ ${sub.min_fit_score}`];
   if (sub.award_types?.length) filterBits.push(sub.award_types.join(" / "));
@@ -229,7 +211,7 @@ function renderEmail(
     </p>
     ${cards}
     <p style="color:#9ca3af;font-size:12px;margin-top:16px;">
-      Sent by Beady · manage this report from the LumiAgents dashboard &rarr; Awards.
+      Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.
     </p>
   </div>
 </body>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
-import type { Env } from "@/runtime";
 import { planContentIdeas } from "../../../integrations/anthropic/content";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 // Propose a run of content-calendar ideas from a theme and insert them as 'idea' rows
 // for the team to review, edit, and draft. Grounded in the company profile so ideas
@@ -18,15 +18,6 @@ export const outputSchema = z.object({
   inserted: z.number(),
   topics: z.array(z.string()),
 });
-
-function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    ...extra,
-  };
-}
 
 function isoDatePlusWeeks(start: Date, weeks: number): string {
   const d = new Date(start.getTime());
@@ -74,7 +65,7 @@ export default defineOrchestration({
       }));
       const res = await fetch(`${env.SUPABASE_URL}/rest/v1/content_calendar`, {
         method: "POST",
-        headers: sbHeaders(env, { Prefer: "return=minimal" }),
+        headers: sbHeaders(env, { extra: { Prefer: "return=minimal" } }),
         body: JSON.stringify(rows),
       });
       if (!res.ok) throw new Error(`insert content_calendar → ${res.status}: ${await res.text()}`);

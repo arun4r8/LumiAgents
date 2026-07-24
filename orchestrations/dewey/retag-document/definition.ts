@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
-import type { Env } from "@/runtime";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 // Dewey's curatorial power: move a document between corpora and set its sensitivity.
 // This is how a document gets locked down (sensitivity='restricted', ops-only) or
@@ -18,17 +18,6 @@ export const outputSchema = z.object({
   corpus: z.string(),
   sensitivity: z.string(),
 });
-
-function headers(env: Env, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    "Content-Profile": "orchestration",
-    "Accept-Profile": "orchestration",
-    ...extra,
-  };
-}
 
 export default defineOrchestration({
   name: "dewey/retag-document",
@@ -55,7 +44,7 @@ export default defineOrchestration({
 
       const res = await fetch(
         `${env.SUPABASE_URL}/rest/v1/orch_documents?id=eq.${encodeURIComponent(input.documentId)}`,
-        { method: "PATCH", headers: headers(env, { Prefer: "return=representation" }), body: JSON.stringify(patch) },
+        { method: "PATCH", headers: sbHeaders(env, { profile: "orchestration", extra: { Prefer: "return=representation" } }), body: JSON.stringify(patch) },
       );
       if (!res.ok) throw new Error(`Supabase PATCH orch_documents → ${res.status}: ${await res.text()}`);
       const rows = (await res.json()) as Array<{ id: string; source_name: string; corpus: string; sensitivity: string }>;

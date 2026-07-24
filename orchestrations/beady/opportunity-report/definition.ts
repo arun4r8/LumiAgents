@@ -3,6 +3,8 @@ import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { sendEmail } from "../../../integrations/resend/send";
 import { senderFor } from "../../../integrations/resend/sender";
+import { sbHeaders } from "@/runtime/utils/supabase";
+import { escapeHtml, fmtDeadline } from "@/runtime/utils/format";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -58,22 +60,13 @@ interface Opportunity {
 
 // ─── Supabase REST helpers (service role; runtime is trusted) ──────────────────
 
-function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-    ...extra,
-  };
-}
-
 // subscriptions lives in the `orchestration` schema → PostgREST needs the
 // Accept-Profile / Content-Profile headers to reach it. Opportunity digests are the
 // kind='opportunity' rows of the unified subscriptions table.
 async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.opportunity&is_active=eq.true&select=${SUB_COLUMNS}`,
-    { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
+    { headers: sbHeaders(env, { profile: "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load subscriptions → ${res.status}: ${await res.text()}`);
   return (await res.json()) as Subscription[];
@@ -83,7 +76,7 @@ async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
 async function loadSubscriptionById(env: Env, id: string): Promise<Subscription | null> {
   const res = await fetch(
     `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.opportunity&select=${SUB_COLUMNS}`,
-    { headers: sbHeaders(env, { "Accept-Profile": "orchestration" }) },
+    { headers: sbHeaders(env, { profile: "orchestration" }) },
   );
   if (!res.ok) throw new Error(`load subscription ${id} → ${res.status}: ${await res.text()}`);
   const rows = (await res.json()) as Subscription[];
@@ -95,7 +88,7 @@ async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
     `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
     {
       method: "PATCH",
-      headers: sbHeaders(env, { "Content-Profile": "orchestration", Prefer: "return=minimal" }),
+      headers: sbHeaders(env, { profile: "orchestration", extra: { Prefer: "return=minimal" } }),
       body: JSON.stringify({ last_sent_at: sentAt, updated_at: sentAt }),
     },
   );
@@ -168,21 +161,6 @@ function isDue(sub: Subscription, now: number): boolean {
 }
 
 // ─── HTML rendering ─────────────────────────────────────────────────────────
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function fmtDeadline(iso: string | null): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return escapeHtml(iso);
-  return d.toISOString().slice(0, 10);
-}
 
 // Fit-badge colors by tier: pursue = green, monitor = amber, else neutral.
 function tierColor(recommendation: string | null): { bg: string; fg: string } {

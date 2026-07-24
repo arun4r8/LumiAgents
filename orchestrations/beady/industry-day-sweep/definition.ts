@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
-import type { Env } from "@/runtime";
 import { tavilySearch } from "../../../integrations/tavily/search";
+import { sbHeaders } from "@/runtime/utils/supabase";
+import { fnv1a } from "@/runtime/utils/hash";
 
 // Discover government agency industry days (industry days, vendor days, small-business
 // matchmaking) from two sources: SAM.gov Special Notices (ptype=s) and a Tavily web
@@ -18,16 +19,6 @@ export const outputSchema = z.object({
   kept: z.number(),
   events: z.array(z.object({ title: z.string(), agency: z.string().nullable(), eventDate: z.string().nullable(), fitScore: z.number() })),
 });
-
-function fnv1a(str: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  return (h >>> 0).toString(16);
-}
-
-function sbHeaders(env: Env, extra: Record<string, string> = {}): Record<string, string> {
-  return { "Content-Type": "application/json", apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, ...extra };
-}
 
 const fmt = (d: Date) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
@@ -154,7 +145,7 @@ Only return items scoring >= ${input.minScore}.
 
       if (rows.length > 0) {
         const res = await ctx.fetch(`${env.SUPABASE_URL}/rest/v1/industry_days?on_conflict=event_id`, {
-          method: "POST", headers: sbHeaders(env, { Prefer: "resolution=merge-duplicates,return=minimal" }), body: JSON.stringify(rows),
+          method: "POST", headers: sbHeaders(env, { extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }), body: JSON.stringify(rows),
         });
         if (!res.ok) throw new Error(`industry_days upsert → ${res.status}: ${await res.text()}`);
       }
@@ -162,7 +153,7 @@ Only return items scoring >= ${input.minScore}.
       // Ledger: every fresh candidate (even skipped) so we don't re-score it next week.
       const ledgerRows = fresh.map((c) => ({ event_id: c.eventId, content_hash: fnv1a(c.title + c.content), scored_at: new Date().toISOString() }));
       const lres = await ctx.fetch(`${env.SUPABASE_URL}/rest/v1/industry_day_scored?on_conflict=event_id`, {
-        method: "POST", headers: sbHeaders(env, { Prefer: "resolution=merge-duplicates,return=minimal" }), body: JSON.stringify(ledgerRows),
+        method: "POST", headers: sbHeaders(env, { extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }), body: JSON.stringify(ledgerRows),
       });
       if (!lres.ok) console.warn(`[industry-day] ledger upsert → ${lres.status}`);
 

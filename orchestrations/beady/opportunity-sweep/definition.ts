@@ -3,6 +3,8 @@ import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { samGovOpportunitySearch, sbirTopicSearch } from "./tools";
 import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
 import { senderFor } from "../../../integrations/resend/sender";
+import { sbHeaders } from "@/runtime/utils/supabase";
+import { fnv1a } from "@/runtime/utils/hash";
 
 // ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
 // A notice is re-scored only when the fields that drive its fit score change. We
@@ -10,14 +12,6 @@ import { senderFor } from "../../../integrations/resend/sender";
 // was materially amended and is scored again (so monitor → pursue can happen when
 // the government actually changes the solicitation). FNV-1a is plenty for change
 // detection; this isn't security-sensitive.
-function fnv1a(str: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16);
-}
 function samContentHash(o: { title: string; naicsCode: string | null; setAside: string | null; responseDeadline: string | null; description: string | null }): string {
   return fnv1a([o.title, o.naicsCode, o.setAside, o.responseDeadline, o.description].join(""));
 }
@@ -127,7 +121,7 @@ export default defineOrchestration({
       try {
         const res = await ctx.fetch(
           `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?select=notice_id,content_hash`,
-          { headers: { apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`, "Accept-Profile": "orchestration" } },
+          { headers: sbHeaders(ctx.env, { profile: "orchestration" }) },
         );
         if (res.ok) for (const row of (await res.json()) as Array<{ notice_id: string | null; content_hash: string | null }>) {
           if (row.notice_id) ledger.set(row.notice_id, row.content_hash);
@@ -275,13 +269,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
         `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?on_conflict=notice_id`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-            "Content-Profile": "orchestration",
-            Prefer: "resolution=merge-duplicates,return=minimal",
-          },
+          headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }),
           body: JSON.stringify(rows),
         },
       );
@@ -385,12 +373,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
           `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?on_conflict=sam_notice_id`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              Prefer: "resolution=merge-duplicates",
-            },
+            headers: sbHeaders(ctx.env, { extra: { Prefer: "resolution=merge-duplicates" } }),
             body: JSON.stringify(rows),
           },
         );
@@ -421,12 +404,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
           `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=in.(${inList})`,
           {
             method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              Prefer: "return=minimal",
-            },
+            headers: sbHeaders(ctx.env, { extra: { Prefer: "return=minimal" } }),
             body: JSON.stringify({ recommendation: "pass", last_scored_at: new Date().toISOString() }),
           },
         );
