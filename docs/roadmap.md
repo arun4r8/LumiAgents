@@ -2,7 +2,7 @@
 
 > **Live board:** the [LumiAgents Delivery Board](https://github.com/orgs/LumitureLabs/projects/1) (org Project) tracks day-to-day work — roadmap follow-ups plus ideas/todos captured from team chats — grouped by status (Current / Backlog / Blocked / Done). This doc stays the authoritative narrative for the phase plan; the board is the working tracker.
 
-Five phases. When work spans phases, finish the current one first. As of 2026-07 Phases 0–3 are shipped and Phase 4 (ongoing migration) is the live one; a large body of capability has shipped on top of the plan; see "Shipped beyond the original plan" below.
+Five phases. When work spans phases, finish the current one first. As of 2026-07 all five phases are shipped: the n8n → Workers migration (Phase 4) is complete, with n8n interop now dormant-but-retained (see that phase). Ongoing work has moved to the [Delivery Board](https://github.com/orgs/LumitureLabs/projects/1); a large body of capability has shipped on top of the plan — see "Shipped beyond the original plan" below.
 
 ## Phase 0: Decisions and inventory  [DONE]
 
@@ -46,7 +46,7 @@ Exit criteria: the chosen orchestration runs in dev, logs land in the new schema
 
 Exit criteria: an end user can trigger an orchestration via the dashboard, watch it progress, and approve a step. An ops user can see everything and intervene on failures.
 
-## Phase 4: Migrate flows from n8n into Workers (ongoing)  [CURRENT]
+## Phase 4: Migrate flows from n8n into Workers  [DONE]
 
 For each MIGRATE-LATER flow, in priority order:
 - Reimplement in Worker code as a tool (or set of tools).
@@ -54,7 +54,9 @@ For each MIGRATE-LATER flow, in priority order:
 - Run both old and new in parallel for one production cycle, comparing outputs (shadow mode).
 - Cut over. Delete the n8n flow.
 
-Done when n8n only handles cases it's uniquely good at: visual editing for non-devs, niche connectors. There is no goal of fully retiring n8n.
+**Status (2026-07):** complete. The high-value flows — GovCon Qualification Assessment (Beady), Resume Scoring (Angie), and LumiAnalysis RAG + Data Analyst (Dewey / Records) — all run as Workers orchestrations, and nothing runs in n8n production anymore.
+
+n8n interop is **dormant but retained, not deleted**: the call-queue drainer no longer runs on cron (disabled by default, gated behind `N8N_QUEUE_ENABLED`), while the `drainN8nCallQueue` function, the `n8n_call_queue` table, and the `N8N_WEBHOOK_SECRET` stay in place. Set `N8N_QUEUE_ENABLED="true"` to re-enable without a code change if a niche flow is ever routed back through n8n — consistent with the original intent that there is no goal of fully retiring n8n.
 
 ## Shipped beyond the original plan  [DONE]
 
