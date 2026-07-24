@@ -3,6 +3,7 @@ import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { tavilySearch } from "./tools";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { fnv1a } from "@/runtime/utils/hash";
+import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "@/runtime/utils/scored-sweep";
 
 function awardHash(url: string, title: string): string {
   return fnv1a(`${url}::${title}`);
@@ -114,26 +115,16 @@ export default defineOrchestration({
 
     // Step 2: Filter out items whose content hash hasn't changed since last score
     const { newItems } = await step(ctx, "check-dedup-ledger", async () => {
-      const ledger = new Map<string, string>(); // award_id → content_hash
-      try {
-        const res = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/award_scored?select=award_id,content_hash`,
-          { headers: sbHeaders(ctx.env, { profile: "orchestration" }) },
-        );
-        if (res.ok) {
-          for (const row of (await res.json()) as Array<{ award_id: string; content_hash: string }>) {
-            ledger.set(row.award_id, row.content_hash);
-          }
-        }
-      } catch (e) {
-        console.warn("[award-sweep] ledger lookup failed, scoring all:", e);
-      }
-
-      const newItems = rawItems.filter((item) => {
-        const id   = fnv1a(item.url);
-        const hash = awardHash(item.url, item.title);
-        return !ledger.has(id) || ledger.get(id) !== hash;
+      const ledger = await loadContentHashLedger(ctx, {
+        table: "award_scored",
+        keyColumn: "award_id",
+        profile: "orchestration",
+        warnLabel: "[award-sweep] ledger lookup failed, scoring all:",
       });
+
+      const newItems = rawItems.filter((item) =>
+        contentChanged(ledger, fnv1a(item.url), awardHash(item.url, item.title)),
+      );
 
       return { newItems };
     });
@@ -261,17 +252,13 @@ Only return items scoring ≥ ${input.minScore}.
         scored_at:    scoredAt,
       }));
 
-      if (ledgerRows.length > 0) {
-        const lres = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/award_scored?on_conflict=award_id`,
-          {
-            method: "POST",
-            headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }),
-            body: JSON.stringify(ledgerRows),
-          },
-        );
-        if (!lres.ok) console.warn(`[award-sweep] ledger insert → ${lres.status}: ${await lres.text()}`);
-      }
+      await upsertContentHashLedger(ctx, {
+        table: "award_scored",
+        conflictColumn: "award_id",
+        profile: "orchestration",
+        rows: ledgerRows,
+        warnLabel: "[award-sweep] ledger insert",
+      });
     });
 
     shortlist.sort((a, b) => b.fitScore - a.fitScore);

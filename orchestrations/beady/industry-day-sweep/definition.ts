@@ -3,6 +3,7 @@ import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { tavilySearch } from "../../../integrations/tavily/search";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { fnv1a } from "@/runtime/utils/hash";
+import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "@/runtime/utils/scored-sweep";
 
 // Discover government agency industry days (industry days, vendor days, small-business
 // matchmaking) from two sources: SAM.gov Special Notices (ptype=s) and a Tavily web
@@ -87,12 +88,12 @@ export default defineOrchestration({
 
     // Step 2: skip candidates already scored with the same content.
     const fresh = await step(ctx, "dedup-ledger", async () => {
-      const ledger = new Map<string, string>();
-      try {
-        const res = await ctx.fetch(`${env.SUPABASE_URL}/rest/v1/industry_day_scored?select=event_id,content_hash`, { headers: sbHeaders(env) });
-        if (res.ok) for (const r of (await res.json()) as Array<{ event_id: string; content_hash: string }>) ledger.set(r.event_id, r.content_hash);
-      } catch (e) { console.warn("[industry-day] ledger lookup failed", e); }
-      return candidates.filter((c) => ledger.get(c.eventId) !== fnv1a(c.title + c.content));
+      const ledger = await loadContentHashLedger(ctx, {
+        table: "industry_day_scored",
+        keyColumn: "event_id",
+        warnLabel: "[industry-day] ledger lookup failed",
+      });
+      return candidates.filter((c) => contentChanged(ledger, c.eventId, fnv1a(c.title + c.content)));
     });
 
     if (fresh.length === 0) return { found: candidates.length, kept: 0, events: [] };
@@ -152,10 +153,12 @@ Only return items scoring >= ${input.minScore}.
 
       // Ledger: every fresh candidate (even skipped) so we don't re-score it next week.
       const ledgerRows = fresh.map((c) => ({ event_id: c.eventId, content_hash: fnv1a(c.title + c.content), scored_at: new Date().toISOString() }));
-      const lres = await ctx.fetch(`${env.SUPABASE_URL}/rest/v1/industry_day_scored?on_conflict=event_id`, {
-        method: "POST", headers: sbHeaders(env, { extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }), body: JSON.stringify(ledgerRows),
+      await upsertContentHashLedger(ctx, {
+        table: "industry_day_scored",
+        conflictColumn: "event_id",
+        rows: ledgerRows,
+        warnLabel: "[industry-day] ledger upsert",
       });
-      if (!lres.ok) console.warn(`[industry-day] ledger upsert → ${lres.status}`);
 
       return rows;
     });
