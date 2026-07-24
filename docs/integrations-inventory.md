@@ -124,14 +124,6 @@ All external systems touched by the orchestration layer. The n8n migration is co
 
 ---
 
-## Accounting / CRM / HR: **stubs, not implemented**
-The code structure exists (`base.ts` + typed wrappers) but the real API calls are not written; they throw at runtime.
-- `integrations/accounting/`: `invoices.ts`, `budget-lines.ts`, `labor-records.ts` (QuickBooks / Unanet / Deltek). Env: `ACCOUNTING_API_URL`, `ACCOUNTING_API_KEY`. `money/financial-report` will fail on any accounting-data query until one is implemented.
-- `integrations/crm/`: `contracts.ts` (Salesforce / HubSpot / Costpoint). Env: `CRM_API_URL`, `CRM_API_KEY`.
-- `integrations/hr/`: `employees.ts` (BambooHR / Workday / ADP). Env: `HR_API_URL`, `HR_API_KEY`.
-
----
-
 ## Credential storage (Workers)
 
 All runtime secrets are set via `wrangler secret put <name>`, never in `wrangler.toml` or committed files.
@@ -157,6 +149,3 @@ All runtime secrets are set via `wrangler secret put <name>`, never in `wrangler
 | Teams incoming webhook | `TEAMS_INCOMING_WEBHOOK_URL` | Ad-hoc Teams notifications |
 | Teams bot app ID | `TEAMS_BOT_APP_ID` | Two-way Teams bot |
 | Teams bot app secret | `TEAMS_BOT_APP_SECRET` | Two-way Teams bot |
-| Accounting API | `ACCOUNTING_API_URL` / `ACCOUNTING_API_KEY` | Stub (not implemented) |
-| CRM API | `CRM_API_URL` / `CRM_API_KEY` | Stub (not implemented) |
-| HR API | `HR_API_URL` / `HR_API_KEY` | Stub (not implemented) |

@@ -28,6 +28,10 @@ VAULT_REPO  = "LumiKnowledge"
 # RESEND_API_KEY               ← Resend API key (email reports)
 # RESEND_FROM                  ← optional sender, e.g. "Beady <reports@domain>"; needs a verified domain.
 #                                Defaults to "Beady <onboarding@resend.dev>" (only delivers to the Resend account owner).
+# TAVILY_API_KEY               ← Tavily web-search API key (LIVE — Beady/Cleo GovCon web search)
+# ALERT_EMAIL                  ← optional comma-separated extra recipients for operational failure alerts
+# SBIR_API_BASE                ← optional override for the DoD SBIR/STTR topics API base URL
+# N8N_QUEUE_ENABLED            ← gate for the n8n call-queue drainer; disabled unless === "true"
 
 [[workflows]]
 name = "orchestration-workflow"
