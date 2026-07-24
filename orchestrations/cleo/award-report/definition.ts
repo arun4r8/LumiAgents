@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { defineOrchestration, step } from "@/runtime";
+import { defineOrchestration } from "@/runtime";
 import type { Env } from "@/runtime";
-import { sendEmail } from "./tools";
-import { senderFor } from "../../../integrations/resend/sender";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { escapeHtml as esc, fmtDate } from "@/runtime/utils/format";
+import {
+  runSubscriptionDigest,
+  renderDigestShell,
+  digestKv,
+  type DigestSubscription,
+} from "@/runtime/utils/subscription-digest";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -24,14 +28,9 @@ export const outputSchema = z.object({
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface AwardSubscription {
-  id:           string;
-  label:        string | null;
-  cadence:      "daily" | "weekly";
-  recipients:   string[];
+interface AwardSubscription extends DigestSubscription {
   award_types:  string[] | null;
   min_fit_score: number;
-  last_sent_at: string | null;
 }
 
 interface Award {
@@ -52,40 +51,9 @@ interface Award {
 
 const SUB_COLS = "id,label,cadence,recipients,award_types,min_fit_score,last_sent_at";
 
-// ─── Supabase helpers ──────────────────────────────────────────────────────────
-
-async function loadActiveSubscriptions(env: Env): Promise<AwardSubscription[]> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.award&is_active=eq.true&select=${SUB_COLS}`,
-    { headers: sbHeaders(env, { profile: "orchestration" }) },
-  );
-  if (!res.ok) throw new Error(`load award subscriptions → ${res.status}: ${await res.text()}`);
-  return (await res.json()) as AwardSubscription[];
-}
-
-async function loadSubscriptionById(env: Env, id: string): Promise<AwardSubscription | null> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.award&select=${SUB_COLS}`,
-    { headers: sbHeaders(env, { profile: "orchestration" }) },
-  );
-  if (!res.ok) throw new Error(`load award subscription ${id} → ${res.status}: ${await res.text()}`);
-  const rows = (await res.json()) as AwardSubscription[];
-  return rows[0] ?? null;
-}
-
-async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
-    {
-      method: "PATCH",
-      headers: sbHeaders(env, { profile: "orchestration", extra: { Prefer: "return=minimal" } }),
-      body: JSON.stringify({ last_sent_at: sentAt, updated_at: sentAt }),
-    },
-  );
-  if (!res.ok) throw new Error(`mark award subscription sent ${id} → ${res.status}: ${await res.text()}`);
-}
-
 const MAX_DIGEST = 30;
+
+// ─── Digest query ──────────────────────────────────────────────────────────────
 
 async function loadDigestAwards(
   env: Env,
@@ -112,13 +80,6 @@ async function loadDigestAwards(
   });
   if (!res.ok) throw new Error(`load awards → ${res.status}: ${await res.text()}`);
   return ((await res.json()) as Award[]).slice(0, MAX_DIGEST);
-}
-
-function isDue(sub: AwardSubscription, now: number): boolean {
-  if (sub.cadence === "daily") return true;
-  if (!sub.last_sent_at) return true;
-  const elapsed = (now - new Date(sub.last_sent_at).getTime()) / 86_400_000;
-  return elapsed >= 6.5;
 }
 
 // ─── HTML rendering ───────────────────────────────────────────────────────────
@@ -163,9 +124,6 @@ function renderEmail(
   const filterBits = [`fit ≥ ${sub.min_fit_score}`];
   if (sub.award_types?.length) filterBits.push(sub.award_types.join(" / "));
 
-  const kv = (label: string, value: string) =>
-    `<tr><td style="color:#6b7280;font-size:12px;padding:2px 14px 2px 0;white-space:nowrap;vertical-align:top;">${label}</td><td style="color:#374151;font-size:13px;padding:2px 0;vertical-align:top;">${value}</td></tr>`;
-
   const cards = awards
     .map((a) => {
       const c         = recColor(a.recommendation);
@@ -193,29 +151,22 @@ function renderEmail(
         <div style="color:#6b7280;font-size:13px;line-height:1.5;margin-bottom:12px;">${esc(a.fit_reason ?? "")}</div>
         <div style="margin-bottom:10px;">${prestigeBadge(a.prestige)}${effortBadge(a.effort)}</div>
         <table role="presentation" style="border-collapse:collapse;margin-bottom:10px;">
-          ${kv("Sponsor", esc(a.sponsor ?? "-"))}
-          ${kv("Deadline", fmtDate(deadline))}
+          ${digestKv("Sponsor", esc(a.sponsor ?? "-"))}
+          ${digestKv("Deadline", fmtDate(deadline))}
         </table>
         ${a.source_url ? `<a href="${esc(a.source_url)}" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600;">View award &rarr;</a>` : ""}
       </div>`;
     })
     .join("");
 
-  const html = `<!doctype html>
-<html>
-<body style="margin:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <h1 style="font-size:20px;color:#111827;margin:0 0 4px;">${heading}</h1>
-    <p style="color:#6b7280;margin:0 0 16px;font-size:14px;">
-      ${esc(sub.label ?? "Award report")} · ${sub.cadence} · ${esc(filterBits.join(" · "))}
-    </p>
-    ${cards}
-    <p style="color:#9ca3af;font-size:12px;margin-top:16px;">
-      Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.
-    </p>
-  </div>
-</body>
-</html>`;
+  const html = renderDigestShell({
+    heading,
+    label: sub.label ?? "Award report",
+    cadence: sub.cadence,
+    filterBits,
+    cards,
+    footer: "Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.",
+  });
 
   return { subject, html };
 }
@@ -236,46 +187,15 @@ export default defineOrchestration({
   },
 
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
-    const manual = Boolean(input.subscriptionId);
-
-    const subscriptions = await step(ctx, "load-subscriptions", async () => {
-      if (manual) {
-        const sub = await loadSubscriptionById(ctx.env, input.subscriptionId!);
-        if (!sub) return [];
-        return Array.isArray(sub.recipients) && sub.recipients.length > 0 ? [sub] : [];
-      }
-      const all = await loadActiveSubscriptions(ctx.env);
-      const now = Date.now();
-      return all.filter((s) => Array.isArray(s.recipients) && s.recipients.length > 0 && isDue(s, now));
+    return runSubscriptionDigest<AwardSubscription, Award>(ctx, input, {
+      kind: "award",
+      subColumns: SUB_COLS,
+      sender: "cleo",
+      stepPrefix: "award-report",
+      emptyReasonManual: "no-matching-awards",
+      emptyReasonCron: "no-new-awards",
+      loadRecords: loadDigestAwards,
+      renderEmail,
     });
-
-    let emailsSent    = 0;
-    let emailsSkipped = 0;
-
-    for (const sub of subscriptions) {
-      const outcome = await step(ctx, `award-report-${sub.id}`, async () => {
-        const sentAt = new Date().toISOString();
-        const awards = await loadDigestAwards(ctx.env, sub, { sinceLastSent: !manual });
-
-        if (awards.length === 0) {
-          if (!manual) await markSent(ctx.env, sub.id, sentAt);
-          return { sent: false as const, reason: manual ? "no-matching-awards" : "no-new-awards" };
-        }
-
-        const { subject, html } = renderEmail(sub, awards, { manual });
-        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html, from: senderFor(ctx.env, "cleo") });
-
-        if (result.sent) {
-          await markSent(ctx.env, sub.id, sentAt);
-          return { sent: true as const, count: awards.length };
-        }
-        return { sent: false as const, reason: result.error ?? "send-failed" };
-      });
-
-      if (outcome.sent) emailsSent++;
-      else emailsSkipped++;
-    }
-
-    return { subscriptionsDue: subscriptions.length, emailsSent, emailsSkipped };
   },
 });

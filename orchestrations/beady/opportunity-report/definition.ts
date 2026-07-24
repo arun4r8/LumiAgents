@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { defineOrchestration, step } from "@/runtime";
+import { defineOrchestration } from "@/runtime";
 import type { Env } from "@/runtime";
-import { sendEmail } from "../../../integrations/resend/send";
-import { senderFor } from "../../../integrations/resend/sender";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { escapeHtml, fmtDeadline } from "@/runtime/utils/format";
+import {
+  runSubscriptionDigest,
+  renderDigestShell,
+  digestKv,
+  type DigestSubscription,
+} from "@/runtime/utils/subscription-digest";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -29,13 +33,10 @@ export const outputSchema = z.object({
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface Subscription {
-  id: string;
-  label: string | null;
-  cadence: "daily" | "weekly";
-  recipients: string[];
+// Opportunity digests are the kind='opportunity' rows of the unified subscriptions
+// table, extended with the opportunity-specific filter columns.
+interface Subscription extends DigestSubscription {
   min_fit_score: number;
-  last_sent_at: string | null;
   sources: string[] | null;
   agencies: string[] | null;
   set_asides: string[] | null;
@@ -58,44 +59,9 @@ interface Opportunity {
   last_scored_at: string | null;
 }
 
-// ─── Supabase REST helpers (service role; runtime is trusted) ──────────────────
-
-// subscriptions lives in the `orchestration` schema → PostgREST needs the
-// Accept-Profile / Content-Profile headers to reach it. Opportunity digests are the
-// kind='opportunity' rows of the unified subscriptions table.
-async function loadActiveSubscriptions(env: Env): Promise<Subscription[]> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?kind=eq.opportunity&is_active=eq.true&select=${SUB_COLUMNS}`,
-    { headers: sbHeaders(env, { profile: "orchestration" }) },
-  );
-  if (!res.ok) throw new Error(`load subscriptions → ${res.status}: ${await res.text()}`);
-  return (await res.json()) as Subscription[];
-}
-
-// One subscription by id (for the manual "Send now" path; active or not).
-async function loadSubscriptionById(env: Env, id: string): Promise<Subscription | null> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}&kind=eq.opportunity&select=${SUB_COLUMNS}`,
-    { headers: sbHeaders(env, { profile: "orchestration" }) },
-  );
-  if (!res.ok) throw new Error(`load subscription ${id} → ${res.status}: ${await res.text()}`);
-  const rows = (await res.json()) as Subscription[];
-  return rows[0] ?? null;
-}
-
-async function markSent(env: Env, id: string, sentAt: string): Promise<void> {
-  const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/subscriptions?id=eq.${id}`,
-    {
-      method: "PATCH",
-      headers: sbHeaders(env, { profile: "orchestration", extra: { Prefer: "return=minimal" } }),
-      body: JSON.stringify({ last_sent_at: sentAt, updated_at: sentAt }),
-    },
-  );
-  if (!res.ok) throw new Error(`mark sent ${id} → ${res.status}: ${await res.text()}`);
-}
-
 const MAX_DIGEST = 50;
+
+// ─── Digest query ──────────────────────────────────────────────────────────────
 
 // Opportunities for a subscription at or above its fit threshold, with filters applied.
 //   sinceLastSent=true  (cron path)   → only items scored since the last send.
@@ -148,18 +114,6 @@ async function loadDigestOpps(
   return rows.slice(0, MAX_DIGEST);
 }
 
-// ─── Cadence ──────────────────────────────────────────────────────────────────
-
-// Daily subs are always due. Weekly subs are due if never sent or last sent ≳6.5
-// days ago (slack so a daily cron that drifts by a few minutes still fires weekly
-// on the 7th day rather than skipping to day 8).
-function isDue(sub: Subscription, now: number): boolean {
-  if (sub.cadence === "daily") return true;
-  if (!sub.last_sent_at) return true;
-  const elapsedDays = (now - new Date(sub.last_sent_at).getTime()) / 86_400_000;
-  return elapsedDays >= 6.5;
-}
-
 // ─── HTML rendering ─────────────────────────────────────────────────────────
 
 // Fit-badge colors by tier: pursue = green, monitor = amber, else neutral.
@@ -209,9 +163,6 @@ function renderEmail(
 
   // Single-column stacked cards render cleanly on phone and desktop (a wide
   // multi-column table overflowed narrow mobile clients). One card per opportunity.
-  const kv = (label: string, value: string): string =>
-    `<tr><td style="color:#6b7280;font-size:12px;padding:2px 14px 2px 0;white-space:nowrap;vertical-align:top;">${label}</td><td style="color:#374151;font-size:13px;padding:2px 0;vertical-align:top;">${value}</td></tr>`;
-
   const cards = opps
     .map((o) => {
       const c = tierColor(o.recommendation);
@@ -230,30 +181,23 @@ function renderEmail(
         <div style="font-size:16px;font-weight:700;line-height:1.3;margin-bottom:6px;color:#111827;">${titleHtml}</div>
         <div style="color:#6b7280;font-size:13px;line-height:1.5;margin-bottom:12px;">${escapeHtml(o.fit_reason ?? "")}</div>
         <table role="presentation" style="border-collapse:collapse;margin-bottom:10px;">
-          ${kv("Agency", escapeHtml(o.agency ?? "-"))}
-          ${kv("Deadline", fmtDeadline(o.response_deadline))}
-          ${kv("Source", sourceLabel(o.source))}
+          ${digestKv("Agency", escapeHtml(o.agency ?? "-"))}
+          ${digestKv("Deadline", fmtDeadline(o.response_deadline))}
+          ${digestKv("Source", sourceLabel(o.source))}
         </table>
         ${o.source_url ? `<a href="${escapeHtml(o.source_url)}" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600;">View on ${sourceLabel(o.source)} &rarr;</a>` : ""}
       </div>`;
     })
     .join("");
 
-  const html = `<!doctype html>
-<html>
-<body style="margin:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <h1 style="font-size:20px;color:#111827;margin:0 0 4px;">${heading}</h1>
-    <p style="color:#6b7280;margin:0 0 16px;font-size:14px;">
-      ${escapeHtml(sub.label ?? "Opportunity report")} · ${sub.cadence} · ${escapeHtml(filterBits.join(" · "))}
-    </p>
-    ${cards}
-    <p style="color:#9ca3af;font-size:12px;margin-top:16px;">
-      Sent by Beady · manage this report from the LumiAgents dashboard &rarr; Reports.
-    </p>
-  </div>
-</body>
-</html>`;
+  const html = renderDigestShell({
+    heading,
+    label: sub.label ?? "Opportunity report",
+    cadence: sub.cadence,
+    filterBits,
+    cards,
+    footer: "Sent by Beady · manage this report from the LumiAgents dashboard &rarr; Reports.",
+  });
 
   return { subject, html };
 }
@@ -274,57 +218,15 @@ export default defineOrchestration({
   },
 
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
-    const manual = Boolean(input.subscriptionId);
-
-    const subscriptions = await step(ctx, "load-subscriptions", async () => {
-      if (manual) {
-        const sub = await loadSubscriptionById(ctx.env, input.subscriptionId!);
-        if (!sub) return [];
-        return Array.isArray(sub.recipients) && sub.recipients.length > 0 ? [sub] : [];
-      }
-      const all = await loadActiveSubscriptions(ctx.env);
-      const now = Date.now();
-      return all.filter((s) => Array.isArray(s.recipients) && s.recipients.length > 0 && isDue(s, now));
+    return runSubscriptionDigest<Subscription, Opportunity>(ctx, input, {
+      kind: "opportunity",
+      subColumns: SUB_COLUMNS,
+      sender: "beady",
+      stepPrefix: "report",
+      emptyReasonManual: "no-matching-opportunities",
+      emptyReasonCron: "no-new-opportunities",
+      loadRecords: loadDigestOpps,
+      renderEmail,
     });
-
-    let emailsSent = 0;
-    let emailsSkipped = 0;
-
-    // One checkpointed step per subscription: query → render → send → stamp.
-    // Cron: only items new since last send; a subscription with nothing new is
-    // stamped (so weekly cadence advances) but no empty email is sent.
-    // Manual ("Send now"): the full current digest, cadence bypassed; nothing is
-    // stamped when there's nothing to send (the regular schedule is untouched).
-    for (const sub of subscriptions) {
-      const outcome = await step(ctx, `report-${sub.id}`, async () => {
-        const sentAt = new Date().toISOString();
-        const opps = await loadDigestOpps(ctx.env, sub, { sinceLastSent: !manual });
-
-        if (opps.length === 0) {
-          if (!manual) await markSent(ctx.env, sub.id, sentAt);
-          return { sent: false as const, reason: manual ? "no-matching-opportunities" : "no-new-opportunities" };
-        }
-
-        const { subject, html } = renderEmail(sub, opps, { manual });
-        const result = await sendEmail(ctx.env, { to: sub.recipients, subject, html, from: senderFor(ctx.env, "beady") });
-
-        // Only advance last_sent_at on a real send; a failed/disabled send is
-        // retried next run rather than silently dropping these opportunities.
-        if (result.sent) {
-          await markSent(ctx.env, sub.id, sentAt);
-          return { sent: true as const, count: opps.length };
-        }
-        return { sent: false as const, reason: result.error ?? "send-failed" };
-      });
-
-      if (outcome.sent) emailsSent++;
-      else emailsSkipped++;
-    }
-
-    return {
-      subscriptionsDue: subscriptions.length,
-      emailsSent,
-      emailsSkipped,
-    };
   },
 });

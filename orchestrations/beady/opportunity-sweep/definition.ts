@@ -5,6 +5,7 @@ import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/re
 import { senderFor } from "../../../integrations/resend/sender";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { fnv1a } from "@/runtime/utils/hash";
+import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "@/runtime/utils/scored-sweep";
 
 // ─── Content fingerprinting (amendment-aware re-scoring) ────────────────────────
 // A notice is re-scored only when the fields that drive its fit score change. We
@@ -117,21 +118,15 @@ export default defineOrchestration({
       // already scored it AND its content fingerprint is unchanged. If the hash
       // differs the solicitation was amended, so we re-score it. notice_id is the
       // raw SAM.gov noticeId, or `sbir_<topicNumber>` for SBIR/STTR topics.
-      const ledger = new Map<string, string | null>(); // notice_id → last content_hash
-      try {
-        const res = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?select=notice_id,content_hash`,
-          { headers: sbHeaders(ctx.env, { profile: "orchestration" }) },
-        );
-        if (res.ok) for (const row of (await res.json()) as Array<{ notice_id: string | null; content_hash: string | null }>) {
-          if (row.notice_id) ledger.set(row.notice_id, row.content_hash);
-        }
-      } catch (e) {
-        console.warn("[sweep] dedupe lookup failed, scoring all results:", e);
-      }
+      const ledger = await loadContentHashLedger(ctx, {
+        table: "scored_notices",
+        keyColumn: "notice_id",
+        profile: "orchestration",
+        warnLabel: "[sweep] dedupe lookup failed, scoring all results:",
+      });
 
       // Score a notice if it's new, or if its content hash changed (amended).
-      const changed = (id: string, hash: string) => !ledger.has(id) || ledger.get(id) !== hash;
+      const changed = (id: string, hash: string) => contentChanged(ledger, id, hash);
 
       return {
         samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => changed(o.noticeId, samContentHash(o))) },
@@ -265,15 +260,13 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
       if (rows.length === 0) return;
       // merge-duplicates: a re-scored (amended) notice updates its existing row with
       // the new score, recommendation, hash and timestamp.
-      const res = await ctx.fetch(
-        `${ctx.env.SUPABASE_URL}/rest/v1/scored_notices?on_conflict=notice_id`,
-        {
-          method: "POST",
-          headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }),
-          body: JSON.stringify(rows),
-        },
-      );
-      if (!res.ok) console.warn(`[sweep] scored_notices insert → ${res.status}: ${await res.text()}`);
+      await upsertContentHashLedger(ctx, {
+        table: "scored_notices",
+        conflictColumn: "notice_id",
+        profile: "orchestration",
+        rows,
+        warnLabel: "[sweep] scored_notices insert",
+      });
     });
 
     // Build the shortlist, resolving back to source-specific fields
