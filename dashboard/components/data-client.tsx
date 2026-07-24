@@ -1209,8 +1209,3 @@ function IntegrationCard({ integration, onClose }: { integration: IntegrationDef
     </div>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(DataClient as any).styles = `@keyframes spin { to { transform: rotate(360deg); } }`;
