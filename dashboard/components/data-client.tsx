@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { AskDataPanel } from "./ask-data-panel";
 import {
-  Plus, Upload, Plug, X, ChevronDown, ChevronUp,
+  Plus, Upload, X, ChevronDown, ChevronUp,
   Check, Loader2, AlertTriangle, ExternalLink, Star,
   User, Send, Download,
 } from "lucide-react";
@@ -109,34 +109,6 @@ const PAST_PERF_FIELDS: Field[] = [
   { key: "period_of_performance", label: "PoP", type: "text" },
 ];
 
-// ─── Integration stub cards ───────────────────────────────────────────────────
-
-interface IntegrationDef {
-  name: string;
-  systems: string;
-  envVars: string[];
-  stub: string;  // integrations/ path
-}
-
-const CRM_INTEGRATION: IntegrationDef = {
-  name: "CRM",
-  systems: "Salesforce · HubSpot · Deltek Costpoint",
-  envVars: ["CRM_API_URL", "CRM_API_KEY"],
-  stub: "integrations/crm/contracts.ts",
-};
-const ACCOUNTING_INTEGRATION: IntegrationDef = {
-  name: "Accounting",
-  systems: "QuickBooks · Unanet · Deltek Vision",
-  envVars: ["ACCOUNTING_API_URL", "ACCOUNTING_API_KEY"],
-  stub: "integrations/accounting/invoices.ts",
-};
-const HR_INTEGRATION: IntegrationDef = {
-  name: "HR System",
-  systems: "BambooHR · Workday · ADP",
-  envVars: ["HR_API_URL", "HR_API_KEY"],
-  stub: "integrations/hr/employees.ts",
-};
-
 // ─── Section config ───────────────────────────────────────────────────────────
 
 interface SectionDef {
@@ -145,7 +117,6 @@ interface SectionDef {
   description: string;
   tableName: string;
   fields: Field[];
-  integration: IntegrationDef;
   readOnly?: boolean;
   readOnlyNote?: string;
 }
@@ -186,13 +157,11 @@ export function DataClient({
       id: "contracts", label: "Contracts", tableName: "contracts",
       description: "Live contract portfolio",
       fields: CONTRACTS_FIELDS,
-      integration: CRM_INTEGRATION,
     },
     {
       id: "past_performance", label: "Past Performance", tableName: "past_performance",
       description: "Capability statements and PPQs used in proposal scoring",
       fields: PAST_PERF_FIELDS,
-      integration: CRM_INTEGRATION,
     },
   ];
 
@@ -201,25 +170,21 @@ export function DataClient({
       id: "invoices", label: "Invoices", tableName: "invoices",
       description: "Billing records and payment status",
       fields: INVOICES_FIELDS,
-      integration: ACCOUNTING_INTEGRATION,
     },
     {
       id: "budget_lines", label: "Budget Lines", tableName: "budget_lines",
       description: "CLIN-level budget tracking per contract",
       fields: BUDGET_LINES_FIELDS,
-      integration: ACCOUNTING_INTEGRATION,
     },
     {
       id: "labor_records", label: "Labor Records", tableName: "labor_records",
       description: "Timesheet and charge-hour data",
       fields: LABOR_RECORDS_FIELDS,
-      integration: ACCOUNTING_INTEGRATION,
     },
     {
       id: "indirect_rates", label: "Indirect Rates", tableName: "indirect_rates",
       description: "Fringe / OH / G&A rates by fiscal year",
       fields: INDIRECT_RATES_FIELDS,
-      integration: ACCOUNTING_INTEGRATION,
     },
   ];
 
@@ -228,7 +193,6 @@ export function DataClient({
       id: "employees", label: "Employees", tableName: "employees",
       description: "Staff directory",
       fields: EMPLOYEES_FIELDS,
-      integration: HR_INTEGRATION,
     },
   ];
 
@@ -248,7 +212,7 @@ export function DataClient({
       <div className="page-h">
         <div>
           <h1>Records</h1>
-          <div className="sub">Business records. Three ways in: manual entry, CSV import, or wire an integration.</div>
+          <div className="sub">Business records. Two ways in: manual entry or CSV import.</div>
         </div>
       </div>
 
@@ -706,7 +670,7 @@ function TableSection({
   bulkInsert: DataClientProps["bulkInsert"];
   deleteRow: DataClientProps["deleteRow"];
 }) {
-  const [mode, setMode] = useState<"view" | "add" | "csv" | "integration">("view");
+  const [mode, setMode] = useState<"view" | "add" | "csv">("view");
 
   const tableCols = section.fields.filter((f) => f.tableCol !== false).map((f) => f.key);
 
@@ -730,12 +694,6 @@ function TableSection({
           >
             <Upload style={{ width: 12, height: 12 }} /> Import CSV
           </button>
-          <button
-            className={`btn sm${mode === "integration" ? " accent" : ""}`}
-            onClick={() => setMode(mode === "integration" ? "view" : "integration")}
-          >
-            <Plug style={{ width: 12, height: 12 }} /> Integration
-          </button>
         </div>
       </div>
       <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10 }}>{section.description}</div>
@@ -758,14 +716,10 @@ function TableSection({
         />
       )}
 
-      {mode === "integration" && (
-        <IntegrationCard integration={section.integration} onClose={() => setMode("view")} />
-      )}
-
       {rows.length === 0 ? (
         <div className="empty" style={{ padding: "32px 0" }}>
           <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-            No records yet. Add rows manually, import a CSV, or wire in a sync integration.
+            No records yet. Add rows manually or import a CSV.
           </div>
         </div>
       ) : (
@@ -1154,58 +1108,3 @@ function CsvImportPanel({
   );
 }
 
-// ─── Integration card ─────────────────────────────────────────────────────────
-
-function IntegrationCard({ integration, onClose }: { integration: IntegrationDef; onClose: () => void }) {
-  return (
-    <div className="card" style={{ padding: 20, marginBottom: 12, borderStyle: "dashed" }}>
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Plug style={{ width: 14, height: 14, color: "var(--ink-3)" }} />
-          <span style={{ fontWeight: 600, fontSize: 13 }}>{integration.name} Integration</span>
-          <span className="chip" style={{ fontSize: 10 }}>stub ready</span>
-        </div>
-        <button className="btn ghost sm" onClick={onClose}><X style={{ width: 12, height: 12 }} /></button>
-      </div>
-      <p style={{ fontSize: 12.5, color: "var(--ink-2)", marginBottom: 14 }}>
-        Sync data automatically from <strong>{integration.systems}</strong>.
-        The typed integration stub is scaffolded; wire it in when you have credentials.
-      </p>
-
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Set these Wrangler secrets to activate
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {integration.envVars.map((v) => (
-            <code key={v} className="mono" style={{
-              fontSize: 12, padding: "4px 8px",
-              background: "var(--bg-2)", borderRadius: 0,
-              border: "1px solid var(--line)", color: "var(--ink)",
-            }}>
-              wrangler secret put {v}
-            </code>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ink-3)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Stub location
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <code className="mono" style={{
-            fontSize: 12, padding: "4px 8px",
-            background: "var(--bg-2)", borderRadius: 0,
-            border: "1px solid var(--line)", color: "var(--ink)",
-          }}>
-            {integration.stub}
-          </code>
-          <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-            implement the fetch, the types are already there
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}

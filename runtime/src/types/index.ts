@@ -23,15 +23,6 @@ export interface Env {
   ENVIRONMENT: string;
   // Comma-separated CORS allowlist (dashboard origin). Unset → CORS stays "*".
   ALLOWED_ORIGINS?: string;
-  // CRM integration (Salesforce / HubSpot / Deltek Costpoint / …)
-  CRM_API_URL?: string;
-  CRM_API_KEY?: string;
-  // HR integration (BambooHR / Workday / ADP / …)
-  HR_API_URL?: string;
-  HR_API_KEY?: string;
-  // Accounting integration (QuickBooks / Unanet / Deltek Vision / …)
-  ACCOUNTING_API_URL?: string;
-  ACCOUNTING_API_KEY?: string;
   AI: Ai;  // Cloudflare Workers AI binding (used by document-rag for embeddings)
   /** Cloudflare Workflows binding: present in deployed Workers, absent in local dev without wrangler. */
   ORCHESTRATION_WORKFLOW: Workflow;

@@ -200,6 +200,5 @@ The custom JWT hook (`public.custom_access_token_hook`) is deployed by migration
 
 ## Known Gaps
 
-- **Accounting / CRM / HR integrations are stubs:** `integrations/accounting`, `integrations/crm`, `integrations/hr` throw at runtime; `money/financial-report` fails on any accounting-data query until one is implemented.
 - **SBIR source is externally unavailable:** the DoD topics portal now sits behind Akamai bot-protection and the SBIR.gov API is disabled; the integration code is correct but upstream is down.
 - **SAM.gov key rotation:** `SAM_GOV_API_KEY` expires roughly every 90 days and must be renewed to keep the Beady sweeps and RFI attachment fetch working.
