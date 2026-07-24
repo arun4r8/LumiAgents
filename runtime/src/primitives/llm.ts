@@ -2,8 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
+import { MODELS } from "../config/models";
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function makeClient(ctx: RunContext): Anthropic {
   return new Anthropic({ apiKey: ctx.env.ANTHROPIC_API_KEY });

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../../runtime/src/types";
+import { MODELS } from "../../runtime/src/config/models";
 
 // Cleo's content drafter for the eminence calendar. Two modes:
 //   draftContentPost: turn one calendar row into a submission-ready LinkedIn post
@@ -8,7 +9,7 @@ import type { Env } from "../../runtime/src/types";
 // Never invents facts about Lumiture (contracts, awards, numbers) that aren't in the
 // profile; eminence content is the company's public voice.
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function firstText(resp: Anthropic.Message): string {
   const b = resp.content.find((x) => x.type === "text");

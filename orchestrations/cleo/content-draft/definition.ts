@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
+import { MODELS } from "@/runtime/config/models";
 import { draftContentPost } from "../../../integrations/anthropic/content";
 
 // Draft a LinkedIn eminence post for one content-calendar row, grounded in the company
@@ -73,7 +74,7 @@ export default defineOrchestration({
           body: JSON.stringify({
             draft_markdown: draftMarkdown,
             status: "ready",
-            model: ctx.model ?? "claude-sonnet-4-6",
+            model: ctx.model ?? MODELS.sonnet,
             updated_at: new Date().toISOString(),
           }),
         },

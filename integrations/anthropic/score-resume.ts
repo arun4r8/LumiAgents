@@ -1,8 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Env } from "../../runtime/src/types";
+import { MODELS } from "../../runtime/src/config/models";
 
-const DEFAULT_MODEL = "claude-haiku-4-5";
+const DEFAULT_MODEL: string = MODELS.haiku;
 
 // Scoring rubric, ported verbatim from the n8n "HR Expert LLM" system message so
 // scores stay comparable with historical results.

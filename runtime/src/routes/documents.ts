@@ -5,6 +5,7 @@ import { OPS_SCOPE } from "../agents/knowledge-access";
 import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
 import { json, parseCsvLine, requireOpsToken, rateLimited } from "./helpers";
+import { MODELS } from "../config/models";
 
 // ─── OCR helpers ──────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ async function ocrWithClaude(env: Env, base64: string, mimeType: string): Promis
       };
 
   const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODELS.haiku,
     max_tokens: 8192,
     messages: [{
       role: "user",
