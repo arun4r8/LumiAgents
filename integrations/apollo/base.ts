@@ -1,4 +1,5 @@
 import type { RunContext } from "../../runtime/src/types";
+import { callJson } from "../http";
 
 const APOLLO_BASE = "https://api.apollo.io/v1";
 
@@ -12,20 +13,18 @@ export async function callApollo<T>(
   path: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const res = await ctx.fetch(`${APOLLO_BASE}/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
-      "X-Api-Key": ctx.env.APOLLO_API_KEY ?? "",
+  return callJson<T>(
+    ctx.fetch,
+    `${APOLLO_BASE}/${path}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": ctx.env.APOLLO_API_KEY ?? "",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Apollo API ${path} → ${res.status}: ${text}`);
-  }
-
-  return res.json() as Promise<T>;
+    { label: `Apollo API ${path}` },
+  );
 }
