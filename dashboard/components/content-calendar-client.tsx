@@ -169,8 +169,8 @@ export function ContentCalendarClient({
           <div className="sub">Nothing scheduled yet. Add an entry or plan a run with Cleo to get started.</div>
         </div>
       ) : (
-        <div className="card" style={{ overflow: "hidden" }}>
-          <table className="tbl" style={{ width: "100%" }}>
+        <div className="card" style={{ overflowX: "auto" }}>
+          <table className="tbl" style={{ width: "100%", minWidth: 900 }}>
             <thead>
               <tr>
                 <th style={{ width: 130 }}>Release</th>
