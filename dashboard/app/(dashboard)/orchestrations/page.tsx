@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 // would just be a confusing duplicate.
 const HIDDEN_FROM_CATALOGUE = ["beady/opportunity-report"];
 
+const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
+
 export default async function OrchestrationsPage() {
   const supabase = await createClient();
 
@@ -20,6 +22,21 @@ export default async function OrchestrationsPage() {
     .neq("trigger_mode", "webhook")
     .order("name");
 
+  // Only show orchestrations that still exist in the code registry, so a retired
+  // orchestration whose catalog row lingers (its row is kept for run-history FKs)
+  // doesn't show up as a runnable card. Falls back to the full DB catalogue if the
+  // runtime is unreachable, so a transient outage never blanks the page.
+  let registered: Set<string> | null = null;
+  try {
+    const res = await fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" });
+    if (res.ok) {
+      const catalogue = (await res.json()) as { name: string }[];
+      registered = new Set(catalogue.map((c) => c.name));
+    }
+  } catch {
+    // runtime unreachable — leave `registered` null and show the DB catalogue as-is
+  }
+
   const orcList = ((orchestrations ?? []) as {
     id: string;
     name: string;
@@ -28,7 +45,11 @@ export default async function OrchestrationsPage() {
     is_active: boolean;
     cron: string | null;
     trigger_mode: string;
-  }[]).filter((o) => !HIDDEN_FROM_CATALOGUE.includes(o.name));
+  }[]).filter(
+    (o) =>
+      !HIDDEN_FROM_CATALOGUE.includes(o.name) &&
+      (registered === null || registered.has(o.name)),
+  );
 
   async function toggleOrchestration(formData: FormData) {
     "use server";
