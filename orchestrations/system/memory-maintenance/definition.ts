@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 export const inputSchema = z.object({
   retentionDays: z
@@ -33,12 +34,7 @@ export default defineOrchestration({
     const purged = await step(ctx, "purge-expired-conversations", async () => {
       const res = await ctx.fetch(`${ctx.env.SUPABASE_URL}/rest/v1/rpc/purge_expired_conversations`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-          "Content-Profile": "orchestration",
-        },
+        headers: sbHeaders(ctx.env, { profile: "orchestration" }),
         body: JSON.stringify({ p_days: input.retentionDays }),
       });
       if (!res.ok) throw new Error(`purge_expired_conversations → ${res.status}: ${await res.text()}`);

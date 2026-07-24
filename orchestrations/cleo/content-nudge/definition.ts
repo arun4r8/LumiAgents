@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
-import type { Env } from "@/runtime";
 import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
 import { senderFor } from "../../../integrations/resend/sender";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 // Daily nudge: surface content-calendar posts due soon that aren't drafted yet, so the
 // calendar chases the team instead of sitting passive. Emails subscribers; degrades
@@ -16,13 +16,6 @@ export const outputSchema = z.object({
   dueCount: z.number(),
   alerted: z.boolean(),
 });
-
-function sbHeaders(env: Env): Record<string, string> {
-  return {
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-  };
-}
 
 export default defineOrchestration({
   name: "cleo/content-nudge",

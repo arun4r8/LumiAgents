@@ -1,16 +1,8 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { tavilySearch } from "./tools";
-
-// FNV-1a, the same approach as the opportunity-sweep content fingerprinting.
-function fnv1a(str: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16);
-}
+import { sbHeaders } from "@/runtime/utils/supabase";
+import { fnv1a } from "@/runtime/utils/hash";
 
 function awardHash(url: string, title: string): string {
   return fnv1a(`${url}::${title}`);
@@ -126,13 +118,7 @@ export default defineOrchestration({
       try {
         const res = await ctx.fetch(
           `${ctx.env.SUPABASE_URL}/rest/v1/award_scored?select=award_id,content_hash`,
-          {
-            headers: {
-              apikey:          ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization:   `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              "Accept-Profile": "orchestration",
-            },
-          },
+          { headers: sbHeaders(ctx.env, { profile: "orchestration" }) },
         );
         if (res.ok) {
           for (const row of (await res.json()) as Array<{ award_id: string; content_hash: string }>) {
@@ -156,7 +142,7 @@ export default defineOrchestration({
     const scored = await llm_extract(ctx, {
       name: "score-awards",
       prompt: `
-You are Beady, Lumiture's BD AI. Evaluate each award opportunity for Lumiture.
+You are Cleo, Lumiture's eminence/awards AI. Evaluate each award opportunity for Lumiture.
 
 Lumiture profile:
 - Database management startup: PostgreSQL, Oracle, SQL Server, cloud DBs, data engineering
@@ -261,12 +247,7 @@ Only return items scoring ≥ ${input.minScore}.
           `${ctx.env.SUPABASE_URL}/rest/v1/awards?on_conflict=award_id`,
           {
             method: "POST",
-            headers: {
-              "Content-Type":  "application/json",
-              apikey:          ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization:   `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              Prefer:          "resolution=merge-duplicates,return=minimal",
-            },
+            headers: sbHeaders(ctx.env, { extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }),
             body: JSON.stringify(rows),
           },
         );
@@ -285,13 +266,7 @@ Only return items scoring ≥ ${input.minScore}.
           `${ctx.env.SUPABASE_URL}/rest/v1/award_scored?on_conflict=award_id`,
           {
             method: "POST",
-            headers: {
-              "Content-Type":    "application/json",
-              apikey:            ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization:     `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Profile": "orchestration",
-              Prefer:            "resolution=merge-duplicates,return=minimal",
-            },
+            headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "resolution=merge-duplicates,return=minimal" } }),
             body: JSON.stringify(ledgerRows),
           },
         );
