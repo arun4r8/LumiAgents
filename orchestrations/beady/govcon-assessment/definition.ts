@@ -24,7 +24,7 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const inputSchema = z.object({
-  opportunityId: z.string().uuid().optional().describe("Existing opportunities row to assess (e.g. from beady/opportunity-search). If omitted or not found, a new row is created from the intake text/PDF."),
+  opportunityId: z.string().uuid().optional().describe("Existing opportunities row to assess (e.g. from beady/opportunity-sweep). If omitted or not found, a new row is created from the intake text/PDF."),
   opportunityName: z.string().optional().describe("Opportunity title, used when creating a new opportunity"),
   summaryText: z.string().optional().describe("Solicitation abstract / analyst summary"),
   notes: z.string().optional().describe("Extra analyst context"),

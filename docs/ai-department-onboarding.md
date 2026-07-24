@@ -273,7 +273,7 @@ The six agents, their domains, and their tools:
 | Agent | Runs as | Domain | Tools (→ orchestration) |
 |---|---|---|---|
 | **Angie** | own Worker | HR & Recruiting | `score_resumes` (resume-scoring), `source_candidates` (candidate-sourcing), `format_resume` (resume-format) |
-| **Beady** | own Worker | GovCon BD: discovery, scoring **and** response drafting | `search_all_opportunities` (parallel SAM.gov + SBIR sweep), `search_opportunities`, `search_sbir_topics`, `assess_opportunity` (5-dimension go/no-go), `seed_past_performance`, `draft_rfi` (Sources Sought / RFI drafting, **moved here from Cleo**), `find_industry_days` (industry-day / vendor-outreach event discovery) |
+| **Beady** | own Worker | GovCon BD: discovery, scoring **and** response drafting | `search_all_opportunities` (parallel SAM.gov + SBIR sweep), `assess_opportunity` (5-dimension go/no-go), `seed_past_performance`, `draft_rfi` (Sources Sought / RFI drafting, **moved here from Cleo**), `find_industry_days` (industry-day / vendor-outreach event discovery) |
 | **Cleo** | own Worker | Eminence, awards & proposals + content calendar | `sweep_awards` (Tavily award sweep), `send_award_digest`, `plan_calendar` (theme → content-calendar ideas), `draft_content` (LinkedIn post copy + asset brief) |
 | **Dewey** | own Worker | Knowledge librarian, steward of the shared corpus | `search_knowledge` (cited RAG), `retag_document` (curate corpus/sensitivity), `knowledge_inventory` |
 | **Patch** | own Worker | IT Ops & Knowledge | `create_ticket`, `update_ticket`, `search_tickets`, `staff_request`, `query_documents` |

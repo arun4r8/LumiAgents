@@ -39,7 +39,7 @@ All external systems touched by the orchestration layer. The n8n migration is co
 ---
 
 ## SBIR / STTR (DoD topics)
-**Used by:** Beady, via `search_sbir_topics` (`beady/sbir-topic-search`)
+**Used by:** Beady, via `search_all_opportunities` (`beady/opportunity-sweep`)
 **Integration code:** `integrations/sbir/topic-search.ts`
 **Usage:** keyword / component / status search over open DoD SBIR-STTR topics
 **Auth model:** none (public portal); tracked against a daily budget for visibility
