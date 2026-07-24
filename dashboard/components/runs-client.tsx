@@ -110,8 +110,8 @@ export function RunsClient({
         })}
       </div>
 
-      <div className="card" style={{ overflow: "hidden" }}>
-        <table className="tbl">
+      <div className="card" style={{ overflowX: "auto" }}>
+        <table className="tbl" style={{ minWidth: 1000 }}>
           <thead>
             <tr>
               <th style={{ width: "30%" }}>Orchestration</th>

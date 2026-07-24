@@ -610,8 +610,8 @@ function DocCorpus({
             <p>No documents match the current filter.</p>
           </div>
         ) : (
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <table className="tbl" style={{ width: "100%" }}>
+          <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+            <table className="tbl" style={{ width: "100%", minWidth: 900 }}>
               <thead>
                 <tr>
                   <th style={{ paddingLeft: 16 }}>Name</th>

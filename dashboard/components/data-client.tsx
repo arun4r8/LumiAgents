@@ -615,7 +615,7 @@ function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, u
         </div>
       ) : (
         <div className="card" style={{ overflow: "auto", marginBottom: 4 }}>
-          <table className="tbl" style={{ minWidth: "100%" }}>
+          <table className="tbl" style={{ minWidth: 850 }}>
             <thead>
               <tr>
                 <th>Title</th>
@@ -750,7 +750,7 @@ function DataTable({
   }
 
   return (
-    <table className="tbl" style={{ minWidth: "100%" }}>
+    <table className="tbl" style={{ minWidth: columns.length * 160 + (onDelete ? 44 : 0) }}>
       <thead>
         <tr>
           {columns.map((col) => (
