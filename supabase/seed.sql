@@ -21,16 +21,6 @@ VALUES
   ),
   -- angie/resume-screening and angie/resume-formatting are handled by n8n, not Workers
 
-  -- ── Beady (business development / GovCon) ────────────────────────────────
-  (
-    'beady/opportunity-search',
-    1,
-    'Search SAM.gov for open solicitations, score each against Lumiture''s capabilities, and return a prioritised shortlist',
-    '{}', '{}',
-    true
-  ),
-  -- beady/govcon-assessment is handled by n8n (5-dim RAG scoring), not Workers
-
   -- ── Money (finance) ───────────────────────────────────────────────────────
   (
     'money/data-analyst',
