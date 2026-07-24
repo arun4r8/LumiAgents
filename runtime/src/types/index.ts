@@ -7,6 +7,7 @@ export interface Env {
   SUPABASE_JWT_SECRET: string;
   ANTHROPIC_API_KEY: string;
   N8N_WEBHOOK_SECRET?: string;  // optional: set when n8n webhooks have Header Auth configured
+  N8N_QUEUE_ENABLED?: string;   // gate for the n8n call-queue drainer; disabled unless === "true"
   APOLLO_API_KEY?: string;      // optional: set when Apollo API key is obtained
   JIRA_BASE_URL: string;
   JIRA_EMAIL: string;

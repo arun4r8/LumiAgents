@@ -146,9 +146,13 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    // The n8n → Workers migration is effectively complete, so the call-queue drainer
+    // is disabled by default. The drainer (and its table/secret) are retained so it can
+    // be re-enabled without a code change — set N8N_QUEUE_ENABLED="true" if a niche flow
+    // is ever routed back through n8n. See LumiAgents#64.
     await Promise.all([
       dispatchCron(controller.cron, env),
-      drainN8nCallQueue(env),
+      ...(env.N8N_QUEUE_ENABLED === "true" ? [drainN8nCallQueue(env)] : []),
     ]);
   },
 } satisfies ExportedHandler<Env>;
