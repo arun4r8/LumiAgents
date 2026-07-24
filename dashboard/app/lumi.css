@@ -965,16 +965,14 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   grid-template-areas:
     "fleet  stream"
     "needs  stream"
-    "thru   spend"
-    "sla    spend";
+    "thru   sla";
   gap: var(--gap);
 }
 .ovr-grid > section:nth-child(1){ grid-area: fleet; }
 .ovr-grid > section:nth-child(2){ grid-area: stream; }
 .ovr-grid > section:nth-child(3){ grid-area: needs; }
 .ovr-grid > section:nth-child(4){ grid-area: thru; }
-.ovr-grid > section:nth-child(5){ grid-area: spend; }
-.ovr-grid > section:nth-child(6){ grid-area: sla; }
+.ovr-grid > section:nth-child(5){ grid-area: sla; }
 
 /* fleet */
 .fleet {
@@ -1072,23 +1070,6 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .sw.failed { background: var(--err); }
 .sw.paused { background: var(--warn); }
 
-/* spend */
-.spend { display: flex; flex-direction: column; gap: 6px; }
-.spend-row {
-  display: grid;
-  grid-template-columns: 1.6fr 2fr auto auto auto;
-  align-items: center; gap: 10px; padding: 4px 0; font-size: 12px;
-}
-.spend-name { color: var(--ink); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
-.spend-bar { height: 6px; background: var(--bg-2); border-radius: 0; overflow: hidden; }
-.spend-bar .fill { height: 100%; background: var(--accent); border-radius: 0; }
-.spend-tok, .spend-cost { color: var(--ink-1); font-size: 11.5px; text-align: right; font-family: var(--mono); }
-.spend-cost { min-width: 42px; }
-.spend-delta { font-size: 11px; min-width: 50px; text-align: right; font-family: var(--mono); }
-.spend-delta.up   { color: var(--err); }
-.spend-delta.down { color: var(--ok); }
-.spend-delta.flat { color: var(--ink-3); }
-
 /* SLA */
 .sla { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .sla-cell {
@@ -1125,7 +1106,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 1180px) {
   .ovr-grid {
     grid-template-columns: 1fr;
-    grid-template-areas: "fleet" "needs" "stream" "thru" "spend" "sla";
+    grid-template-areas: "fleet" "needs" "stream" "thru" "sla";
   }
   .kpis { grid-template-columns: repeat(2, 1fr); }
 }

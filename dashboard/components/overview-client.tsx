@@ -282,22 +282,12 @@ export default function OverviewClient({
           )}
         </section>
 
-        {/* Throughput placeholder */}
         <section className="card pad">
           <div className="sec-h">
             <h3>Throughput · last 24h</h3>
             <div className="muted mono" style={{ fontSize: 11.5 }}>{recentRuns.length} runs</div>
           </div>
           <ThroughputChart runs={runs} />
-        </section>
-
-        {/* Spend placeholder */}
-        <section className="card pad">
-          <div className="sec-h">
-            <h3>Spend by agent · today</h3>
-            <div className="muted mono" style={{ fontSize: 11.5 }}>-</div>
-          </div>
-          <SpendPlaceholder orchestrations={orchestrations} />
         </section>
 
         {/* SLA board */}
@@ -559,58 +549,6 @@ function ThroughputChart({ runs }: { runs: Run[] }) {
         <span><span className="sw failed" /> failed</span>
       </div>
     </>
-  );
-}
-
-// ── Spend by agent ────────────────────────────────────────────────────
-
-// Add a row here when a new agent goes live. The key must match the
-// prefix of its orchestration names (e.g. "angie/resume-scoring" → "angie").
-const AGENTS: { key: string; label: string }[] = [
-  { key: "angie", label: "Angie" },
-  { key: "beady", label: "Beady" },
-  { key: "money", label: "Money" },
-  { key: "patch", label: "Patch" },
-];
-
-function SpendPlaceholder({ orchestrations }: { orchestrations: Orchestration[] }) {
-  // Count active orchestrations per agent so we can show the sub-label.
-  const countByAgent = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const o of orchestrations) {
-      if (!o.is_active) continue;
-      const prefix = o.name.split("/")[0] ?? o.name;
-      map.set(prefix, (map.get(prefix) ?? 0) + 1);
-    }
-    return map;
-  }, [orchestrations]);
-
-  return (
-    <div className="spend">
-      {AGENTS.map(({ key, label }) => {
-        const count = countByAgent.get(key) ?? 0;
-        return (
-          <div key={key} className="spend-row">
-            <div className="spend-name">
-              {label}
-              {count > 0 && (
-                <span className="muted mono" style={{ fontSize: 10, marginLeft: 6 }}>
-                  {count} flow{count !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-            <div className="spend-bar">
-              <div className="fill" style={{ width: 0 }} />
-            </div>
-            <div className="spend-tok" style={{ color: "var(--ink-3)" }}>-</div>
-            <div className="spend-cost" style={{ color: "var(--ink-3)" }}>-</div>
-          </div>
-        );
-      })}
-      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
-        Token spend tracked in run_steps · aggregated view coming soon
-      </div>
-    </div>
   );
 }
 
