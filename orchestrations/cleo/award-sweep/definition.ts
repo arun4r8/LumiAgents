@@ -9,6 +9,21 @@ function awardHash(url: string, title: string): string {
   return fnv1a(`${url}::${title}`);
 }
 
+// Normalize an award title into a stable key so the same award seen at
+// different URLs collapses to one dedup key. Lowercases, strips ®/™,
+// removes parenthetical segments and 4-digit years, replaces non-alphanumerics
+// with spaces, then collapses and trims whitespace.
+function normalizeAwardKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[®™]/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b\d{4}\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ─── Search query sets ────────────────────────────────────────────────────────
 
 const INDUSTRY_QUERIES = [
@@ -48,6 +63,7 @@ const scoredAwardSchema = z.object({
   prestige:            z.enum(["high", "medium", "low"]),
   effort:              z.enum(["low", "medium", "high"]),
   recommendation:      z.enum(["apply", "consider", "skip"]),
+  cycleStatus:         z.enum(["open", "closed", "hub", "unknown"]),
 });
 
 export const outputSchema = z.object({
@@ -73,6 +89,8 @@ export default defineOrchestration({
   },
 
   async run(ctx, input) {
+    const today = new Date().toISOString().slice(0, 10);
+
     // Step 1: Run Tavily searches and deduplicate by URL
     const { rawItems, searchesRun } = await step(ctx, "fetch-award-candidates", async () => {
       type RawItem = { url: string; title: string; content: string; type: "industry" | "government" };
@@ -133,33 +151,49 @@ export default defineOrchestration({
     const scored = await llm_extract(ctx, {
       name: "score-awards",
       prompt: `
-You are Cleo, Lumiture's eminence/awards AI. Evaluate each award opportunity for Lumiture.
+You are Cleo, Lumiture's eminence/awards AI. Evaluate each award opportunity for Lumiture. Today's date is ${today}.
 
 Lumiture profile:
-- Database management startup: PostgreSQL, Oracle, SQL Server, cloud DBs, data engineering
-- AI/ML integration and agentic infrastructure (building autonomous internal agents)
-- Small business, US-based, DC-area, federal government focus
-- Looking to build brand recognition through awards for eminence and business development
+- Business: database-management & data-engineering startup (PostgreSQL, Oracle, SQL Server, cloud DBs) with AI/ML integration and agentic infrastructure (autonomous internal agents).
+- Market: US-based, DC/DMV area, federal-government focused. Small business.
+- Goal: build brand recognition through awards for eminence and business development.
 
-Fit score (1-10):
-- 8-10: strong match, Lumiture clearly eligible, high value to apply
-- 6-7: good fit, eligible and worth the effort
-- 4-5: possible, stretch eligibility or niche value
-- 1-3: not applicable, wrong industry, size, or geography
+Eligibility facts — use these to GATE eligibility; NEVER assume a fact that is not listed here:
+- Set-asides / certifications: [FILL — 8(a)? SDVOSB? WOSB? HUBZone? — list what's held, or "none"]
+- Ownership: [FILL — e.g. "not veteran-owned; not woman-owned"]
+- Annual revenue: [FILL — e.g. "under $5M"]
+- Year founded / company age: [FILL — e.g. "2024"]
+- Headcount: [FILL]
+- Leadership public-sector eminence: [FILL — e.g. "limited; no prior named GovCon roles or awards"]
+
+STEP 1 — Page type. Decide what each source page actually is:
+- "open"    = a specific, currently-open nomination/application (eligibility + ideally a deadline).
+- "closed"  = a specific past cycle (deadline already passed, or an article about a prior year's awards).
+- "hub"     = a topic/tag/aggregator/index/landing page with no specific cycle (e.g. a "/topic/..." page or an evergreen awards hub).
+- "unknown" = cannot tell from the content.
+Do NOT invent a deadline or inflate fit for "hub" or "closed" pages — a hub page is not an application.
+
+STEP 2 — Eligibility gate (apply BEFORE scoring fit):
+- If the award REQUIRES a status Lumiture lacks per the eligibility facts (veteran-only, 8(a)-only, woman-owned-only, a revenue cap Lumiture exceeds, nominees must be federal employees rather than contractors, a company-age limit exceeded, etc.) -> INELIGIBLE: set fitScore <= 3, recommendation "skip", and state the disqualifying requirement in fitReason.
+- If eligibility depends on a fact not provided above and you cannot confirm it -> do NOT assume eligible: cap fitScore at 5, recommendation "consider", and name the condition to verify in fitReason.
+
+STEP 3 — Fit score (1-10), for ELIGIBLE items only:
+- 8-10: strong match, clearly eligible, high eminence/BD value
+- 6-7: good fit, eligible, worth the effort
+- 4-5: eligible but niche or a stretch
+- 1-3: poor fit or ineligible
 
 recommendation:
-  "apply"    → fit ≥ 7
-  "consider" → fit 5-6
-  "skip"     → fit ≤ 4
+- "apply"    -> fitScore >= 7 AND eligible AND cycleStatus = "open"
+- "consider" -> fitScore 5-6, OR eligibility/cycle needs verifying
+- "skip"     -> fitScore <= 4, OR ineligible, OR cycleStatus = "closed" (deadline passed — note the likely next cycle in fitReason)
 
-prestige: "high" = nationally recognized (Inc 5000, Wash100, FCW Federal 100), "medium" = industry-known, "low" = local/minor
-effort: "low" = short nomination form, "medium" = written application + references, "high" = extensive documentation
+prestige: "high" = nationally recognized (Inc 5000, Wash100, FCW/Federal 100), "medium" = industry-known, "low" = local/minor.
+effort: "low" = short nomination form, "medium" = written application + references, "high" = extensive documentation.
 
-For each item extract: title, sponsor (who administers the award), category (the award program name or subcategory),
-awardType ("industry" or "government"), applicationDeadline (extract from content if visible, else null),
-nominationDeadline (null if not found), fitScore, fitReason (1-2 sentences), prestige, effort, recommendation.
+For each item extract: title, sponsor (who administers the award), category (program name/subcategory), awardType ("industry" or "government"), applicationDeadline (from content if visible, else null), nominationDeadline (else null), cycleStatus ("open"|"closed"|"hub"|"unknown"), fitScore, fitReason (1-2 sentences — ALWAYS name any eligibility or cycle caveat), prestige, effort, recommendation.
 
-Only return items scoring ≥ ${input.minScore}.
+Return an item ONLY if it is a real award program with fitScore >= ${input.minScore} AND cycleStatus is NOT "hub". Drop topic/aggregator/hub pages entirely.
       `.trim(),
       input: {
         items: newItems.map((item, i) => ({
@@ -180,6 +214,7 @@ Only return items scoring ≥ ${input.minScore}.
             awardType:           z.enum(["industry", "government"]),
             applicationDeadline: z.string().nullable(),
             nominationDeadline:  z.string().nullable(),
+            cycleStatus:         z.enum(["open", "closed", "hub", "unknown"]),
             fitScore:            z.number().int().min(1).max(10),
             fitReason:           z.string(),
             prestige:            z.enum(["high", "medium", "low"]),
@@ -196,8 +231,13 @@ Only return items scoring ≥ ${input.minScore}.
     for (const s of scored.awards) {
       const raw = newItems[s.id];
       if (!raw) continue;
+      // Defensive backstop: never persist hub/aggregator pages even if the
+      // model slips and returns one despite the prompt instruction.
+      if (s.cycleStatus === "hub") continue;
       shortlist.push({
-        awardId:             fnv1a(raw.url),
+        // Dedup by normalized award name so the same award seen at different
+        // URLs merges into one row (the URL-based ledger in Step 2 stays as-is).
+        awardId:             fnv1a(normalizeAwardKey(s.title)),
         title:               s.title,
         sponsor:             s.sponsor,
         category:            s.category,
@@ -210,6 +250,7 @@ Only return items scoring ≥ ${input.minScore}.
         prestige:            s.prestige,
         effort:              s.effort,
         recommendation:      s.recommendation,
+        cycleStatus:         s.cycleStatus,
       });
     }
 
@@ -231,6 +272,7 @@ Only return items scoring ≥ ${input.minScore}.
           prestige:             a.prestige,
           effort:               a.effort,
           recommendation:       a.recommendation,
+          cycle_status:         a.cycleStatus,
           last_scored_at:       scoredAt,
         }));
 

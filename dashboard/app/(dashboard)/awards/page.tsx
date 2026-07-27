@@ -23,6 +23,7 @@ export interface Award {
   prestige: string | null;
   effort: string | null;
   recommendation: string;
+  cycle_status: string | null;
   last_scored_at: string;
 }
 
