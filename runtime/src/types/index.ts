@@ -47,6 +47,17 @@ export interface Env {
   // Resend transactional email (opportunity report dispatch), set via `wrangler secret put`
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;  // e.g. "Beady <reports@lumiture.com>"
+  // Microsoft Graph app-only creds (client-credentials), set via `wrangler secret put`.
+  // Used to live-sync the content calendar from the M365 planning workbook.
+  MSGRAPH_TENANT_ID?: string;
+  MSGRAPH_CLIENT_ID?: string;
+  MSGRAPH_CLIENT_SECRET?: string;
+  // Location of the content-calendar planning workbook in Microsoft 365 (Graph
+  // drive + item IDs; optional worksheet name → defaults to the first sheet).
+  // Set in wrangler.toml [vars]. Unset → the Graph content sync is disabled.
+  CONTENT_CALENDAR_DRIVE_ID?: string;
+  CONTENT_CALENDAR_ITEM_ID?: string;
+  CONTENT_CALENDAR_WORKSHEET?: string;
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────

@@ -145,6 +145,23 @@ export default async function ContentCalendarPage() {
     revalidatePath("/content-calendar");
   }
 
+  // Sync now: fire cleo/content-sync (async) to live-sync the calendar from the
+  // team's Microsoft 365 planning workbook via the Graph API. Runs in the
+  // background; synced rows land here (idempotent via source_key — same keys as
+  // an equivalent CSV import, and existing drafts/status are preserved). Surfaces
+  // the runtime error (e.g. "not configured") if the run can't be started.
+  async function syncNow(): Promise<{ started: boolean }> {
+    "use server";
+    const token = await getToken();
+    const res = await fetch(
+      `${RUNTIME}/api/orchestrations/${encodeURIComponent("cleo/content-sync")}/run`,
+      { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
+    );
+    if (!res.ok) throw new Error(`Sync failed (${res.status}): ${await res.text()}`);
+    revalidatePath("/content-calendar");
+    return { started: true };
+  }
+
   // Import CSV (from the team's planning spreadsheet). Idempotent via source_key:
   // re-uploading an edited sheet updates rows; existing drafts/status are preserved
   // (they aren't in the upsert payload).
@@ -173,6 +190,7 @@ export default async function ContentCalendarPage() {
       draftWithCleo={draftWithCleo}
       planWithCleo={planWithCleo}
       importCsv={importCsv}
+      syncNow={syncNow}
     />
   );
 }
