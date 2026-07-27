@@ -30,6 +30,23 @@ function parseSources(formData: FormData): string[] | null {
   return picked.length > 0 ? picked : null;
 }
 
+// Award eligibility-profile parsing. Checkbox groups → validated string[] (null when
+// none picked); number fields → integer or null (empty = don't filter on it).
+const VALID_HELD_SET_ASIDES = ["8(a)", "SDVOSB", "WOSB", "HUBZone"] as const;
+const VALID_OWNERSHIP = ["veteran", "woman", "minority"] as const;
+
+function parseCheckboxes(formData: FormData, field: string, valid: readonly string[]): string[] | null {
+  const picked = formData.getAll(field).map(String).filter((s) => valid.includes(s));
+  return picked.length > 0 ? picked : null;
+}
+
+function parseIntField(raw: FormDataEntryValue | null): number | null {
+  const str = String(raw ?? "").trim();
+  if (str === "") return null;
+  const n = Math.round(Number(str));
+  return Number.isFinite(n) ? n : null;
+}
+
 function clampScore(raw: FormDataEntryValue | null, fallback: number): number {
   const n = Math.round(Number(raw));
   if (!Number.isFinite(n)) return fallback;
@@ -47,14 +64,31 @@ async function getToken(): Promise<string> {
   return session.access_token;
 }
 
-function kindFilters(kind: "opportunity" | "award", formData: FormData): Record<string, string[] | null> {
+function kindFilters(kind: "opportunity" | "award", formData: FormData): Record<string, string[] | number | null> {
   return kind === "award"
-    ? { award_types: parseList(formData.get("award_types")), sources: null, agencies: null, set_asides: null }
+    ? {
+        award_types: parseList(formData.get("award_types")),
+        sources: null,
+        agencies: null,
+        set_asides: null,
+        // award eligibility profile
+        held_set_asides: parseCheckboxes(formData, "held_set_asides", VALID_HELD_SET_ASIDES),
+        ownership: parseCheckboxes(formData, "ownership", VALID_OWNERSHIP),
+        annual_revenue_usd: parseIntField(formData.get("annual_revenue_usd")),
+        founded_year: parseIntField(formData.get("founded_year")),
+        headcount: parseIntField(formData.get("headcount")),
+      }
     : {
         award_types: null,
         sources: parseSources(formData),
         agencies: parseList(formData.get("agencies")),
         set_asides: parseList(formData.get("set_asides")),
+        // clear any award eligibility profile on an opportunity sub
+        held_set_asides: null,
+        ownership: null,
+        annual_revenue_usd: null,
+        founded_year: null,
+        headcount: null,
       };
 }
 
