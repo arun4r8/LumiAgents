@@ -16,6 +16,12 @@ export interface Subscription {
   agencies: string[] | null;
   set_asides: string[] | null;
   award_types: string[] | null;
+  // award-kind eligibility profile (used to filter award recommendations)
+  held_set_asides: string[] | null;
+  ownership: string[] | null;
+  annual_revenue_usd: number | null;
+  founded_year: number | null;
+  headcount: number | null;
 }
 
 type Kind = "opportunity" | "award";
@@ -46,6 +52,21 @@ interface Props extends Actions {
 const SOURCE_OPTIONS = [
   { value: "sam_gov", label: "SAM.gov" },
   { value: "sbir", label: "SBIR/STTR" },
+];
+
+// Award eligibility-profile options. Values match the award requirement enums the
+// sweep extracts (set_aside_required / owner_required) so the digest can match them.
+const HELD_SET_ASIDE_OPTIONS = [
+  { value: "8(a)", label: "8(a)" },
+  { value: "SDVOSB", label: "SDVOSB" },
+  { value: "WOSB", label: "WOSB" },
+  { value: "HUBZone", label: "HUBZone" },
+];
+
+const OWNERSHIP_OPTIONS = [
+  { value: "veteran", label: "Veteran-owned" },
+  { value: "woman", label: "Woman-owned" },
+  { value: "minority", label: "Minority-owned" },
 ];
 
 const KIND_LABEL: Record<Kind, string> = { opportunity: "Opportunity", award: "Award" };
@@ -174,11 +195,51 @@ function FilterFields({ kind, s, compact }: { kind: Kind; s?: Subscription; comp
   const inputStyle = compact ? { height: 30, fontSize: 13 } : undefined;
   if (kind === "award") {
     return (
-      <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
-        <label style={{ fontSize: labelSize }}>Award types <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
-        <input className="input" name="award_types" defaultValue={s?.award_types?.join(", ") ?? ""} placeholder="e.g. industry, government" style={inputStyle} />
-        {!compact && <span className="hint">Comma-separated; leave blank to include all award types.</span>}
-      </div>
+      <>
+        <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
+          <label style={{ fontSize: labelSize }}>Award types <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+          <input className="input" name="award_types" defaultValue={s?.award_types?.join(", ") ?? ""} placeholder="e.g. industry, government" style={inputStyle} />
+          {!compact && <span className="hint">Comma-separated; leave blank to include all award types.</span>}
+        </div>
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label style={{ fontSize: labelSize }}>Eligibility profile <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>(optional)</span></label>
+          <span className="hint" style={{ marginTop: 0, marginBottom: 8 }}>Used to filter award recommendations to what you&apos;re eligible for. Leave blank = don&apos;t filter on it.</span>
+        </div>
+        <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
+          <label style={{ fontSize: labelSize }}>Set-asides held</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", minHeight: compact ? 30 : undefined }}>
+            {HELD_SET_ASIDE_OPTIONS.map((o) => (
+              <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
+                <input type="checkbox" name="held_set_asides" value={o.value} defaultChecked={s?.held_set_asides?.includes(o.value) ?? false} />
+                {o.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="field" style={{ gridColumn: compact ? undefined : "1 / -1" }}>
+          <label style={{ fontSize: labelSize }}>Ownership</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", minHeight: compact ? 30 : undefined }}>
+            {OWNERSHIP_OPTIONS.map((o) => (
+              <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 400, cursor: "pointer" }}>
+                <input type="checkbox" name="ownership" value={o.value} defaultChecked={s?.ownership?.includes(o.value) ?? false} />
+                {o.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label style={{ fontSize: labelSize }}>Annual revenue (USD)</label>
+          <input className="input mono" name="annual_revenue_usd" type="number" min={0} step={1} defaultValue={s?.annual_revenue_usd ?? ""} placeholder="e.g. 4000000" style={inputStyle} />
+        </div>
+        <div className="field">
+          <label style={{ fontSize: labelSize }}>Year founded</label>
+          <input className="input mono" name="founded_year" type="number" min={1900} max={2100} step={1} defaultValue={s?.founded_year ?? ""} placeholder="e.g. 2024" style={inputStyle} />
+        </div>
+        <div className="field">
+          <label style={{ fontSize: labelSize }}>Headcount</label>
+          <input className="input mono" name="headcount" type="number" min={0} step={1} defaultValue={s?.headcount ?? ""} placeholder="e.g. 12" style={inputStyle} />
+        </div>
+      </>
     );
   }
   return (

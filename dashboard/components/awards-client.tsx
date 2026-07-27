@@ -44,6 +44,12 @@ const EFFORT_COLORS: Record<string, { bg: string; fg: string }> = {
   medium: WARN,
   high: ERR,
 };
+const CYCLE_COLORS: Record<string, { bg: string; fg: string }> = {
+  open: OK,
+  closed: MUTED,
+  hub: WARN,
+  unknown: WARN,
+};
 
 function fitColor(score: number | null): { bg: string; fg: string } {
   if (score == null) return MUTED;
@@ -55,9 +61,13 @@ function fitColor(score: number | null): { bg: string; fg: string } {
 export function AwardsClient({ awards, dismissAward }: Props) {
   const [rec, setRec] = useState<RecFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
+  const [openOnly, setOpenOnly] = useState(false);
 
   const filtered = awards.filter(
-    (a) => (rec === "all" || a.recommendation === rec) && (type === "all" || a.award_type === type),
+    (a) =>
+      (rec === "all" || a.recommendation === rec) &&
+      (type === "all" || a.award_type === type) &&
+      (!openOnly || a.cycle_status === "open"),
   );
   const applyCount = awards.filter((a) => a.recommendation === "apply").length;
 
@@ -98,6 +108,9 @@ export function AwardsClient({ awards, dismissAward }: Props) {
               <button key={t} style={pill(type === t)} onClick={() => setType(t)}>{t}</button>
             ))}
           </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button style={pill(openOnly)} onClick={() => setOpenOnly((v) => !v)}>Open only</button>
+          </div>
         </div>
       )}
 
@@ -112,7 +125,7 @@ export function AwardsClient({ awards, dismissAward }: Props) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                {["Award", "Type", "Deadline", "Fit", "Prestige", "Effort", "Rec.", ""].map((h) => (
+                {["Award", "Type", "Cycle", "Deadline", "Fit", "Prestige", "Effort", "Rec.", ""].map((h) => (
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -150,6 +163,9 @@ function AwardRow({ award: a, dismissAward }: { award: Award; dismissAward: Prop
       </td>
       <td style={{ padding: "12px 14px" }}>
         <Badge text={a.award_type === "government" ? "Gov" : "Industry"} bg="var(--info-soft)" fg="var(--info)" />
+      </td>
+      <td style={{ padding: "12px 14px" }}>
+        {a.cycle_status ? <Badge text={a.cycle_status} {...(CYCLE_COLORS[a.cycle_status] ?? CYCLE_COLORS.unknown)} /> : "-"}
       </td>
       <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{deadline ?? "-"}</td>
       <td style={{ padding: "12px 14px" }}>

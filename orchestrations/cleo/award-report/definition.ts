@@ -31,6 +31,11 @@ export const outputSchema = z.object({
 interface AwardSubscription extends DigestSubscription {
   award_types:  string[] | null;
   min_fit_score: number;
+  // eligibility profile (award-kind subs) — used to filter to what the subscriber qualifies for
+  held_set_asides:    string[] | null;
+  ownership:          string[] | null;
+  annual_revenue_usd: number | null;
+  founded_year:       number | null;
 }
 
 interface Award {
@@ -46,12 +51,55 @@ interface Award {
   prestige:             string | null;
   effort:               string | null;
   recommendation:       string;
+  cycle_status:         string | null;
+  // extracted eligibility REQUIREMENTS
+  set_aside_required:   string | null;
+  owner_required:       string | null;
+  revenue_cap_usd:      number | null;
+  applicant_type:       string | null;
+  min_years:            number | null;
+  max_years:            number | null;
   last_scored_at:       string | null;
 }
 
-const SUB_COLS = "id,label,cadence,recipients,award_types,min_fit_score,last_sent_at";
+const SUB_COLS =
+  "id,label,cadence,recipients,award_types,min_fit_score,held_set_asides,ownership,annual_revenue_usd,founded_year,last_sent_at";
 
 const MAX_DIGEST = 30;
+
+// Match an award's extracted eligibility REQUIREMENTS against a subscription's
+// eligibility PROFILE. Default to INCLUDE: an award is only excluded when it is KNOWN
+// to fail a dimension. Unknown/permissive requirement values ("none"/"other"/null) and
+// blank profile fields never exclude.
+function eligibleForSub(award: Award, sub: AwardSubscription, currentYear: number): boolean {
+  // Set-aside: a required certification the subscriber doesn't hold → exclude.
+  const sa = award.set_aside_required;
+  if (sa && sa !== "none" && sa !== "other" && !(sub.held_set_asides?.includes(sa) ?? false)) {
+    return false;
+  }
+  // Ownership: a required ownership status the subscriber doesn't have → exclude.
+  const ow = award.owner_required;
+  if (ow && ow !== "none" && ow !== "other" && !(sub.ownership?.includes(ow) ?? false)) {
+    return false;
+  }
+  // Revenue: subscriber over the award's revenue cap → exclude.
+  if (
+    award.revenue_cap_usd != null &&
+    sub.annual_revenue_usd != null &&
+    sub.annual_revenue_usd > award.revenue_cap_usd
+  ) {
+    return false;
+  }
+  // Applicant type: fed-employee awards can't be won by a contractor company → exclude.
+  if (award.applicant_type === "federal_employee") return false;
+  // Company age: outside the award's specified age bounds → exclude.
+  if (sub.founded_year != null) {
+    const age = currentYear - sub.founded_year;
+    if (award.min_years != null && age < award.min_years) return false;
+    if (award.max_years != null && age > award.max_years) return false;
+  }
+  return true;
+}
 
 // ─── Digest query ──────────────────────────────────────────────────────────────
 
@@ -61,7 +109,7 @@ async function loadDigestAwards(
   opts: { sinceLastSent: boolean },
 ): Promise<Award[]> {
   const params = new URLSearchParams({
-    select: "title,sponsor,category,award_type,application_deadline,nomination_deadline,source_url,fit_score,fit_reason,prestige,effort,recommendation,last_scored_at",
+    select: "title,sponsor,category,award_type,application_deadline,nomination_deadline,source_url,fit_score,fit_reason,prestige,effort,recommendation,cycle_status,set_aside_required,owner_required,revenue_cap_usd,applicant_type,min_years,max_years,last_scored_at",
     fit_score:     `gte.${sub.min_fit_score}`,
     recommendation: "neq.skip",
     order: "fit_score.desc,last_scored_at.desc",
@@ -79,7 +127,15 @@ async function loadDigestAwards(
     headers: sbHeaders(env),
   });
   if (!res.ok) throw new Error(`load awards → ${res.status}: ${await res.text()}`);
-  return ((await res.json()) as Award[]).slice(0, MAX_DIGEST);
+
+  const currentYear = new Date().getFullYear();
+  const rows = (await res.json()) as Award[];
+  return rows
+    // Never email an expired cycle (null cycle_status is kept — only known-closed drops).
+    .filter((a) => a.cycle_status !== "closed")
+    // Filter to what this subscription is eligible for (default include on unknowns).
+    .filter((a) => eligibleForSub(a, sub, currentYear))
+    .slice(0, MAX_DIGEST);
 }
 
 // ─── HTML rendering ───────────────────────────────────────────────────────────
@@ -165,7 +221,7 @@ function renderEmail(
     cadence: sub.cadence,
     filterBits,
     cards,
-    footer: "Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.",
+    footer: "Filtered to this subscription's eligibility profile. Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.",
   });
 
   return { subject, html };
