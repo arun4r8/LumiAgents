@@ -25,21 +25,34 @@ function normalizeAwardKey(title: string): string {
 }
 
 // ─── Search query sets ────────────────────────────────────────────────────────
+// Year is computed at runtime (not hardcoded) so the queries stay current.
+// Sources curated from the eminence lead's target-source list: FedScoop 50,
+// ACT-IAC (incl. Igniting Innovation), Washington Business Journal (incl.
+// fastest-growing companies), fastest-growing-small-business rankings, and the
+// OnCon Icon Awards — kept alongside the strong existing GovCon programs.
 
-const INDUSTRY_QUERIES = [
-  "govcon award nominations 2026 open small business apply",
-  "government contracting awards 2026 applications open",
-  "federal IT technology company award nominations 2026",
-  "Washington Technology Fast 50 2026 nominations",
-  "FCW Federal 100 award 2026 nominations open",
-  "Wash100 award 2026 nominations",
-];
+function industryQueries(year: number): string[] {
+  return [
+    `FedScoop 50 awards ${year} nominations`,
+    `ACT-IAC awards ${year} nominations`,
+    `ACT-IAC Igniting Innovation awards ${year}`,
+    `Washington Business Journal awards ${year} nominations`,
+    `Washington Business Journal fastest growing companies ${year}`,
+    `fastest growing small business award ${year} nominations govcon`,
+    `OnCon Icon Awards ${year} nominations`,
+    `Greater Washington government contractor awards ${year} nominations`,
+    `Washington Technology Fast 50 ${year} nominations`,
+    `Wash100 award ${year} nominations`,
+    `FCW Federal 100 award ${year} nominations`,
+  ];
+}
 
-const GOVERNMENT_QUERIES = [
-  "SBA small business of the year award nominations 2026",
-  "SBIR excellence award 2026 nominations open",
-  "federal agency small business innovation award 2026 nominations",
-];
+function governmentQueries(year: number): string[] {
+  return [
+    `SBA small business award ${year} nominations`,
+    `SBIR excellence award ${year} nominations`,
+  ];
+}
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +103,7 @@ export default defineOrchestration({
 
   async run(ctx, input) {
     const today = new Date().toISOString().slice(0, 10);
+    const year = new Date().getFullYear();
 
     // Step 1: Run Tavily searches and deduplicate by URL
     const { rawItems, searchesRun } = await step(ctx, "fetch-award-candidates", async () => {
@@ -97,10 +111,10 @@ export default defineOrchestration({
 
       const queries: Array<{ query: string; type: "industry" | "government" }> = [
         ...(input.includeIndustry
-          ? INDUSTRY_QUERIES.map((q) => ({ query: q, type: "industry" as const }))
+          ? industryQueries(year).map((q) => ({ query: q, type: "industry" as const }))
           : []),
         ...(input.includeGovernment
-          ? GOVERNMENT_QUERIES.map((q) => ({ query: q, type: "government" as const }))
+          ? governmentQueries(year).map((q) => ({ query: q, type: "government" as const }))
           : []),
       ];
 
