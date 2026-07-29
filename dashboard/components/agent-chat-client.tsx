@@ -5,6 +5,8 @@ import { Send, Loader2, Paperclip, X, ArrowRight } from "lucide-react";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
@@ -480,6 +482,55 @@ export default function AgentChatClient({
           border: 1px solid var(--line);
         }
 
+        /* markdown-rendered assistant content */
+        .msg-markdown > :first-child { margin-top: 0; }
+        .msg-markdown > :last-child  { margin-bottom: 0; }
+        .msg-markdown p              { margin: 0 0 8px; }
+        .msg-markdown ul, .msg-markdown ol {
+          margin: 0 0 8px; padding-left: 20px;
+        }
+        .msg-markdown li { margin: 2px 0; }
+        .msg-markdown h1, .msg-markdown h2, .msg-markdown h3,
+        .msg-markdown h4, .msg-markdown h5, .msg-markdown h6 {
+          margin: 12px 0 6px; font-weight: 600; line-height: 1.3;
+        }
+        .msg-markdown h1 { font-size: 17px; }
+        .msg-markdown h2 { font-size: 15.5px; }
+        .msg-markdown h3, .msg-markdown h4, .msg-markdown h5, .msg-markdown h6 { font-size: 13.5px; }
+        .msg-markdown a {
+          color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
+        }
+        .msg-markdown code {
+          font-family: ui-monospace, "SF Mono", Menlo, monospace;
+          font-size: 12.5px;
+          background: rgba(0, 0, 0, 0.06);
+          border-radius: 3px;
+          padding: 1px 4px;
+        }
+        .msg-markdown pre {
+          background: rgba(0, 0, 0, 0.06);
+          border-radius: 4px;
+          padding: 10px 12px;
+          margin: 0 0 8px;
+          overflow-x: auto;
+        }
+        .msg-markdown pre code {
+          background: none; padding: 0; font-size: 12.5px;
+        }
+        .msg-markdown blockquote {
+          margin: 0 0 8px; padding-left: 10px;
+          border-left: 2px solid var(--line);
+          color: var(--ink-2);
+        }
+        .msg-markdown hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
+        .msg-markdown table {
+          border-collapse: collapse; margin: 0 0 8px; font-size: 12.5px;
+        }
+        .msg-markdown th, .msg-markdown td {
+          border: 1px solid var(--line); padding: 4px 8px; text-align: left;
+        }
+        .msg-markdown strong { font-weight: 600; }
+
         /* thinking */
         .msg-bubble.thinking {
           display: flex; align-items: center; gap: 8px;
@@ -599,7 +650,13 @@ function MessageBubble({ message }: { message: Message }) {
   return (
     <div className={`msg-row ${message.role}`}>
       <div className="msg-bubble">
-        <div>{message.text}</div>
+        {message.role === "assistant" ? (
+          <div className="msg-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+          </div>
+        ) : (
+          <div>{message.text}</div>
+        )}
 
         {/* File chips on user messages */}
         {message.role === "user" && message.files && message.files.length > 0 && (
