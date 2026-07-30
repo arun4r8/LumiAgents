@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { costUsd } from "@/lib/llm-pricing";
 
 interface RunRow {
   status: string;
@@ -7,13 +8,10 @@ interface RunRow {
 }
 
 interface StepRow {
+  llm_model: string | null;
   llm_input_tokens: number | null;
   llm_output_tokens: number | null;
 }
-
-// Sonnet 4.6 pricing as of 2026-05: $3/M input, $15/M output
-const INPUT_COST_PER_M = 3;
-const OUTPUT_COST_PER_M = 15;
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createClient();
@@ -35,9 +33,9 @@ export async function GET(): Promise<NextResponse> {
     supabase
       .schema("orchestration")
       .from("run_steps")
-      .select("llm_input_tokens, llm_output_tokens")
+      .select("llm_model, llm_input_tokens, llm_output_tokens")
       .gte("started_at", since)
-      .in("step_type", ["llm_decide", "llm_extract"]),
+      .not("llm_model", "is", null),
   ]);
 
   if (runsResult.error) {
@@ -53,9 +51,12 @@ export async function GET(): Promise<NextResponse> {
   const steps = (stepsResult.data ?? []) as StepRow[];
   const totalInputTokens = steps.reduce((s, r) => s + (r.llm_input_tokens ?? 0), 0);
   const totalOutputTokens = steps.reduce((s, r) => s + (r.llm_output_tokens ?? 0), 0);
-  const estimatedCostUsd =
-    (totalInputTokens / 1_000_000) * INPUT_COST_PER_M +
-    (totalOutputTokens / 1_000_000) * OUTPUT_COST_PER_M;
+  // Price per-model via the shared table so this reconciles with the
+  // Overview "Spend by agent" panel (both use lib/llm-pricing).
+  const estimatedCostUsd = steps.reduce(
+    (s, r) => s + costUsd(r.llm_model, r.llm_input_tokens ?? 0, r.llm_output_tokens ?? 0),
+    0,
+  );
 
   return NextResponse.json({
     total,

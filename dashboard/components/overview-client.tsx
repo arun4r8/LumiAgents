@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import { StatusBadge, fmtTimeAgo, fmtExpiry, fmtAbs } from "@/components/lumi";
+import { costUsd } from "@/lib/llm-pricing";
 
 // ── types ─────────────────────────────────────────────────────────────
 
@@ -74,22 +75,9 @@ interface OverviewClientProps {
   decideApproval: (id: string, approved: boolean, notes: string) => Promise<void>;
 }
 
-// ── spend pricing & agent colors ──────────────────────────────────────
-//
-// Approximate list prices in USD per million tokens (MTok), matched by model-name
-// family. These are estimates for a cost signal on the Overview page, not billing
-// figures — easy to update: change the numbers below when list prices change.
-const MODEL_PRICING: { family: string; input: number; output: number }[] = [
-  { family: "sonnet", input: 3, output: 15 },
-  { family: "haiku", input: 1, output: 5 },
-];
-const DEFAULT_PRICING = { input: 3, output: 15 }; // default -> Sonnet pricing
-
-function priceFor(model: string): { input: number; output: number } {
-  const m = model.toLowerCase();
-  const hit = MODEL_PRICING.find((p) => m.includes(p.family));
-  return hit ? { input: hit.input, output: hit.output } : DEFAULT_PRICING;
-}
+// ── agent colors ──────────────────────────────────────────────────────
+// Spend pricing lives in lib/llm-pricing (shared with the Infrastructure
+// tab's LLM Cost KPI so the two surfaces reconcile).
 
 // Agent accent colors — reused from the Orchestrations page palette, extended to the
 // two agents (cleo, dewey) that page doesn't enumerate.
@@ -669,10 +657,7 @@ function SpendByAgent({ spend }: { spend: SpendRow[] }) {
       { agent: string; cost: number; tokens: number; calls: number }
     >();
     for (const row of spend) {
-      const price = priceFor(row.model);
-      const cost =
-        (row.input_tokens / 1e6) * price.input +
-        (row.output_tokens / 1e6) * price.output;
+      const cost = costUsd(row.model, row.input_tokens, row.output_tokens);
       const tokens = row.input_tokens + row.output_tokens;
       const cur = byAgent.get(row.agent) ?? {
         agent: row.agent,
