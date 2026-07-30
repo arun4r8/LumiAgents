@@ -8,7 +8,10 @@
 --
 -- SECURITY DEFINER so authenticated dashboard users can read aggregate spend without
 -- needing direct SELECT on the orchestration schema; only aggregate counts leave the
--- function, never prompt/response contents.
+-- function, never prompt/response contents. Gated to ops users via public.is_ops():
+-- SECURITY DEFINER bypasses RLS, so the gate is enforced in-function — a signed-in
+-- enduser calling this RPC directly gets zero rows. is_ops() reads the caller's JWT
+-- claims (request-scoped), which DEFINER does not alter, so it reflects the real caller.
 
 CREATE OR REPLACE FUNCTION public.agent_spend(p_days int DEFAULT 30)
 RETURNS TABLE(agent text, model text, input_tokens bigint, output_tokens bigint, calls bigint)
@@ -21,7 +24,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, orchestration AS 
   FROM orchestration.run_steps rs
   JOIN orchestration.runs r ON r.id = rs.run_id
   JOIN orchestration.orchestrations o ON o.id = r.orchestration_id
-  WHERE rs.llm_model IS NOT NULL
+  WHERE public.is_ops()
+    AND rs.llm_model IS NOT NULL
     AND rs.started_at >= now() - make_interval(days => p_days)
   GROUP BY 1, 2;
 $$;
