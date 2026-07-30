@@ -57,12 +57,65 @@ interface RecentStep {
   runs: { id: string; orchestrations: { name: string } | null } | null;
 }
 
+interface SpendRow {
+  agent: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  calls: number;
+}
+
 interface OverviewClientProps {
   runs: Run[];
   approvals: Approval[];
   orchestrations: Orchestration[];
   recentSteps: RecentStep[];
+  spend: SpendRow[];
   decideApproval: (id: string, approved: boolean, notes: string) => Promise<void>;
+}
+
+// ── spend pricing & agent colors ──────────────────────────────────────
+//
+// Approximate list prices in USD per million tokens (MTok), matched by model-name
+// family. These are estimates for a cost signal on the Overview page, not billing
+// figures — easy to update: change the numbers below when list prices change.
+const MODEL_PRICING: { family: string; input: number; output: number }[] = [
+  { family: "sonnet", input: 3, output: 15 },
+  { family: "haiku", input: 1, output: 5 },
+];
+const DEFAULT_PRICING = { input: 3, output: 15 }; // default -> Sonnet pricing
+
+function priceFor(model: string): { input: number; output: number } {
+  const m = model.toLowerCase();
+  const hit = MODEL_PRICING.find((p) => m.includes(p.family));
+  return hit ? { input: hit.input, output: hit.output } : DEFAULT_PRICING;
+}
+
+// Agent accent colors — reused from the Orchestrations page palette, extended to the
+// two agents (cleo, dewey) that page doesn't enumerate.
+const AGENT_COLOR: Record<string, string> = {
+  angie: "oklch(62% 0.18 280)",
+  beady: "oklch(58% 0.17 145)",
+  cleo: "oklch(60% 0.17 200)",
+  dewey: "oklch(60% 0.16 330)",
+  money: "oklch(62% 0.16 85)",
+  patch: "oklch(60% 0.16 30)",
+};
+function agentColor(agent: string): string {
+  return AGENT_COLOR[agent.toLowerCase()] ?? "var(--ink-3)";
+}
+
+// "1.2M" / "845K" / "312" style token formatting.
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
+  return `${n}`;
+}
+
+function fmtUsd(n: number): string {
+  if (n >= 100) return `$${n.toFixed(0)}`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(3)}`;
 }
 
 // ── Root component ────────────────────────────────────────────────────
@@ -72,6 +125,7 @@ export default function OverviewClient({
   approvals,
   orchestrations,
   recentSteps,
+  spend,
   decideApproval,
 }: OverviewClientProps) {
   const router = useRouter();
@@ -296,6 +350,15 @@ export default function OverviewClient({
             <h3>Approval SLA</h3>
           </div>
           <SlaBoard approvals={approvals} />
+        </section>
+
+        {/* Spend by agent */}
+        <section className="card pad">
+          <div className="sec-h">
+            <h3>Spend by agent</h3>
+            <div className="muted mono" style={{ fontSize: 11.5 }}>last 30 days</div>
+          </div>
+          <SpendByAgent spend={spend} />
         </section>
       </div>
     </div>
@@ -593,6 +656,104 @@ function SlaBoard({ approvals }: { approvals: Approval[] }) {
           <div className="sla-l">{s.label}</div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Spend by agent ────────────────────────────────────────────────────
+
+function SpendByAgent({ spend }: { spend: SpendRow[] }) {
+  const { agents, totalCost, totalTokens } = useMemo(() => {
+    const byAgent = new Map<
+      string,
+      { agent: string; cost: number; tokens: number; calls: number }
+    >();
+    for (const row of spend) {
+      const price = priceFor(row.model);
+      const cost =
+        (row.input_tokens / 1e6) * price.input +
+        (row.output_tokens / 1e6) * price.output;
+      const tokens = row.input_tokens + row.output_tokens;
+      const cur = byAgent.get(row.agent) ?? {
+        agent: row.agent,
+        cost: 0,
+        tokens: 0,
+        calls: 0,
+      };
+      cur.cost += cost;
+      cur.tokens += tokens;
+      cur.calls += row.calls;
+      byAgent.set(row.agent, cur);
+    }
+    const agents = [...byAgent.values()].sort((a, b) => b.cost - a.cost);
+    return {
+      agents,
+      totalCost: agents.reduce((s, a) => s + a.cost, 0),
+      totalTokens: agents.reduce((s, a) => s + a.tokens, 0),
+    };
+  }, [spend]);
+
+  if (agents.length === 0) {
+    return (
+      <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>
+        No agent spend recorded in this window.
+      </div>
+    );
+  }
+
+  const maxCost = Math.max(...agents.map((a) => a.cost), 1e-9);
+
+  return (
+    <div className="spend">
+      <div className="spend-tot">
+        <div className="spend-tot-cell">
+          <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {fmtUsd(totalCost)}
+          </div>
+          <div className="spend-tot-l">estimated · 30d</div>
+        </div>
+        <div className="spend-tot-cell">
+          <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {fmtTokens(totalTokens)}
+          </div>
+          <div className="spend-tot-l">total tokens</div>
+        </div>
+      </div>
+
+      <div className="spend-bars">
+        {agents.map((a) => (
+          <div key={a.agent} className="spend-row">
+            <div className="spend-row-h">
+              <span className="spend-agent" style={{ color: agentColor(a.agent) }}>
+                <span className="spend-dot" style={{ background: agentColor(a.agent) }} />
+                {a.agent}
+              </span>
+              <span className="spend-cost mono" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {fmtUsd(a.cost)}
+              </span>
+              <span
+                className="spend-tok mono muted"
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
+                {fmtTokens(a.tokens)}
+              </span>
+            </div>
+            <div className="spend-track">
+              <div
+                className="spend-fill"
+                style={{
+                  width: `${(a.cost / maxCost) * 100}%`,
+                  background: agentColor(a.agent),
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="spend-note muted">
+        Estimated — prices are approximate model list rates and may not reflect billing.
+      </div>
     </div>
   );
 }
