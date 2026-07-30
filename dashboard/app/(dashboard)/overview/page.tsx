@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   const supabase = await createClient();
 
-  const [orchResult, runsResult, approvalsResult, stepsResult] = await Promise.all([
+  const [orchResult, runsResult, approvalsResult, stepsResult, spendResult] = await Promise.all([
     supabase
       .schema("orchestration")
       .from("orchestrations")
@@ -34,6 +34,8 @@ export default async function OverviewPage() {
       .select("id, step_name, step_type, status, started_at, ended_at, runs(id, orchestrations(name))")
       .order("started_at", { ascending: false })
       .limit(20),
+
+    supabase.rpc("agent_spend", { p_days: 30 }),
   ]);
 
   const orchestrations = (orchResult.data ?? []) as unknown as {
@@ -75,6 +77,14 @@ export default async function OverviewPage() {
     runs: { id: string; orchestrations: { name: string } | null } | null;
   }[];
 
+  const spend = (spendResult.data ?? []) as unknown as {
+    agent: string;
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    calls: number;
+  }[];
+
   async function decideApproval(approvalId: string, approved: boolean, notes: string) {
     "use server";
 
@@ -106,6 +116,7 @@ export default async function OverviewPage() {
       approvals={approvals}
       orchestrations={orchestrations}
       recentSteps={recentSteps}
+      spend={spend}
       decideApproval={decideApproval}
     />
   );
