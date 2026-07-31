@@ -55,8 +55,8 @@ Do not use em dashes.`,
     },
   ],
   toolMap: {
-    search_knowledge:    { orchestration: "dewey/knowledge-search" },
+    search_knowledge:    { orchestration: "dewey/knowledge-search", mode: "sync" },
     retag_document:      { orchestration: "dewey/retag-document" },
-    knowledge_inventory: { orchestration: "dewey/knowledge-inventory" },
+    knowledge_inventory: { orchestration: "dewey/knowledge-inventory", mode: "sync" },
   },
 };

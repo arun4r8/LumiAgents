@@ -85,6 +85,18 @@ Do not use em dashes.`,
         },
       },
     },
+    {
+      name: "get_recent_opportunities",
+      description:
+        "Get opportunities the sweep has found/touched recently, ranked by fit score (e.g. 'top 3 contracts from today's sweep'). Reads existing results; does not run a new sweep.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max opportunities to return (default 10, max 50)" },
+          sinceHours: { type: "number", description: "How far back to look, in hours (default 24)" },
+        },
+      },
+    },
   ],
   toolMap: {
     assess_opportunity:      { orchestration: "beady/govcon-assessment" },
@@ -92,5 +104,6 @@ Do not use em dashes.`,
     find_industry_days:      { orchestration: "beady/industry-day-sweep" },
     seed_past_performance:   { orchestration: "beady/past-performance-seed" },
     search_all_opportunities: { orchestration: "beady/opportunity-sweep" },
+    get_recent_opportunities: { orchestration: "beady/recent-opportunities", mode: "sync" },
   },
 };

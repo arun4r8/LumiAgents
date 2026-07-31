@@ -55,10 +55,23 @@ Do not use em dashes.`,
         required: ["resume_text", "target_role"],
       },
     },
+    {
+      name: "get_recent_candidates",
+      description:
+        "Get top-scored candidates from résumé scoring jobs run recently (e.g. 'who scored well from today's batch'). Reads existing results; does not score anything new.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max candidates to return (default 10, max 50)" },
+          sinceHours: { type: "number", description: "How far back to look, in hours (default 24)" },
+        },
+      },
+    },
   ],
   toolMap: {
     score_resumes:     { orchestration: "angie/resume-scoring" },
     source_candidates: { orchestration: "angie/candidate-sourcing" },
     format_resume:     { orchestration: "angie/resume-formatting" },
+    get_recent_candidates: { orchestration: "angie/recent-resume-jobs", mode: "sync" },
   },
 };

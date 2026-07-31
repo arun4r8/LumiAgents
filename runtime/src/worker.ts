@@ -9,6 +9,7 @@ import { handleDocuments } from "./routes/documents";
 import { handleApprovals } from "./routes/approvals";
 import { handleAgents } from "./routes/agents";
 import { handleSchedules } from "./routes/schedules";
+import { handleRuns } from "./routes/runs";
 import { handleVault } from "./routes/vault";
 
 // Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
@@ -118,6 +119,7 @@ export default {
         handleAgents,
         handleSchedules,
         handleVault,
+        handleRuns,
       ];
 
       for (const handler of handlers) {

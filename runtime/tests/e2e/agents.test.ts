@@ -120,3 +120,42 @@ describe("angie/format_resume tool dispatch", () => {
     expect(body.runIds[0]).toMatch(UUID_RE);
   }, 60_000);
 });
+
+// ── Sync tool dispatch: real answer, not "I started it" ───────────────────────
+// dewey/knowledge_inventory needs no external creds (pure Supabase read) and is
+// mode:"sync" — the reply should reflect real data, and the runId should still be
+// recorded (sync runs are logged for dashboard visibility same as async ones).
+
+describe("dewey/knowledge_inventory tool dispatch (sync)", () => {
+  it("returns a real inventory answer, still recording a runId", async () => {
+    const { status, body } = await chat(
+      "dewey",
+      "Use your knowledge_inventory tool and tell me how many documents are in the knowledge base right now.",
+    );
+    expect(status).toBe(200);
+    expect(typeof body.reply).toBe("string");
+    // A sync tool result must not read as "I started it" / a bare run-ID message.
+    expect(body.reply.toLowerCase()).not.toMatch(/run id|orchestration started/);
+
+    expect(body.runIds.length).toBeGreaterThan(0);
+    expect(body.runIds[0]).toMatch(UUID_RE);
+  }, 60_000);
+});
+
+// ── list_recent_runs: cross-agent isolation ────────────────────────────────────
+// Every agent gets this tool for free (agent-chat.ts appends it, not each agent's
+// toolMap). The server derives the prefix from the authenticated agentSlug, so one
+// agent's chat can never be made to list another agent's run history.
+
+describe("list_recent_runs cross-agent isolation", () => {
+  it("dewey's run history never includes another agent's orchestrations", async () => {
+    const { status, body } = await chat(
+      "dewey",
+      "Use your list_recent_runs tool to show me what you've run in the last week.",
+    );
+    expect(status).toBe(200);
+    expect(typeof body.reply).toBe("string");
+    // Whatever comes back, it must not surface another agent's orchestration names.
+    expect(body.reply).not.toMatch(/beady\/|money\/|patch\/|angie\/|cleo\//);
+  }, 60_000);
+});

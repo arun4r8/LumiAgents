@@ -76,6 +76,52 @@ export class SupabaseClient {
     return row;
   }
 
+  // Run history for the `list_recent_runs` chat tool. `prefix` (e.g. "beady/") is
+  // validated by the caller (routes/runs.ts) against the known agent slugs — never
+  // pass an unvalidated value here.
+  async listRecentRuns(params: {
+    prefix: string;
+    sinceISO: string;
+    limit: number;
+  }): Promise<Array<{
+    runId: string;
+    orchestrationName: string;
+    version: number;
+    status: Run["status"];
+    triggeredBy: Run["triggered_by"];
+    createdAt: string;
+    startedAt: string | undefined;
+    endedAt: string | undefined;
+  }>> {
+    const qs = new URLSearchParams({
+      select: "id,status,triggered_by,created_at,started_at,ended_at,orchestrations!inner(name,version)",
+      "orchestrations.name": `like.${params.prefix}*`,
+      created_at: `gte.${params.sinceISO}`,
+      order: "created_at.desc",
+      limit: String(params.limit),
+    });
+    const rows = await this.request<Array<{
+      id: string;
+      status: Run["status"];
+      triggered_by: Run["triggered_by"];
+      created_at: string;
+      started_at?: string;
+      ended_at?: string;
+      orchestrations: { name: string; version: number };
+    }>>(`/rest/v1/runs?${qs}`, "GET");
+
+    return rows.map((r) => ({
+      runId: r.id,
+      orchestrationName: r.orchestrations.name,
+      version: r.orchestrations.version,
+      status: r.status,
+      triggeredBy: r.triggered_by,
+      createdAt: r.created_at,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+    }));
+  }
+
   // ─── Run steps ────────────────────────────────────────────────────────────
 
   async createRunStep(data: Omit<RunStep, "id" | "started_at">): Promise<RunStep> {

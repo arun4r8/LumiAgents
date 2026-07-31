@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AGENTS } from "../../../agents";
+import type { AgentTool } from "../../../agents";
 import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, ensurePdfBase64 } from "../utils/pdf";
 
 const MODEL = "claude-sonnet-4-6";
@@ -57,6 +58,37 @@ export interface AgentChatResponse {
 
 type ToolInput = Record<string, unknown>;
 
+// Cross-agent infrastructure tool, appended to every agent's tool list in
+// runAgentChat (not copy-pasted per agent/<slug>/index.ts, since it's not tied to
+// one orchestration). Deliberately takes no agent/prefix field: dispatchTool derives
+// the prefix from the authenticated agentSlug itself, so a prompt-injected or
+// confused model can never ask to see another agent's run history.
+const LIST_RECENT_RUNS_TOOL: AgentTool = {
+  name: "list_recent_runs",
+  description:
+    "List orchestration runs you've executed recently (name, status, when started/ended). " +
+    "Use this for 'what have you run today/this week' or 'did that finish' questions.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      limit: { type: "number", description: "Max runs to return (default 10, max 50)" },
+      sinceHours: { type: "number", description: "How far back to look, in hours (default 24)" },
+    },
+  },
+};
+
+async function fetchRuntime(
+  path: string,
+  init: RequestInit,
+  runtimeUrl: string,
+  runtimeWorker?: AgentEnv["RUNTIME_WORKER"],
+): Promise<Response> {
+  // Use Service Binding when available (avoids CF loop-block on HTTP fetch back to runtime).
+  const base = runtimeWorker ? "https://runtime.internal" : runtimeUrl;
+  const url = `${base}${path}`;
+  return runtimeWorker ? runtimeWorker.fetch(url, init) : fetch(url, init);
+}
+
 async function dispatchTool(
   toolName: string,
   toolInput: ToolInput,
@@ -66,6 +98,27 @@ async function dispatchTool(
   files?: FileAttachment[],
   runtimeWorker?: AgentEnv["RUNTIME_WORKER"],
 ): Promise<{ result: unknown; runId?: string }> {
+  const authHeaders: Record<string, string> = dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {};
+
+  if (toolName === "list_recent_runs") {
+    const limit = typeof toolInput["limit"] === "number" ? toolInput["limit"] : 10;
+    const sinceHours = typeof toolInput["sinceHours"] === "number" ? toolInput["sinceHours"] : 24;
+    const qs = new URLSearchParams({
+      prefix: `${agentSlug}/`,
+      limit: String(limit),
+      sinceHours: String(sinceHours),
+    });
+    const resp = await fetchRuntime(`/api/runs?${qs}`, { method: "GET", headers: authHeaders }, runtimeUrl, runtimeWorker);
+    let data: { runs?: unknown; error?: string };
+    try {
+      data = (await resp.json()) as typeof data;
+    } catch {
+      return { result: { error: `Run history lookup failed (HTTP ${resp.status})` } };
+    }
+    if (!resp.ok) return { result: { error: data.error ?? `HTTP ${resp.status}` } };
+    return { result: data };
+  }
+
   const agent = AGENTS[agentSlug];
   const mapping = agent?.toolMap[toolName];
 
@@ -91,19 +144,38 @@ async function dispatchTool(
     }
   }
 
-  const orchUrl = `${runtimeWorker ? "https://runtime.internal" : runtimeUrl}/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/run`;
+  const path = mapping.mode === "sync" ? "run-sync" : "run";
   const orchInit: RequestInit = {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {}),
-    },
+    headers: { "Content-Type": "application/json", ...authHeaders },
     body: JSON.stringify(payload),
   };
-  // Use Service Binding when available (avoids CF loop-block on HTTP fetch back to runtime).
-  const resp = runtimeWorker
-    ? await runtimeWorker.fetch(orchUrl, orchInit)
-    : await fetch(orchUrl, orchInit);
+  const resp = await fetchRuntime(
+    `/api/orchestrations/${encodeURIComponent(mapping.orchestration)}/${path}`,
+    orchInit,
+    runtimeUrl,
+    runtimeWorker,
+  );
+
+  if (mapping.mode === "sync") {
+    let data: { runId?: string; status?: "completed" | "failed"; output?: unknown; error?: string };
+    try {
+      data = (await resp.json()) as typeof data;
+    } catch {
+      return { result: { error: `Orchestration dispatch failed (HTTP ${resp.status})` } };
+    }
+    if (!resp.ok) return { result: { error: data.error ?? `HTTP ${resp.status}` } };
+    if (data.status === "failed") {
+      return {
+        ...(data.runId !== undefined && { runId: data.runId }),
+        result: { error: data.error ?? "Orchestration failed" },
+      };
+    }
+    return {
+      ...(data.runId !== undefined && { runId: data.runId }),
+      result: data.output,
+    };
+  }
 
   let data: { runId?: string; output?: unknown; error?: string };
   try {
@@ -172,7 +244,7 @@ export async function runAgentChat(
       model: MODEL,
       max_tokens: 2048,
       system: agent.systemPrompt + (request.memoryPreamble ? `\n\n${request.memoryPreamble}` : "") + INJECTION_GUARD,
-      tools: agent.tools.map((t) => ({
+      tools: [...agent.tools, LIST_RECENT_RUNS_TOOL].map((t) => ({
         name: t.name,
         description: t.description,
         input_schema: t.inputSchema as Anthropic.Tool["input_schema"],

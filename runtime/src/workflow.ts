@@ -17,7 +17,7 @@ import type { Env, RunContext } from "./types";
 import { SupabaseClient } from "./db/client";
 import { orchestrations } from "./registry";
 import { failRun, notifyRunSuccess } from "./utils/run-failure-alert";
-import { MODELS } from "./config/models";
+import { resolveOrchestrationModel } from "./utils/resolve-model";
 
 export interface RunWorkflowParams {
   runId: string;
@@ -52,19 +52,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
       throw new Error(message);
     }
 
-    // Resolve model: per-orchestration override → agent default → fallback
-    const DEFAULT_MODEL: string = MODELS.sonnet;
-    const agentId = orchestrationName.split("/")[0] ?? "";
-    let resolvedModel = DEFAULT_MODEL;
-    try {
-      const [agentCfg, orchRow] = await Promise.all([
-        db.getAgentConfig(agentId).catch(() => null),
-        db.getOrchestrationByName(orchestrationName).catch(() => null),
-      ]);
-      resolvedModel = orchRow?.model ?? agentCfg?.model ?? DEFAULT_MODEL;
-    } catch {
-      // non-fatal; default is safe
-    }
+    const resolvedModel = await resolveOrchestrationModel(db, orchestrationName);
 
     let stepCounter = 0;
 

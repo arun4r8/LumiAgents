@@ -59,6 +59,88 @@ describe("Orchestration auth", () => {
   });
 });
 
+// ─── run-sync: awaited, in-process execution (no Workflow) ───────────────────
+// dewey/knowledge-inventory needs no external creds (pure Supabase read), so it's
+// a clean way to exercise the new /run-sync path without depending on live
+// financial/Jira/Apollo data the way the money/patch skip-marked tests do.
+
+describe("Orchestration run-sync", () => {
+  it("rejects unauthenticated run-sync requests", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/orchestrations/dewey%2Fknowledge-inventory/run-sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects unknown orchestration name", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/orchestrations/does-not-exist/run-sync`, {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("awaits real execution and returns output synchronously, not a bare runId", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/orchestrations/dewey%2Fknowledge-inventory/run-sync`, {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { runId: string; status: string; output?: { totalDocuments?: number } };
+    expect(data.status).toBe("completed");
+    expect(data.runId).toBeTruthy();
+    expect(typeof data.output?.totalDocuments).toBe("number");
+  }, 30_000);
+
+  it("validates input the same way /run does (422), before execution", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/orchestrations/beady%2Frecent-opportunities/run-sync`, {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({ limit: 99999 }), // exceeds the schema's max(50)
+    });
+    expect(res.status).toBe(422);
+  });
+});
+
+// ─── GET /api/runs (backs the list_recent_runs chat tool) ─────────────────────
+
+describe("GET /api/runs", () => {
+  it("rejects unauthenticated requests", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/runs?prefix=dewey/`);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects an unknown/unlisted prefix", async () => {
+    const res = await fetch(`${RUNTIME_URL}/api/runs?prefix=not-a-real-agent/`, {
+      headers: await authHeaders(),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("scopes results to the requested agent prefix only", async () => {
+    // Seed at least one dewey run so the prefix filter has something to find.
+    await fetch(`${RUNTIME_URL}/api/orchestrations/dewey%2Fknowledge-inventory/run-sync`, {
+      method: "POST",
+      headers: await authHeaders(),
+      body: JSON.stringify({}),
+    });
+
+    const res = await fetch(`${RUNTIME_URL}/api/runs?prefix=dewey/&limit=50&sinceHours=1`, {
+      headers: await authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as { runs: Array<{ orchestrationName: string }> };
+    expect(data.runs.length).toBeGreaterThan(0);
+    for (const r of data.runs) {
+      expect(r.orchestrationName.startsWith("dewey/")).toBe(true);
+    }
+  }, 30_000);
+});
+
 // ─── Patch: document-ingest + ticket-ops ──────────────────────────────────────
 
 describe("patch/document-ingest", () => {

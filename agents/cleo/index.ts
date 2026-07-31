@@ -81,11 +81,37 @@ Do not use em dashes.`,
         required: ["calendarId"],
       },
     },
+    {
+      name: "get_recent_awards",
+      description:
+        "Get awards the sweep has found/touched recently, ranked by fit score (e.g. 'what have you found in the awards pipeline'). Reads existing results; does not run a new sweep.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max awards to return (default 10, max 50)" },
+          sinceHours: { type: "number", description: "How far back to look, in hours (default 24)" },
+        },
+      },
+    },
+    {
+      name: "get_recent_content",
+      description:
+        "Get content-calendar items updated recently (e.g. 'what have you drafted today'). Reads existing entries; does not draft anything new.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max items to return (default 10, max 50)" },
+          sinceHours: { type: "number", description: "How far back to look, in hours (default 24)" },
+        },
+      },
+    },
   ],
   toolMap: {
     sweep_awards:       { orchestration: "cleo/award-sweep" },
     send_award_digest:  { orchestration: "cleo/award-report" },
     plan_calendar:      { orchestration: "cleo/content-plan" },
     draft_content:      { orchestration: "cleo/content-draft" },
+    get_recent_awards:  { orchestration: "cleo/recent-awards", mode: "sync" },
+    get_recent_content: { orchestration: "cleo/recent-content", mode: "sync" },
   },
 };

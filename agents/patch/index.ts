@@ -84,9 +84,9 @@ Do not use em dashes.`,
   ],
   toolMap: {
     create_ticket:  { orchestration: "patch/ticket-ops",    transform: (i) => ({ operation: "create", ...i }) },
-    search_tickets: { orchestration: "patch/ticket-ops",    transform: (i) => ({ operation: "search", jql: i["jql"], maxResults: i["maxResults"] ?? 10 }) },
+    search_tickets: { orchestration: "patch/ticket-ops",    mode: "sync", transform: (i) => ({ operation: "search", jql: i["jql"], maxResults: i["maxResults"] ?? 10 }) },
     update_ticket:  { orchestration: "patch/ticket-ops",    transform: (i) => ({ operation: "update", ...i }) },
     staff_request:  { orchestration: "patch/staff-request", transform: (i) => ({ ...i, urgency: i["urgency"] ?? "this_month", notifyTeams: true }) },
-    query_documents: { orchestration: "patch/document-query" },
+    query_documents: { orchestration: "patch/document-query", mode: "sync" },
   },
 };

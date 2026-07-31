@@ -49,6 +49,6 @@ Do not use em dashes.`,
   ],
   toolMap: {
     generate_financial_report: { orchestration: "money/financial-report" },
-    query_data: { orchestration: "money/data-analyst", transform: (i) => ({ question: i["question"] }) },
+    query_data: { orchestration: "money/data-analyst", mode: "sync", transform: (i) => ({ question: i["question"] }) },
   },
 };
