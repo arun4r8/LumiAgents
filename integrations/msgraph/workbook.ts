@@ -1,12 +1,12 @@
 /**
  * Microsoft Graph workbook (Excel) helpers.
  *
- * Reads a worksheet's used range as a raw string grid, so the same
- * header-matching / row-mapping used for CSV import can be reused for the live
- * Graph sync (see orchestrations/cleo/content-sync/map.ts).
+ * Reads a worksheet's used range as a raw string grid, plus Excel Table helpers
+ * (read/patch/append) used by the two-way content-calendar sync
+ * (orchestrations/cleo/content-sync).
  */
 
-import { graphGet, type MsGraphEnv } from "./base";
+import { graphGet, graphPatch, graphPost, type MsGraphEnv } from "./base";
 
 interface WorksheetList {
   value?: Array<{ name?: string; position?: number }>;
@@ -52,4 +52,109 @@ export async function readWorksheetGrid(
       cell == null ? "" : String(cell),
     ),
   );
+}
+
+// ─── Excel Table helpers (two-way sync) ────────────────────────────────────────
+
+/**
+ * 0-based column index → spreadsheet column letters. 0→A, 25→Z, 26→AA, 27→AB…
+ */
+export function colLetter(index: number): string {
+  let n = index;
+  let out = "";
+  do {
+    out = String.fromCharCode(65 + (n % 26)) + out;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return out;
+}
+
+// Parse a Graph range address like "Sheet1!A1:H31" into its sheet name and the
+// top-left anchor (0-based column index, 1-based row). Sheet names may be quoted
+// ("'My Sheet'!A1:..."), so strip surrounding single quotes and unescape doubled
+// single quotes.
+function parseAddress(address: string): { sheetName: string; topCol: number; topRow: number } {
+  const bang = address.lastIndexOf("!");
+  let sheetName = bang >= 0 ? address.slice(0, bang) : "";
+  const range = bang >= 0 ? address.slice(bang + 1) : address;
+  if (sheetName.startsWith("'") && sheetName.endsWith("'")) {
+    sheetName = sheetName.slice(1, -1).replace(/''/g, "'");
+  }
+  const topLeft = (range.split(":")[0] ?? range).trim();
+  const m = topLeft.match(/^([A-Za-z]+)(\d+)$/);
+  let topCol = 0;
+  let topRow = 1;
+  if (m) {
+    const letters = m[1]!.toUpperCase();
+    let col = 0;
+    for (let i = 0; i < letters.length; i++) col = col * 26 + (letters.charCodeAt(i) - 64);
+    topCol = col - 1;
+    topRow = Number(m[2]);
+  }
+  return { sheetName, topCol, topRow };
+}
+
+export interface TableRead {
+  sheetName: string;
+  topRow: number; // 1-based row of the header (table range top)
+  topCol: number; // 0-based column of the table's leftmost column
+  headers: string[];
+  rows: string[][]; // data rows only (header excluded), cells coerced to string
+}
+
+/**
+ * Read an Excel Table's full range (headers + data) via the workbook API. Returns
+ * the parsed anchor (sheet name / top row / top col from the range address) plus the
+ * header row and the data rows as a string grid.
+ */
+export async function readTable(
+  env: MsGraphEnv,
+  opts: { driveId: string; itemId: string; table: string },
+): Promise<TableRead> {
+  const { driveId, itemId, table } = opts;
+  const path =
+    `/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')` +
+    `/range?$select=address,values`;
+  const res = await graphGet<{ address?: string; values?: unknown[][] }>(env, path);
+
+  const address = res.address ?? "";
+  const { sheetName, topCol, topRow } = parseAddress(address);
+
+  const values = Array.isArray(res.values) ? res.values : [];
+  const grid = values.map((row) =>
+    (Array.isArray(row) ? row : []).map((cell) => (cell == null ? "" : String(cell))),
+  );
+  const headers = grid[0] ?? [];
+  const rows = grid.slice(1);
+  return { sheetName, topRow, topCol, headers, rows };
+}
+
+/**
+ * Write a single cell (or 1x1 range) on a worksheet. `address` is a column+row like
+ * "E5". Uses the worksheet range endpoint so we can target absolute cells regardless
+ * of the table's own row indexing.
+ */
+export async function updateCell(
+  env: MsGraphEnv,
+  opts: { driveId: string; itemId: string; sheetName: string; address: string; value: string },
+): Promise<void> {
+  const { driveId, itemId, sheetName, address, value } = opts;
+  const path =
+    `/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')` +
+    `/range(address='${encodeURIComponent(address)}')`;
+  await graphPatch<unknown>(env, path, { values: [[value]] });
+}
+
+/**
+ * Append a row to an Excel Table. `values` is one full row in header order. Graph
+ * inserts it at the bottom of the table.
+ */
+export async function addTableRow(
+  env: MsGraphEnv,
+  opts: { driveId: string; itemId: string; table: string; values: string[] },
+): Promise<void> {
+  const { driveId, itemId, table, values } = opts;
+  const path =
+    `/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
+  await graphPost<unknown>(env, path, { values: [values] });
 }

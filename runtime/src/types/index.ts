@@ -58,6 +58,8 @@ export interface Env {
   CONTENT_CALENDAR_DRIVE_ID?: string;
   CONTENT_CALENDAR_ITEM_ID?: string;
   CONTENT_CALENDAR_WORKSHEET?: string;
+  // Name of the Excel Table the two-way sync reads/writes (default "ContentCalendar").
+  CONTENT_CALENDAR_TABLE?: string;
 }
 
 // ─── Run context passed to every step ────────────────────────────────────────

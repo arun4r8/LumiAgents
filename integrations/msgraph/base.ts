@@ -69,3 +69,49 @@ export async function graphGet<T>(env: MsGraphEnv, path: string): Promise<T> {
     { label: `Microsoft Graph GET ${path}` },
   );
 }
+
+/**
+ * PATCH `https://graph.microsoft.com/v1.0${path}` with an app-only bearer token and
+ * a JSON body, returning the parsed JSON response typed as `T`. Used by the two-way
+ * content sync to write individual worksheet cells back to the planning workbook.
+ */
+export async function graphPatch<T>(env: MsGraphEnv, path: string, body: unknown): Promise<T> {
+  const token = await getGraphToken(env);
+  return callJson<T>(
+    fetch,
+    `https://graph.microsoft.com/v1.0${path}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+    { label: `Microsoft Graph PATCH ${path}` },
+  );
+}
+
+/**
+ * POST `https://graph.microsoft.com/v1.0${path}` with an app-only bearer token and a
+ * JSON body, returning the parsed JSON response typed as `T`. Used to append new rows
+ * to the content-calendar Excel table.
+ */
+export async function graphPost<T>(env: MsGraphEnv, path: string, body: unknown): Promise<T> {
+  const token = await getGraphToken(env);
+  return callJson<T>(
+    fetch,
+    `https://graph.microsoft.com/v1.0${path}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+    { label: `Microsoft Graph POST ${path}` },
+  );
+}
