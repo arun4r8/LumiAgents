@@ -15,7 +15,16 @@ import {
   Clock,
 } from "lucide-react";
 import { StatusBadge, fmtTimeAgo, fmtExpiry, fmtAbs } from "@/components/lumi";
-import { costUsd } from "@/lib/llm-pricing";
+import { WindowToggle } from "@/components/window-toggle";
+import {
+  aggregateByAgent,
+  daysFor,
+  fmtTokens,
+  fmtUsd,
+  type SpendRow,
+  type SpendWindow,
+} from "@/lib/spend";
+import { agentColor } from "@/lib/agent-style";
 
 // ── types ─────────────────────────────────────────────────────────────
 
@@ -58,53 +67,17 @@ interface RecentStep {
   runs: { id: string; orchestrations: { name: string } | null } | null;
 }
 
-interface SpendRow {
-  agent: string;
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  calls: number;
-}
-
 interface OverviewClientProps {
   runs: Run[];
   approvals: Approval[];
   orchestrations: Orchestration[];
   recentSteps: RecentStep[];
-  spend: SpendRow[];
   decideApproval: (id: string, approved: boolean, notes: string) => Promise<void>;
 }
 
-// ── agent colors ──────────────────────────────────────────────────────
-// Spend pricing lives in lib/llm-pricing (shared with the Infrastructure
-// tab's LLM Cost KPI so the two surfaces reconcile).
-
-// Agent accent colors — reused from the Orchestrations page palette, extended to the
-// two agents (cleo, dewey) that page doesn't enumerate.
-const AGENT_COLOR: Record<string, string> = {
-  angie: "oklch(62% 0.18 280)",
-  beady: "oklch(58% 0.17 145)",
-  cleo: "oklch(60% 0.17 200)",
-  dewey: "oklch(60% 0.16 330)",
-  money: "oklch(62% 0.16 85)",
-  patch: "oklch(60% 0.16 30)",
-};
-function agentColor(agent: string): string {
-  return AGENT_COLOR[agent.toLowerCase()] ?? "var(--ink-3)";
-}
-
-// "1.2M" / "845K" / "312" style token formatting.
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
-  return `${n}`;
-}
-
-function fmtUsd(n: number): string {
-  if (n >= 100) return `$${n.toFixed(0)}`;
-  if (n >= 1) return `$${n.toFixed(2)}`;
-  return `$${n.toFixed(3)}`;
-}
+// Spend pricing lives in lib/llm-pricing and aggregation/formatting in lib/spend
+// (shared with the Infrastructure tab's LLM Cost KPI so the two surfaces
+// reconcile). Agent colors live in lib/agent-style.
 
 // ── Root component ────────────────────────────────────────────────────
 
@@ -113,7 +86,6 @@ export default function OverviewClient({
   approvals,
   orchestrations,
   recentSteps,
-  spend,
   decideApproval,
 }: OverviewClientProps) {
   const router = useRouter();
@@ -341,13 +313,7 @@ export default function OverviewClient({
         </section>
 
         {/* Spend by agent */}
-        <section className="card pad">
-          <div className="sec-h">
-            <h3>Spend by agent</h3>
-            <div className="muted mono" style={{ fontSize: 11.5 }}>last 30 days</div>
-          </div>
-          <SpendByAgent spend={spend} />
-        </section>
+        <SpendByAgent />
       </div>
     </div>
   );
@@ -650,96 +616,124 @@ function SlaBoard({ approvals }: { approvals: Approval[] }) {
 
 // ── Spend by agent ────────────────────────────────────────────────────
 
-function SpendByAgent({ spend }: { spend: SpendRow[] }) {
-  const { agents, totalCost, totalTokens } = useMemo(() => {
-    const byAgent = new Map<
-      string,
-      { agent: string; cost: number; tokens: number; calls: number }
-    >();
-    for (const row of spend) {
-      const cost = costUsd(row.model, row.input_tokens, row.output_tokens);
-      const tokens = row.input_tokens + row.output_tokens;
-      const cur = byAgent.get(row.agent) ?? {
-        agent: row.agent,
-        cost: 0,
-        tokens: 0,
-        calls: 0,
-      };
-      cur.cost += cost;
-      cur.tokens += tokens;
-      cur.calls += row.calls;
-      byAgent.set(row.agent, cur);
-    }
-    const agents = [...byAgent.values()].sort((a, b) => b.cost - a.cost);
-    return {
-      agents,
-      totalCost: agents.reduce((s, a) => s + a.cost, 0),
-      totalTokens: agents.reduce((s, a) => s + a.tokens, 0),
-    };
-  }, [spend]);
+function SpendByAgent() {
+  const [win, setWin] = useState<SpendWindow>("30d");
+  const [rows, setRows] = useState<SpendRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (agents.length === 0) {
-    return (
-      <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>
-        No agent spend recorded in this window.
-      </div>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/spend?days=${daysFor(win)}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        return (await res.json()) as SpendRow[];
+      })
+      .then((data) => {
+        if (!cancelled) setRows(data);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [win]);
+
+  const winLabel = win === "24h" ? "24h" : win === "7d" ? "7d" : "30d";
+  const winCaption = win === "24h" ? "last 24h" : win === "7d" ? "last 7 days" : "last 30 days";
+
+  const { agents, totalCost, totalTokens } = useMemo(
+    () => aggregateByAgent(rows),
+    [rows]
+  );
 
   const maxCost = Math.max(...agents.map((a) => a.cost), 1e-9);
 
   return (
-    <div className="spend">
-      <div className="spend-tot">
-        <div className="spend-tot-cell">
-          <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {fmtUsd(totalCost)}
-          </div>
-          <div className="spend-tot-l">estimated · 30d</div>
-        </div>
-        <div className="spend-tot-cell">
-          <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {fmtTokens(totalTokens)}
-          </div>
-          <div className="spend-tot-l">total tokens</div>
+    <section className="card pad">
+      <div className="sec-h">
+        <h3>Spend by agent</h3>
+        <div className="row gap-sm" style={{ alignItems: "center" }}>
+          <div className="muted mono" style={{ fontSize: 11.5 }}>{winCaption}</div>
+          <WindowToggle value={win} onChange={setWin} />
         </div>
       </div>
 
-      <div className="spend-bars">
-        {agents.map((a) => (
-          <div key={a.agent} className="spend-row">
-            <div className="spend-row-h">
-              <span className="spend-agent" style={{ color: agentColor(a.agent) }}>
-                <span className="spend-dot" style={{ background: agentColor(a.agent) }} />
-                {a.agent}
-              </span>
-              <span className="spend-cost mono" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {fmtUsd(a.cost)}
-              </span>
-              <span
-                className="spend-tok mono muted"
-                style={{ fontVariantNumeric: "tabular-nums" }}
-              >
-                {fmtTokens(a.tokens)}
-              </span>
+      {loading ? (
+        <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>
+          Loading spend…
+        </div>
+      ) : error ? (
+        <div style={{ fontSize: 12, padding: "20px 0", color: "var(--err)" }}>
+          {error}
+        </div>
+      ) : agents.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12, padding: "20px 0" }}>
+          No agent spend recorded in this window.
+        </div>
+      ) : (
+        <div className="spend">
+          <div className="spend-tot">
+            <div className="spend-tot-cell">
+              <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {fmtUsd(totalCost)}
+              </div>
+              <div className="spend-tot-l">estimated · {winLabel}</div>
             </div>
-            <div className="spend-track">
-              <div
-                className="spend-fill"
-                style={{
-                  width: `${(a.cost / maxCost) * 100}%`,
-                  background: agentColor(a.agent),
-                }}
-              />
+            <div className="spend-tot-cell">
+              <div className="spend-tot-v" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {fmtTokens(totalTokens)}
+              </div>
+              <div className="spend-tot-l">total tokens</div>
             </div>
           </div>
-        ))}
-      </div>
 
-      <div className="spend-note muted">
-        Estimated — prices are approximate model list rates and may not reflect billing.
-      </div>
-    </div>
+          <div className="spend-bars">
+            {agents.map((a) => (
+              <div key={a.agent} className="spend-row">
+                <div className="spend-row-h">
+                  <span className="spend-agent" style={{ color: agentColor(a.agent) }}>
+                    <span className="spend-dot" style={{ background: agentColor(a.agent) }} />
+                    {a.agent}
+                  </span>
+                  <span className="spend-cost mono" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {fmtUsd(a.cost)}
+                  </span>
+                  <span
+                    className="spend-tok mono muted"
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {fmtTokens(a.tokens)}
+                  </span>
+                </div>
+                <div className="spend-track">
+                  <div
+                    className="spend-fill"
+                    style={{
+                      width: `${(a.cost / maxCost) * 100}%`,
+                      background: agentColor(a.agent),
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="spend-note muted">
+            Estimated — prices are approximate model list rates and may not reflect billing.
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -550,6 +550,37 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .tabs button:hover { color: var(--ink); }
 .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); }
 
+/* ── segmented window toggle ──────────────────────────────────────── */
+.winseg {
+  display: inline-flex;
+  border: 2px solid var(--line);
+  border-radius: 0;
+  overflow: hidden;
+}
+.winseg button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--line);
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.winseg button:first-child { border-left: 0; }
+.winseg button:hover { color: var(--ink); background: var(--bg-2); }
+.winseg button.active {
+  background: var(--accent);
+  /* --accent is a light gold in both themes, so keep dark ink for contrast */
+  color: #201e1d;
+  font-weight: 600;
+}
+.winseg button.active:hover { background: var(--accent); }
+
 /* ── json panel ───────────────────────────────────────────────────── */
 .json-pane {
   border: 1px solid var(--line);

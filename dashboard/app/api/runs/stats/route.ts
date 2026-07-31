@@ -13,7 +13,9 @@ interface StepRow {
   llm_output_tokens: number | null;
 }
 
-export async function GET(): Promise<NextResponse> {
+const VALID_DAYS = new Set([1, 7, 30]);
+
+export async function GET(request: Request): Promise<NextResponse> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,7 +24,9 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const daysParam = Number(new URL(request.url).searchParams.get("days"));
+  const days = VALID_DAYS.has(daysParam) ? daysParam : 1;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   const [runsResult, stepsResult] = await Promise.all([
     supabase

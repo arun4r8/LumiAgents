@@ -22,6 +22,16 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { WindowToggle } from "@/components/window-toggle";
+import {
+  aggregateByAgent,
+  daysFor,
+  fmtTokens,
+  fmtUsd,
+  type SpendRow,
+  type SpendWindow,
+} from "@/lib/spend";
+import { agentColor } from "@/lib/agent-style";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -168,20 +178,24 @@ function formatCost(usd: number): string {
 }
 
 function MetricsTab() {
+  const [win, setWin] = useState<SpendWindow>("24h");
   const [raw, setRaw] = useState<MetricsData | null>(null);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
+  const [spendRows, setSpendRows] = useState<SpendRow[]>([]);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingCreds, setMissingCreds] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (w: SpendWindow) => {
     setLoading(true);
     setError(null);
     try {
-      const [cfRes, runsRes, usageRes] = await Promise.all([
+      const days = daysFor(w);
+      const [cfRes, runsRes, spendRes, usageRes] = await Promise.all([
         fetch("/api/cf/metrics"),
-        fetch("/api/runs/stats"),
+        fetch(`/api/runs/stats?days=${days}`),
+        fetch(`/api/spend?days=${days}`),
         fetch("/api/cf/usage"),
       ]);
       if (cfRes.status === 503) {
@@ -194,6 +208,7 @@ function MetricsTab() {
       }
       setRaw((await cfRes.json()) as MetricsData);
       if (runsRes.ok) setRunStats((await runsRes.json()) as RunStats);
+      setSpendRows(spendRes.ok ? ((await spendRes.json()) as SpendRow[]) : []);
       if (usageRes.ok) setUsage((await usageRes.json()) as UsageData);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -203,8 +218,8 @@ function MetricsTab() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(win);
+  }, [load, win]);
 
   // All hooks must be called before any conditional return.
   const buckets: CfInvocationBucket[] =
@@ -222,6 +237,12 @@ function MetricsTab() {
     p99Values.length > 0
       ? Math.round(p99Values.reduce((s, v) => s + v, 0) / p99Values.length)
       : 0;
+
+  // Per-agent spend for the selected window. The LLM Cost KPI reads from this
+  // same aggregation so the KPI and the breakdown always match.
+  const spend = useMemo(() => aggregateByAgent(spendRows), [spendRows]);
+  const winLabel = win;
+  const maxAgentCost = Math.max(...spend.agents.map((a) => a.cost), 1e-9);
 
   if (missingCreds) return <SetupCard />;
 
@@ -248,21 +269,73 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Window toggle: drives run-count + LLM spend KPIs and the breakdown */}
+      <div className="sec-h">
+        <h3>Run &amp; spend metrics</h3>
+        <WindowToggle value={win} onChange={setWin} />
+      </div>
+
       {/* KPI strip: orchestration run stats */}
       <div className="kpis">
-        <MetricKpi label="Total Runs · 24h" value={(runStats?.total ?? 0).toLocaleString()} tone="info" />
+        <MetricKpi label={`Total Runs · ${winLabel}`} value={(runStats?.total ?? 0).toLocaleString()} tone="info" />
         <MetricKpi label="Succeeded" value={(runStats?.succeeded ?? 0).toLocaleString()} tone={runStats && runStats.succeeded > 0 ? "ok" : "muted"} />
         <MetricKpi label="Failed" value={(runStats?.failed ?? 0).toLocaleString()} tone={runStats && runStats.failed > 0 ? "err" : "ok"} />
         <MetricKpi label="Cron-triggered" value={(runStats?.cronTriggered ?? 0).toLocaleString()} tone="muted" />
         <MetricKpi
-          label="LLM Cost · 24h"
-          value={runStats ? formatCost(runStats.estimatedCostUsd) : "-"}
+          label={`LLM Cost · ${winLabel}`}
+          value={formatCost(spend.totalCost)}
           tone="muted"
-          subLabel={runStats ? `${((runStats.totalInputTokens + runStats.totalOutputTokens) / 1000).toFixed(1)}k tokens` : undefined}
+          subLabel={`${(spend.totalTokens / 1000).toFixed(1)}k tokens`}
         />
         <MetricKpi label="CPU P50 (avg)" value={`${avgP50} µs`} tone="muted" />
         <MetricKpi label="CPU P99 (avg)" value={`${avgP99} µs`} tone={avgP99 > 50000 ? "warn" : "muted"} />
       </div>
+
+      {/* LLM spend by agent (selected window) */}
+      <section className="card pad">
+        <div className="sec-h" style={{ marginBottom: 16 }}>
+          <h3>LLM spend by agent · {winLabel}</h3>
+          <span className="chip muted mono" style={{ fontSize: 11 }}>estimated</span>
+        </div>
+        {spend.agents.length === 0 ? (
+          <div className="muted" style={{ fontSize: 13, padding: "12px 0" }}>
+            No agent spend in this window.
+          </div>
+        ) : (
+          <div className="spend">
+            <div className="spend-bars">
+              {spend.agents.map((a) => (
+                <div key={a.agent} className="spend-row">
+                  <div className="spend-row-h">
+                    <span className="spend-agent" style={{ color: agentColor(a.agent) }}>
+                      <span className="spend-dot" style={{ background: agentColor(a.agent) }} />
+                      {a.agent}
+                    </span>
+                    <span className="spend-cost mono" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {fmtUsd(a.cost)}
+                    </span>
+                    <span className="spend-tok mono muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                      {fmtTokens(a.tokens)}
+                    </span>
+                  </div>
+                  <div className="spend-track">
+                    <div
+                      className="spend-fill"
+                      style={{
+                        width: `${(a.cost / maxAgentCost) * 100}%`,
+                        background: agentColor(a.agent),
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="spend-note muted">
+              Estimated — prices are approximate model list rates and may not reflect billing.
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Plan usage */}
       {usage && (
@@ -323,11 +396,14 @@ function MetricsTab() {
 
       {/* Bar chart */}
       <section className="card pad">
-        <div className="sec-h" style={{ marginBottom: 16 }}>
+        <div className="sec-h" style={{ marginBottom: 6 }}>
           <h3>Requests · last 24h</h3>
-          <button className="btn ghost sm" onClick={load}>
+          <button className="btn ghost sm" onClick={() => void load(win)}>
             <RefreshCw style={{ width: 12, height: 12 }} /> Refresh
           </button>
+        </div>
+        <div className="muted mono" style={{ fontSize: 11, marginBottom: 12 }}>
+          Cloudflare metrics · fixed 24h window (free-plan retention)
         </div>
         {buckets.length === 0 ? (
           <div className="muted" style={{ fontSize: 13, padding: "20px 0" }}>
