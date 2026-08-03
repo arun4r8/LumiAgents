@@ -4,6 +4,7 @@ import { useTheme } from "@/components/theme-provider";
 import {
   Sun, Moon, Monitor, AlignJustify, Rows3, Loader2,
   Check, Bot, GitBranch, ChevronDown, ChevronUp, Save,
+  UserPlus, Copy, Trash2, Send,
 } from "lucide-react";
 import { useTransition, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -46,24 +47,42 @@ interface OrchestrationType {
   notes: string | null;
 }
 
+export interface TeamMember {
+  id: string;
+  email: string;
+  role: string;
+  status: "active" | "invited";
+  created_at: string;
+}
+
 interface Props {
+  userId: string;
   userEmail: string;
   userCreatedAt: string | null;
+  isOps: boolean;
+  members: TeamMember[];
   agentConfigs: AgentConfig[];
   orchestrations: OrchestrationType[];
   updateAgentConfig: (agentId: string, data: { model: string; max_tokens: number; notes: string | null }) => Promise<void>;
   updateOrchestrationConfig: (id: string, data: { description: string | null; model: string | null; notes: string | null; cron: string | null }) => Promise<void>;
+  inviteMember: (formData: FormData) => Promise<{ link: string; email: string; role: "ops" | "enduser" }>;
+  revokeMember: (formData: FormData) => Promise<void>;
+  resendInvite: (formData: FormData) => Promise<{ link: string }>;
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-type Tab = "account" | "agents" | "orchestrations" | "appearance";
+type Tab = "account" | "agents" | "orchestrations" | "team" | "appearance";
 
 export function SettingsClient({
-  userEmail, userCreatedAt, agentConfigs, orchestrations,
+  userId, userEmail, userCreatedAt, isOps, members, agentConfigs, orchestrations,
   updateAgentConfig, updateOrchestrationConfig,
+  inviteMember, revokeMember, resendInvite,
 }: Props) {
   const [tab, setTab] = useState<Tab>("agents");
+  const tabs: Tab[] = isOps
+    ? ["agents", "orchestrations", "team", "account", "appearance"]
+    : ["agents", "orchestrations", "account", "appearance"];
 
   const memberSince = userCreatedAt
     ? new Date(userCreatedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
@@ -79,7 +98,7 @@ export function SettingsClient({
       </div>
 
       <div className="tabs" style={{ marginBottom: 24 }}>
-        {(["agents", "orchestrations", "account", "appearance"] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}
             style={{ textTransform: "capitalize" }}>
             {t}
@@ -109,6 +128,15 @@ export function SettingsClient({
             <ChangePasswordSection />
           </Section>
         </div>
+      )}
+      {tab === "team" && isOps && (
+        <TeamTab
+          currentUserId={userId}
+          members={members}
+          inviteMember={inviteMember}
+          revokeMember={revokeMember}
+          resendInvite={resendInvite}
+        />
       )}
       {tab === "appearance" && <AppearanceTab />}
 
@@ -435,6 +463,257 @@ function OrchRow({ orch, agentColor, agentDefaultModel, updateOrchestrationConfi
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Team tab ─────────────────────────────────────────────────────────────────
+
+function TeamTab({ currentUserId, members, inviteMember, revokeMember, resendInvite }: {
+  currentUserId: string;
+  members: TeamMember[];
+  inviteMember: Props["inviteMember"];
+  revokeMember: Props["revokeMember"];
+  resendInvite: Props["resendInvite"];
+}) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"ops" | "enduser">("enduser");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [invite, setInvite] = useState<{ link: string; email: string; role: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function submitInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setInvite(null);
+    const fd = new FormData();
+    fd.set("email", email);
+    fd.set("role", role);
+    startTransition(async () => {
+      try {
+        const res = await inviteMember(fd);
+        setInvite(res);
+        setEmail("");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not create invite.");
+      }
+    });
+  }
+
+  async function copyLink(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 820 }}>
+      {/* Invite form */}
+      <Section heading="Invite a member">
+        <div className="card" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-2)", margin: 0 }}>
+            Create a single-use invite link and send it to the person yourself. No email is sent — self-signup is disabled.
+          </p>
+          <form onSubmit={submitInvite} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div className="field" style={{ margin: 0, flex: "1 1 240px" }}>
+              <label style={{ fontSize: 12 }}>Email</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="person@lumiture.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ fontSize: 13 }}
+                required
+              />
+            </div>
+            <div className="field" style={{ margin: 0, flex: "0 0 160px" }}>
+              <label style={{ fontSize: 12 }}>Role</label>
+              <select
+                className="sel"
+                value={role}
+                onChange={(e) => setRole(e.target.value as "ops" | "enduser")}
+                style={{ fontSize: 13 }}
+              >
+                <option value="enduser">enduser</option>
+                <option value="ops">ops</option>
+              </select>
+            </div>
+            <button className="btn accent" type="submit" disabled={pending} style={{ height: 34 }}>
+              {pending
+                ? <Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} />
+                : <UserPlus style={{ width: 13, height: 13 }} />}
+              Create invite
+            </button>
+          </form>
+
+          {error && <div style={{ fontSize: 12.5, color: "var(--err)" }}>{error}</div>}
+
+          {invite && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-1)" }}>Invite link</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="input mono"
+                  readOnly
+                  value={invite.link}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{ fontSize: 12, flex: 1 }}
+                />
+                <button className="btn" type="button" onClick={() => copyLink(invite.link)} style={{ height: 34 }}>
+                  {copied
+                    ? <><Check style={{ width: 13, height: 13 }} /> Copied</>
+                    : <><Copy style={{ width: 13, height: 13 }} /> Copy</>}
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                Send this link to {invite.email} — it&apos;s single-use and tied to their email.
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* Members table */}
+      <Section heading="Members">
+        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
+          <table className="tbl" style={{ minWidth: 620 }}>
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.length === 0 && (
+                <tr><td colSpan={5} style={{ color: "var(--ink-3)", cursor: "default" }}>No members yet.</td></tr>
+              )}
+              {members.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  member={m}
+                  isSelf={m.id === currentUserId}
+                  revokeMember={revokeMember}
+                  resendInvite={resendInvite}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function MemberRow({ member, isSelf, revokeMember, resendInvite }: {
+  member: TeamMember;
+  isSelf: boolean;
+  revokeMember: Props["revokeMember"];
+  resendInvite: Props["resendInvite"];
+}) {
+  const [pending, startTransition] = useTransition();
+  const [rowLink, setRowLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const created = member.created_at
+    ? new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+
+  function revoke() {
+    if (!confirm(`Remove ${member.email}? This deletes their account.`)) return;
+    setError(null);
+    const fd = new FormData();
+    fd.set("userId", member.id);
+    startTransition(async () => {
+      try {
+        await revokeMember(fd);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not remove member.");
+      }
+    });
+  }
+
+  function resend() {
+    setError(null);
+    setRowLink(null);
+    const fd = new FormData();
+    fd.set("email", member.email);
+    startTransition(async () => {
+      try {
+        const res = await resendInvite(fd);
+        setRowLink(res.link);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not regenerate invite.");
+      }
+    });
+  }
+
+  async function copyRow(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <>
+      <tr style={{ cursor: "default" }}>
+        <td className="mono" style={{ fontSize: 12.5 }}>{member.email}</td>
+        <td><span className={`chip${member.role === "ops" ? " accent" : " muted"}`}>{member.role}</span></td>
+        <td>
+          <span className={`chip${member.status === "active" ? " ok" : " info"}`}>{member.status}</span>
+        </td>
+        <td style={{ color: "var(--ink-2)", fontSize: 12.5 }}>{created}</td>
+        <td>
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+            {member.status === "invited" && (
+              <button className="btn sm" type="button" onClick={resend} disabled={pending}>
+                <Send style={{ width: 11, height: 11 }} /> Resend
+              </button>
+            )}
+            {!isSelf && (
+              <button className="btn danger-out sm" type="button" onClick={revoke} disabled={pending}>
+                <Trash2 style={{ width: 11, height: 11 }} /> Revoke
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+      {(rowLink || error) && (
+        <tr style={{ cursor: "default" }}>
+          <td colSpan={5} style={{ background: "var(--bg-1)" }}>
+            {error && <div style={{ fontSize: 12, color: "var(--err)" }}>{error}</div>}
+            {rowLink && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  className="input mono"
+                  readOnly
+                  value={rowLink}
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{ fontSize: 12, flex: 1 }}
+                />
+                <button className="btn sm" type="button" onClick={() => copyRow(rowLink)}>
+                  {copied
+                    ? <><Check style={{ width: 11, height: 11 }} /> Copied</>
+                    : <><Copy style={{ width: 11, height: 11 }} /> Copy</>}
+                </button>
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
