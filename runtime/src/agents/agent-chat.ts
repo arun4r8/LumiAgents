@@ -41,12 +41,65 @@ export interface FileAttachment {
  *  routing, the worker entry-points, and the chat loop all narrow against this. */
 export type AgentSlug = "angie" | "beady" | "cleo" | "dewey" | "patch" | "money";
 
+/** Tier 0 (#67) per-agent customization, resolved by the gateway from
+ *  orchestration.agent_config_overrides and passed into the chat loop. The agent's own
+ *  Worker has no Supabase access, so — exactly like `memoryPreamble` — the gateway reads
+ *  the row and threads it through the request rather than the loop reading the DB. */
+export interface AgentOverrideInput {
+  /** Persona override. Empty/absent → the agent's code systemPrompt is used unchanged. */
+  systemPrompt?: string | null;
+  /** How systemPrompt combines with the base prompt. Default "append". */
+  promptStrategy?: "append" | "replace";
+  /** Tool-name allow-list. Empty/absent → all of the agent's tools. Unknown names ignored. */
+  enabledTools?: string[] | null;
+}
+
+/** Per-agent model config (from orchestration.agent_configs), resolved by the gateway. */
+export interface AgentModelConfig {
+  model: string;
+  maxTokens: number;
+}
+
 export interface AgentChatRequest {
   agentSlug: AgentSlug;
   messages: ChatMessage[];
   files?: FileAttachment[];
   /** Recalled long-term memory, injected into the system prompt (reference, not instructions). */
   memoryPreamble?: string;
+  /** Resolved from agent_configs; falls back to the chat defaults (MODEL / 2048) when absent. */
+  modelConfig?: AgentModelConfig;
+  /** Latest agent_config_overrides row for this agent, if any. Purely additive. */
+  override?: AgentOverrideInput;
+}
+
+// ─── Tier 0 override resolution (pure, unit-tested) ─────────────────────────────
+
+/**
+ * Layer a persona override onto the agent's code-defined system prompt.
+ *   - no override (empty/whitespace systemPrompt) → base is returned unchanged.
+ *   - promptStrategy "replace" → the override is used alone.
+ *   - promptStrategy "append" (default) → `base + "\n\n" + override`.
+ * The INJECTION_GUARD is always appended by the caller, never here — this function must
+ * not weaken the injection posture.
+ */
+export function resolveSystemPrompt(base: string, override?: AgentOverrideInput | null): string {
+  const extra = override?.systemPrompt?.trim();
+  if (!extra) return base;
+  return override?.promptStrategy === "replace" ? extra : `${base}\n\n${extra}`;
+}
+
+/**
+ * Restrict an agent's tools to an enabled subset.
+ *   - empty/absent allow-list → all tools (no customization).
+ *   - non-empty allow-list → only the named tools; unknown names are ignored.
+ * If a non-empty allow-list matches nothing (all names unknown — shouldn't happen given
+ * save-time validation), fall back to all tools rather than stranding the agent.
+ */
+export function resolveEnabledTools(tools: AgentTool[], enabled?: string[] | null): AgentTool[] {
+  if (!enabled || enabled.length === 0) return tools;
+  const allow = new Set(enabled);
+  const filtered = tools.filter((t) => allow.has(t.name));
+  return filtered.length > 0 ? filtered : tools;
 }
 
 export interface AgentChatResponse {
@@ -213,6 +266,14 @@ export async function runAgentChat(
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const runIds: string[] = [];
 
+  // Tier 0 (#67): resolve model, max_tokens, persona, and enabled tools from config.
+  // With no modelConfig and no override this is byte-identical to the previous hardcoded
+  // behavior (MODEL / 2048 / agent.systemPrompt / agent.tools).
+  const model = request.modelConfig?.model ?? MODEL;
+  const maxTokens = request.modelConfig?.maxTokens ?? 2048;
+  const systemBase = resolveSystemPrompt(agent.systemPrompt, request.override);
+  const enabledTools = resolveEnabledTools(agent.tools, request.override?.enabledTools);
+
   const messages: Anthropic.MessageParam[] = request.messages.map((m, i) => {
     const isLast = i === request.messages.length - 1;
     if (isLast && m.role === "user" && request.files?.length) {
@@ -241,10 +302,10 @@ export async function runAgentChat(
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      system: agent.systemPrompt + (request.memoryPreamble ? `\n\n${request.memoryPreamble}` : "") + INJECTION_GUARD,
-      tools: [...agent.tools, LIST_RECENT_RUNS_TOOL].map((t) => ({
+      model,
+      max_tokens: maxTokens,
+      system: systemBase + (request.memoryPreamble ? `\n\n${request.memoryPreamble}` : "") + INJECTION_GUARD,
+      tools: [...enabledTools, LIST_RECENT_RUNS_TOOL].map((t) => ({
         name: t.name,
         description: t.description,
         input_schema: t.inputSchema as Anthropic.Tool["input_schema"],

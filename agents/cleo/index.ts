@@ -72,11 +72,16 @@ Do not use em dashes.`,
     {
       name: "draft_content",
       description:
-        "Draft a LinkedIn eminence post (copy + asset brief) for a specific content-calendar entry, grounded in the company profile. Runs in the background; the draft appears on the Content Calendar dashboard page with status 'ready'.",
+        "Draft an eminence post (copy + asset brief) for a specific content-calendar entry, grounded in the company profile. Defaults to LinkedIn; pass channel to draft for another surface (e.g. Instagram). Runs in the background; the draft appears on the Content Calendar dashboard page with status 'ready'.",
       inputSchema: {
         type: "object",
         properties: {
           calendarId: { type: "string", description: "The content_calendar.id of the entry to draft a post for." },
+          channel: {
+            type: "string",
+            enum: ["linkedin", "instagram"],
+            description: "Social channel to draft for. Defaults to 'linkedin'.",
+          },
         },
         required: ["calendarId"],
       },

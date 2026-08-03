@@ -16,11 +16,25 @@ function firstText(resp: Anthropic.Message): string {
   return b && b.type === "text" ? b.text : "";
 }
 
-const POST_SYSTEM = `You are Cleo, Lumiture's eminence and brand-voice assistant. Draft a single LinkedIn post for Lumiture, LLC from the provided calendar entry.
+export type ContentChannel = "linkedin" | "instagram";
+
+// LinkedIn: long-form thought-leadership. Instagram: visual-first captions. Same grounding
+// rules; the channel only changes the copy format so Cleo can draft for either surface
+// (Tier 0 #67 — "make Cleo draft Instagram content instead of LinkedIn").
+const CHANNEL_COPY_SPEC: Record<ContentChannel, string> = {
+  linkedin:
+    `The ready-to-publish LinkedIn post. Strong first-line hook, 2–4 short paragraphs, a clear takeaway, and a light CTA. Professional but human; no hashtag stuffing. 1–3 relevant hashtags at the end.`,
+  instagram:
+    `The ready-to-publish Instagram caption. A strong hook line, then 3–6 short lines (visual-first, scannable), one clear CTA, and 3–8 relevant hashtags at the end. Never LinkedIn-style long-form paragraphs.`,
+};
+
+function postSystemPrompt(channel: ContentChannel): string {
+  const label = channel === "instagram" ? "Instagram" : "LinkedIn";
+  return `You are Cleo, Lumiture's eminence and brand-voice assistant. Draft a single ${label} post for Lumiture, LLC from the provided calendar entry.
 
 Output Markdown with exactly these sections:
 ## Post copy
-The ready-to-publish post. Strong first-line hook, 2–4 short paragraphs, a clear takeaway, and a light CTA. Professional but human; no hashtag stuffing. 1–3 relevant hashtags at the end.
+${CHANNEL_COPY_SPEC[channel]}
 ## Asset brief
 2–4 sentences describing the visual to accompany the post (what the graphic/carousel/video should show), consistent with the asset_ref/asset_type if given.
 ## Notes
@@ -31,6 +45,7 @@ Rules:
 - If the entry's description is thin, expand on the topic sensibly but do not fabricate company specifics; use a clearly-marked placeholder like [confirm: specific example].
 - Match a confident, credible, non-salesy government-technology brand voice.
 - Do not use em dashes.`;
+}
 
 const PLAN_SYSTEM = `You are Cleo, Lumiture's eminence strategist. Propose a run of LinkedIn post IDEAS for Lumiture, LLC on the given theme.
 
@@ -48,18 +63,22 @@ Rules:
 export interface ContentPostInput {
   entry: Record<string, unknown>;
   companyProfile: unknown;
+  /** Which social channel to draft for. Defaults to LinkedIn (backward compatible). */
+  channel?: ContentChannel;
 }
 
 export async function draftContentPost(env: Env, input: ContentPostInput, model = DEFAULT_MODEL): Promise<string> {
+  const channel: ContentChannel = input.channel ?? "linkedin";
+  const label = channel === "instagram" ? "Instagram" : "LinkedIn";
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const payload = { calendar_entry: input.entry, company_profile: input.companyProfile };
   const resp = await client.messages.create({
     model,
     max_tokens: 1600,
-    system: POST_SYSTEM,
+    system: postSystemPrompt(channel),
     messages: [{
       role: "user",
-      content: `Draft the LinkedIn post using only this data:\n\n<data>\n${JSON.stringify(payload, null, 2)}\n</data>`,
+      content: `Draft the ${label} post using only this data:\n\n<data>\n${JSON.stringify(payload, null, 2)}\n</data>`,
     }],
   });
   return firstText(resp) || "Content draft generation failed.";

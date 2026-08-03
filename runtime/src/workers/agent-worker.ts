@@ -36,7 +36,13 @@ export function makeAgentWorker(slug: AgentSlug) {
       const runtimeUrl = request.headers.get("X-Runtime-Url") ?? "";
       const dispatchToken = request.headers.get("X-Dispatch-Token") ?? undefined;
 
-      let body: { messages?: unknown; files?: unknown; memoryPreamble?: unknown };
+      let body: {
+        messages?: unknown;
+        files?: unknown;
+        memoryPreamble?: unknown;
+        modelConfig?: unknown;
+        override?: unknown;
+      };
       try { body = await request.json() as typeof body; }
       catch { return json({ error: "Invalid JSON body" }, 400); }
 
@@ -47,6 +53,9 @@ export function makeAgentWorker(slug: AgentSlug) {
       const rawFiles = body.files as AgentChatRequest["files"];
       if (rawFiles?.length) chatReq.files = rawFiles;
       if (typeof body.memoryPreamble === "string") chatReq.memoryPreamble = body.memoryPreamble;
+      // Tier 0 (#67): the gateway resolved these from agent_configs / agent_config_overrides.
+      if (body.modelConfig) chatReq.modelConfig = body.modelConfig as NonNullable<AgentChatRequest["modelConfig"]>;
+      if (body.override) chatReq.override = body.override as NonNullable<AgentChatRequest["override"]>;
 
       try {
         const result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);

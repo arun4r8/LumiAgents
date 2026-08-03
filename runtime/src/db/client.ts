@@ -284,6 +284,40 @@ export class SupabaseClient {
     return row;
   }
 
+  // ─── Agent config overrides (Tier 0 customization) ─────────────────────────
+
+  /**
+   * Latest persona / card / enabled-tools override for an agent, or null when the
+   * agent has never been customized. `agent_config_overrides` is append-only and
+   * versioned, so the active override is simply the most-recent row per agent_id.
+   * The chat loop layers this on top of the agent's code-defined systemPrompt/tools.
+   */
+  async getAgentOverrides(agentId: string): Promise<{
+    id: string;
+    agent_id: string;
+    system_prompt: string | null;
+    prompt_strategy: "append" | "replace";
+    card: unknown | null;
+    enabled_tools: string[] | null;
+    updated_by: string | null;
+    created_at: string;
+  } | null> {
+    const rows = await this.request<Array<{
+      id: string;
+      agent_id: string;
+      system_prompt: string | null;
+      prompt_strategy: "append" | "replace";
+      card: unknown | null;
+      enabled_tools: string[] | null;
+      updated_by: string | null;
+      created_at: string;
+    }>>(
+      `/rest/v1/agent_config_overrides?agent_id=eq.${encodeURIComponent(agentId)}&order=created_at.desc&limit=1`,
+      "GET",
+    );
+    return rows[0] ?? null;
+  }
+
   // ─── Run failure alert state ──────────────────────────────────────────────
 
   /** Current failure streak for an orchestration, or null when it is healthy. */

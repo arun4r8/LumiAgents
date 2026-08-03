@@ -10,6 +10,10 @@ import { draftContentPost } from "../../../integrations/anthropic/content";
 
 export const inputSchema = z.object({
   calendarId: z.string().uuid().describe("content_calendar.id of the entry to draft a post for."),
+  channel: z
+    .enum(["linkedin", "instagram"])
+    .default("linkedin")
+    .describe("Social channel to draft for. Defaults to LinkedIn (backward compatible)."),
 });
 
 export const outputSchema = z.object({
@@ -38,7 +42,7 @@ export default defineOrchestration({
   version: 1,
   triggerMode: "agent",
   description:
-    "Draft a LinkedIn eminence post (copy + asset brief) for a content-calendar row, grounded in the company profile. Writes the draft back and sets status='ready'.",
+    "Draft an eminence post (copy + asset brief) for a content-calendar row, grounded in the company profile. Defaults to LinkedIn; accepts channel (e.g. instagram). Writes the draft back and sets status='ready'.",
   inputSchema,
   outputSchema,
   access: {
@@ -62,7 +66,7 @@ export default defineOrchestration({
     });
 
     const draftMarkdown = await step(ctx, "draft-post", async () =>
-      draftContentPost(env, { entry, companyProfile }, ctx.model),
+      draftContentPost(env, { entry, companyProfile, channel: input.channel }, ctx.model),
     );
 
     await step(ctx, "store-draft", async () => {

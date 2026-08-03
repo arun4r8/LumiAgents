@@ -1,6 +1,8 @@
 import type { Env } from "../types";
 import { runAgentChat } from "../agents/agent-chat";
 import type { AgentChatRequest, AgentChatResponse, AgentSlug, ChatMessage, FileAttachment } from "../agents/agent-chat";
+import { resolveAgentChatConfig } from "../agents/resolve-agent-config";
+import { SupabaseClient } from "../db/client";
 import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
 import { json, requireUser, rateLimited } from "./helpers";
@@ -83,6 +85,11 @@ export async function handleAgents(
     // Semantic recall over this user's prior conversations with this agent.
     const memoryPreamble = await recall(env, { userId: authResult.userId, agentSlug: slug, queryText: lastUser?.content ?? "" });
 
+    // Tier 0 (#67): resolve model/max_tokens (agent_configs) + persona/tool override
+    // (agent_config_overrides) here — the agent Worker has no Supabase access, so we
+    // thread the result through the request, exactly like memoryPreamble.
+    const agentConfig = await resolveAgentChatConfig(new SupabaseClient(env), slug);
+
     let result: AgentChatResponse | null = null;
     if (workerBinding) {
       // Production: forward to the agent's own CF Worker via Service Binding, with the
@@ -95,7 +102,13 @@ export async function handleAgents(
           "X-Runtime-Url": runtimeUrl,
           "X-Dispatch-Token": dispatchToken,
         },
-        body: JSON.stringify({ messages, files: body.files, memoryPreamble: memoryPreamble || undefined }),
+        body: JSON.stringify({
+          messages,
+          files: body.files,
+          memoryPreamble: memoryPreamble || undefined,
+          modelConfig: agentConfig.modelConfig,
+          override: agentConfig.override,
+        }),
       });
       // A newly-created agent Worker has no secrets until an operator runs
       // `wrangler secret put`, and a Service Binding to a not-yet-deployed Worker throws.
@@ -119,6 +132,8 @@ export async function handleAgents(
       const chatReq: AgentChatRequest = { agentSlug: slug, messages };
       if (body.files?.length) chatReq.files = body.files;
       if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
+      if (agentConfig.modelConfig) chatReq.modelConfig = agentConfig.modelConfig;
+      if (agentConfig.override) chatReq.override = agentConfig.override;
       result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
     }
 
@@ -162,8 +177,11 @@ export async function handleAgents(
       const messages: ChatMessage[] = [...transcript, { role: "user", content: parsed.text }];
       const memoryPreamble = await recall(env, { userId, agentSlug: slug, queryText: parsed.text });
 
+      const agentConfig = await resolveAgentChatConfig(new SupabaseClient(env), slug);
       const chatReq: AgentChatRequest = { agentSlug: slug, messages };
       if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
+      if (agentConfig.modelConfig) chatReq.modelConfig = agentConfig.modelConfig;
+      if (agentConfig.override) chatReq.override = agentConfig.override;
       const result = await runAgentChat(env, chatReq, runtimeUrl);
       const replyText = result.runIds.length > 0
         ? `${result.reply}\n\n*Run IDs: ${result.runIds.join(", ")}*`
