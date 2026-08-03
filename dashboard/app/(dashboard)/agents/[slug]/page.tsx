@@ -1,11 +1,17 @@
 import { notFound } from "next/navigation";
-import { AGENTS } from "../page";
 import AgentChatClient from "@/components/agent-chat-client";
 import CustomizeAgentPanel from "@/components/customize-agent-panel";
+import AgentComposer, { type OrchestrationOption } from "@/components/agent-composer";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentDef } from "@/lib/agent-defs";
+import { getAgentCard, getOrchestrationOptions } from "@/lib/agent-catalog";
 import { ALLOWED_MODELS, type PromptStrategy } from "@/lib/agent-overrides";
+import {
+  DEFAULT_MAX_TOKENS,
+  type AgentManifestDraft,
+} from "@/lib/agent-manifest";
 import { saveAgentOverrides, revertAgentOverride } from "./actions";
+import { createAgent, updateAgent, setAgentLifecycle, deleteAgent } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,77 +27,64 @@ interface OverrideRow {
   created_at: string;
 }
 
+interface RawCard {
+  emoji?: string;
+  category?: string;
+  description?: string;
+  suggestedPrompts?: string[];
+}
+
 const DEFAULT_MODEL = "claude-sonnet-4-6";
-const DEFAULT_MAX_TOKENS = 2048; // matches the chat loop's hardcoded fallback
 
 export default async function AgentDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const agent = AGENTS.find((a) => a.slug === slug);
-  if (!agent) notFound();
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const card = await getAgentCard(slug, session?.access_token);
+  if (!card) notFound();
+
   const isOps = user?.app_metadata?.role === "ops";
 
-  // The customize panel is ops-only: only ops can read the overrides (RLS ops_all) and
-  // only ops see the affordance. Everything below is skipped for endusers.
-  const def = isOps ? getAgentDef(slug) : null;
-  let history: OverrideRow[] = [];
-  let current: {
-    system_prompt: string | null;
-    prompt_strategy: PromptStrategy;
-    enabled_tools: string[] | null;
-    model: string;
-    max_tokens: number;
-    updated_at: string | null;
-  } | null = null;
-
-  if (isOps && def) {
-    const [overridesRes, cfgRes] = await Promise.all([
-      supabase.schema("orchestration").from("agent_config_overrides")
-        .select("id, prompt_strategy, system_prompt, enabled_tools, created_at")
-        .eq("agent_id", slug)
-        .order("created_at", { ascending: false }),
-      supabase.schema("orchestration").from("agent_configs")
-        .select("model, max_tokens, updated_at")
-        .eq("agent_id", slug)
-        .maybeSingle(),
-    ]);
-
-    history = (overridesRes.data ?? []) as OverrideRow[];
-    const latest = history[0] ?? null;
-    const cfg = cfgRes.data as { model: string; max_tokens: number; updated_at: string | null } | null;
-
-    current = {
-      system_prompt: latest?.system_prompt ?? null,
-      prompt_strategy: latest?.prompt_strategy ?? "append",
-      enabled_tools: latest?.enabled_tools ?? null,
-      model: cfg?.model ?? DEFAULT_MODEL,
-      max_tokens: cfg?.max_tokens ?? DEFAULT_MAX_TOKENS,
-      updated_at: cfg?.updated_at ?? latest?.created_at ?? null,
-    };
-  }
+  // Ops-only authoring surfaces are prepared server-side; endusers only get the chat.
+  const configEditor = isOps && card.source === "config" ? await loadConfigEditor(slug) : null;
+  const codeCustomizer = isOps && card.source === "code" ? await loadCodeCustomizer(slug) : null;
 
   return (
     <>
       <AgentChatClient
-        slug={agent.slug}
-        agentName={agent.name}
-        agentEmoji={agent.emoji}
-        description={agent.description}
-        suggestedPrompts={agent.suggestedPrompts}
+        slug={card.slug}
+        agentName={card.name}
+        agentEmoji={card.emoji}
+        description={card.description}
+        suggestedPrompts={card.suggestedPrompts}
       />
 
-      {isOps && def && current && (
+      {configEditor && (
+        <div className="page" style={{ paddingTop: 0 }}>
+          <AgentComposer
+            mode="edit"
+            initial={configEditor.initial}
+            lifecycle={configEditor.lifecycle}
+            orchestrations={configEditor.orchestrations}
+            createAgent={createAgent}
+            updateAgent={updateAgent}
+            setAgentLifecycle={setAgentLifecycle}
+            deleteAgent={deleteAgent}
+          />
+        </div>
+      )}
+
+      {codeCustomizer && (
         <div className="page" style={{ paddingTop: 0 }}>
           <CustomizeAgentPanel
-            slug={def.slug}
-            displayName={def.displayName}
-            basePrompt={def.systemPrompt}
-            tools={def.tools}
+            slug={codeCustomizer.slug}
+            displayName={codeCustomizer.displayName}
+            basePrompt={codeCustomizer.basePrompt}
+            tools={codeCustomizer.tools}
             allowedModels={ALLOWED_MODELS}
-            current={current}
-            history={history}
+            current={codeCustomizer.current}
+            history={codeCustomizer.history}
             saveAgentOverrides={saveAgentOverrides}
             revertAgentOverride={revertAgentOverride}
           />
@@ -101,6 +94,100 @@ export default async function AgentDetailPage({ params }: PageProps) {
   );
 }
 
-export function generateStaticParams() {
-  return AGENTS.map((a) => ({ slug: a.slug }));
+// ─── Config agent: pre-fill the edit round-trip composer (Tier 1) ───────────────
+
+async function loadConfigEditor(slug: string): Promise<{
+  initial: AgentManifestDraft;
+  lifecycle: "active" | "disabled";
+  orchestrations: OrchestrationOption[];
+} | null> {
+  const supabase = await createClient();
+
+  const [agentRes, toolRes, cfgRes, ovrRes, orchRes] = await Promise.all([
+    supabase.schema("orchestration").from("agents")
+      .select("display_name, card, knowledge_corpora, lifecycle").eq("slug", slug).maybeSingle(),
+    supabase.schema("orchestration").from("agent_tools")
+      .select("orchestration_name, params, mode, position").eq("agent_slug", slug).order("position"),
+    supabase.schema("orchestration").from("agent_configs")
+      .select("model, max_tokens").eq("agent_id", slug).maybeSingle(),
+    supabase.schema("orchestration").from("agent_config_overrides")
+      .select("system_prompt").eq("agent_id", slug).order("created_at", { ascending: false }).limit(1),
+    supabase.schema("orchestration").from("orchestrations").select("name, is_active"),
+  ]);
+
+  const agent = agentRes.data as {
+    display_name: string; card: RawCard | null;
+    knowledge_corpora: string[] | null; lifecycle: "active" | "disabled";
+  } | null;
+  if (!agent) return null;
+
+  const c = agent.card ?? {};
+  const toolRows = (toolRes.data ?? []) as {
+    orchestration_name: string; params: Record<string, unknown> | null;
+    mode: "async" | "sync"; position: number | null;
+  }[];
+  const cfg = cfgRes.data as { model: string; max_tokens: number } | null;
+  const persona = ((ovrRes.data ?? [])[0] as { system_prompt: string | null } | undefined)?.system_prompt ?? "";
+
+  const initial: AgentManifestDraft = {
+    slug,
+    displayName: agent.display_name,
+    emoji: c.emoji ?? "🤖",
+    category: c.category ?? "",
+    description: c.description ?? "",
+    suggestedPrompts: Array.isArray(c.suggestedPrompts) ? c.suggestedPrompts : [],
+    systemPrompt: persona,
+    model: cfg?.model ?? DEFAULT_MODEL,
+    maxTokens: cfg?.max_tokens ?? DEFAULT_MAX_TOKENS,
+    tools: toolRows.map((t) => ({ orchestrationName: t.orchestration_name, mode: t.mode, params: t.params })),
+    knowledgeCorpora: agent.knowledge_corpora ?? ["shared"],
+  };
+
+  const activeByName = new Map<string, boolean>(
+    ((orchRes.data ?? []) as { name: string; is_active: boolean }[]).map((o) => [o.name, o.is_active]),
+  );
+  const orchestrations = await getOrchestrationOptions(activeByName);
+
+  return { initial, lifecycle: agent.lifecycle, orchestrations };
+}
+
+// ─── Code agent: the Phase 1 Tier 0 customize panel (unchanged behavior) ────────
+
+async function loadCodeCustomizer(slug: string) {
+  const supabase = await createClient();
+  const def = getAgentDef(slug);
+  if (!def) return null;
+
+  const [overridesRes, cfgRes] = await Promise.all([
+    supabase.schema("orchestration").from("agent_config_overrides")
+      .select("id, prompt_strategy, system_prompt, enabled_tools, created_at")
+      .eq("agent_id", slug)
+      .order("created_at", { ascending: false }),
+    supabase.schema("orchestration").from("agent_configs")
+      .select("model, max_tokens, updated_at")
+      .eq("agent_id", slug)
+      .maybeSingle(),
+  ]);
+
+  const history = (overridesRes.data ?? []) as OverrideRow[];
+  const latest = history[0] ?? null;
+  const cfg = cfgRes.data as { model: string; max_tokens: number; updated_at: string | null } | null;
+
+  const current = {
+    system_prompt: latest?.system_prompt ?? null,
+    prompt_strategy: latest?.prompt_strategy ?? ("append" as PromptStrategy),
+    enabled_tools: latest?.enabled_tools ?? null,
+    model: cfg?.model ?? DEFAULT_MODEL,
+    max_tokens: cfg?.max_tokens ?? DEFAULT_MAX_TOKENS,
+    updated_at: cfg?.updated_at ?? latest?.created_at ?? null,
+  };
+
+  return {
+    slug: def.slug,
+    displayName: def.displayName,
+    basePrompt: def.systemPrompt,
+    tools: def.tools,
+    current,
+    history,
+  };
 }

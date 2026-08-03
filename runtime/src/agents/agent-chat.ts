@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AGENTS } from "../../../agents";
-import type { AgentTool } from "../../../agents";
+import type { AgentDefinition, AgentTool, ToolMapping } from "../../../agents";
 import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, ensurePdfBase64 } from "../utils/pdf";
 
 const MODEL = "claude-sonnet-4-6";
@@ -61,7 +61,8 @@ export interface AgentModelConfig {
 }
 
 export interface AgentChatRequest {
-  agentSlug: AgentSlug;
+  /** A code agent slug (in AGENTS) or a config-agent slug from the catalog. */
+  agentSlug: string;
   messages: ChatMessage[];
   files?: FileAttachment[];
   /** Recalled long-term memory, injected into the system prompt (reference, not instructions). */
@@ -70,6 +71,12 @@ export interface AgentChatRequest {
   modelConfig?: AgentModelConfig;
   /** Latest agent_config_overrides row for this agent, if any. Purely additive. */
   override?: AgentOverrideInput;
+  /**
+   * Tier 1 (#67): a config agent's AgentDefinition, assembled from the catalog by the
+   * gateway (catalog-agent.ts). When present the chat loop uses it INSTEAD of the bundled
+   * AGENTS[slug] — same shape, resolved from data. Absent → a code agent (AGENTS[slug]).
+   */
+  agentDef?: AgentDefinition;
 }
 
 // ─── Tier 0 override resolution (pure, unit-tested) ─────────────────────────────
@@ -146,6 +153,7 @@ async function dispatchTool(
   toolName: string,
   toolInput: ToolInput,
   agentSlug: string,
+  toolMap: Record<string, ToolMapping>,
   runtimeUrl: string,
   dispatchToken: string | undefined,
   files?: FileAttachment[],
@@ -172,8 +180,7 @@ async function dispatchTool(
     return { result: data };
   }
 
-  const agent = AGENTS[agentSlug];
-  const mapping = agent?.toolMap[toolName];
+  const mapping = toolMap[toolName];
 
   if (!mapping) {
     return { result: { error: `Unknown tool: ${toolName}` } };
@@ -260,7 +267,9 @@ export async function runAgentChat(
   runtimeUrl: string,
   dispatchToken?: string,
 ): Promise<AgentChatResponse> {
-  const agent = AGENTS[request.agentSlug];
+  // Tier 1 (#67): a config agent supplies its catalog-assembled definition via agentDef;
+  // a code agent resolves from the bundled AGENTS. Same shape either way.
+  const agent = request.agentDef ?? AGENTS[request.agentSlug];
   if (!agent) throw new Error(`Unknown agent slug: ${request.agentSlug}`);
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
@@ -341,6 +350,7 @@ export async function runAgentChat(
           block.name,
           block.input as ToolInput,
           request.agentSlug,
+          agent.toolMap,
           runtimeUrl,
           dispatchToken,
           request.files,

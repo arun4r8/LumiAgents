@@ -1,108 +1,42 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { getAgentCards, type AgentCard } from "@/lib/agent-catalog";
 
-// ─── Agent metadata ───────────────────────────────────────────────────────────
+export const dynamic = "force-dynamic";
 
-export interface AgentMeta {
-  slug: string;
-  name: string;
-  emoji: string;
-  category: string;
-  description: string;
-  suggestedPrompts: string[];
-}
+// Tier 1 (#67): the agents list renders from the catalog (code ∪ config), not a hardcoded
+// array. Config agents created in-app appear here immediately. Ops see a "New agent" action
+// and can see disabled agents (badged); endusers see only active agents.
 
-export const AGENTS: AgentMeta[] = [
-  {
-    slug: "angie",
-    name: "Angie",
-    emoji: "🧑‍💼",
-    category: "HR & Recruiting",
-    description: "Screens resumes, sources candidates, and runs the hiring pipeline.",
-    suggestedPrompts: [
-      "Screen this resume for a cleared IT PM role",
-      "Find 5 senior Java developers in DC",
-      "Format this resume to our template",
-    ],
-  },
-  {
-    slug: "beady",
-    name: "Beady",
-    emoji: "🔭",
-    category: "GovCon Intel",
-    description: "Assesses opportunities, searches SAM.gov, and runs go/no go calls.",
-    suggestedPrompts: [
-      "Assess this opportunity for go/no-go",
-      "Find SBIR opportunities closing this month",
-      "What's our win probability on this RFP?",
-    ],
-  },
-  {
-    slug: "patch",
-    name: "Patch",
-    emoji: "🔧",
-    category: "IT & Ops",
-    description: "Handles Jira tickets, staff requests, doc Q&A, and ops triage.",
-    suggestedPrompts: [
-      "Create a ticket for the VPN issue affecting the BD team",
-      "Search for open critical tickets",
-      "Request a new hire for the CISA contract",
-    ],
-  },
-  {
-    slug: "money",
-    name: "Money",
-    emoji: "💰",
-    category: "Finance",
-    description: "Builds financial reports, budget analysis, and contract burn rates.",
-    suggestedPrompts: [
-      "Summarize revenue by contract for Q1 2025",
-      "Which contracts are burning over budget?",
-      "Show me indirect rate trends",
-    ],
-  },
-  {
-    slug: "cleo",
-    name: "Cleo",
-    emoji: "🏆",
-    category: "Eminence",
-    description: "Researches awards, runs recognition programs, and tracks eminence.",
-    suggestedPrompts: [
-      "What awards should Lumiture apply for this quarter?",
-      "Run a fresh award sweep",
-      "Which open government small business awards are high-prestige?",
-    ],
-  },
-  {
-    slug: "dewey",
-    name: "Dewey",
-    emoji: "📚",
-    category: "Knowledge",
-    description: "Curates the knowledge base with cited answers and sensitivity tags.",
-    suggestedPrompts: [
-      "What do we know about our past performance on cloud migrations?",
-      "Give me an inventory of the knowledge base",
-      "Lock the FY25 financial model to restricted",
-    ],
-  },
-];
+export default async function AgentsPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const isOps = user?.app_metadata?.role === "ops";
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+  const all = await getAgentCards(session?.access_token);
+  const agents = isOps ? all : all.filter((a) => a.lifecycle === "active");
 
-export default function AgentsPage() {
   return (
     <div className="page view-fade">
       <div className="page-h">
         <div>
           <h1>Agents</h1>
           <div className="sub">
-            {AGENTS.length} agents · chat, upload files, and track runs
+            {agents.length} agents · chat, upload files, and track runs
           </div>
         </div>
+        {isOps && (
+          <Link href="/agents/new" className="btn primary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Plus size={14} /> New agent
+          </Link>
+        )}
       </div>
 
       <div className="orch-grid ag-grid">
-        {AGENTS.map((agent) => (
-          <AgentCard key={agent.slug} agent={agent} />
+        {agents.map((agent) => (
+          <AgentCardTile key={agent.slug} agent={agent} />
         ))}
       </div>
     </div>
@@ -111,13 +45,21 @@ export default function AgentsPage() {
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
-function AgentCard({ agent }: { agent: AgentMeta }) {
+function AgentCardTile({ agent }: { agent: AgentCard }) {
+  const disabled = agent.lifecycle === "disabled";
   return (
-    <Link href={`/agents/${agent.slug}`} className="orch-card ag-card">
-      <span className="ag-cat">{agent.category}</span>
+    <Link href={`/agents/${agent.slug}`} className="orch-card ag-card" style={disabled ? { opacity: 0.6 } : undefined}>
+      <span className="ag-cat">
+        {agent.category}
+        {disabled && <span style={{ marginLeft: 6, color: "var(--err)" }}>· disabled</span>}
+      </span>
       <div className="ag-art">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/agents/${agent.slug}.svg`} alt="" aria-hidden="true" />
+        {agent.source === "code" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={`/agents/${agent.slug}.svg`} alt="" aria-hidden="true" />
+        ) : (
+          <span aria-hidden="true" style={{ fontSize: 44, lineHeight: 1 }}>{agent.emoji}</span>
+        )}
       </div>
       <div className="ag-body">
         <div className="ag-h">

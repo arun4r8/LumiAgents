@@ -1,11 +1,45 @@
 import type { Env } from "../types";
+import { AGENTS } from "../../../agents";
+import type { AgentDefinition } from "../../../agents";
 import { runAgentChat } from "../agents/agent-chat";
 import type { AgentChatRequest, AgentChatResponse, AgentSlug, ChatMessage, FileAttachment } from "../agents/agent-chat";
 import { resolveAgentChatConfig } from "../agents/resolve-agent-config";
+import { buildConfigAgentDefinition } from "../agents/catalog-agent";
+import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
 import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
-import { json, requireUser, rateLimited } from "./helpers";
+import { json, requireUser, rateLimited, schemaToJsonSchema } from "./helpers";
+
+/**
+ * Tier 1 (#67): if `slug` is a config agent (a catalog row with source='config' and no
+ * dedicated Worker binding), assemble its AgentDefinition from the catalog + agent_tools +
+ * the code orchestration registry, so it can run through the inline runAgentChat path.
+ *
+ * Returns:
+ *   - { def }        → a runnable config agent; route inline with this definition.
+ *   - { disabled }   → the config agent exists but its lifecycle is 'disabled'.
+ *   - null           → not a config agent (a code agent, or unknown slug); behave as today.
+ *
+ * Best-effort: any lookup failure yields null, so the runtime degrades to code-agents-only
+ * (no-op safety) rather than erroring on an empty/unreachable catalog.
+ */
+async function resolveConfigAgent(
+  db: SupabaseClient,
+  slug: string,
+  hasWorkerBinding: boolean,
+): Promise<{ def: AgentDefinition } | { disabled: true } | null> {
+  const row = await db.getCatalogAgent(slug).catch(() => null);
+  if (!row || row.source !== "config" || hasWorkerBinding) return null;
+  if (row.lifecycle === "disabled") return { disabled: true };
+  const toolRows = await db.getAgentTools(slug).catch(() => []);
+  const def = buildConfigAgentDefinition(row, toolRows, (name) => {
+    const orch = orchestrations.get(name);
+    if (!orch) return null;
+    return { description: orch.description ?? null, inputSchema: schemaToJsonSchema(orch.inputSchema) };
+  });
+  return { def };
+}
 
 async function mintDispatchToken(jwtSecret: string): Promise<string> {
   const enc = (s: string) =>
@@ -41,6 +75,29 @@ export async function handleAgents(
 ): Promise<Response | null> {
   const { pathname } = url;
 
+  // GET /api/agents — the agent card catalogue (code ∪ config), read via service_role so
+  // any signed-in user's dashboard can render every card even though writes to the catalog
+  // are ops-only (RLS). Mirrors the open GET /api/orchestrations catalogue: only non-
+  // sensitive card metadata is returned. Empty list on any failure (no-op safety).
+  if (pathname === "/api/agents" && request.method === "GET") {
+    // Any authenticated user (ops + enduser) may read the card catalogue; not public.
+    const authResult = await requireUser(request, env);
+    if (authResult instanceof Response) return authResult;
+    try {
+      const rows = await new SupabaseClient(env).getCatalogAgents();
+      return json(rows.map((r) => ({
+        slug: r.slug,
+        displayName: r.display_name,
+        card: r.card,
+        source: r.source,
+        lifecycle: r.lifecycle,
+      })));
+    } catch (err) {
+      console.error("[agents] catalogue read failed:", err);
+      return json([]);
+    }
+  }
+
   // POST /api/agents/:slug/chat
   const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)\/chat$/);
   if (agentMatch && request.method === "POST") {
@@ -56,6 +113,23 @@ export async function handleAgents(
 
     const bindingKey = AGENT_BINDINGS[slug] as keyof Env | undefined;
     const workerBinding = bindingKey ? (env[bindingKey] as Fetcher | undefined) : undefined;
+
+    const db = new SupabaseClient(env);
+
+    // Tier 1 (#67): is this a config agent (catalog data, no Worker)? If so, assemble its
+    // definition now and route it through the inline chat loop below. Code agents (a real
+    // binding, or an AGENTS entry in local dev) are untouched.
+    const configAgent = await resolveConfigAgent(db, slug, !!workerBinding);
+    if (configAgent && "disabled" in configAgent) {
+      return json({ error: "This agent is currently disabled." }, 403);
+    }
+    const configAgentDef = configAgent?.def;
+
+    // Guard an unknown slug: not a code agent (no binding, not in AGENTS) and not a config
+    // agent → 404, rather than a 500 from the inline loop's "Unknown agent slug".
+    if (!workerBinding && !configAgentDef && !Object.hasOwn(AGENTS, slug)) {
+      return json({ error: `Unknown agent: ${slug}` }, 404);
+    }
 
     const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET);
 
@@ -87,8 +161,10 @@ export async function handleAgents(
 
     // Tier 0 (#67): resolve model/max_tokens (agent_configs) + persona/tool override
     // (agent_config_overrides) here — the agent Worker has no Supabase access, so we
-    // thread the result through the request, exactly like memoryPreamble.
-    const agentConfig = await resolveAgentChatConfig(new SupabaseClient(env), slug);
+    // thread the result through the request, exactly like memoryPreamble. For a config
+    // agent (Tier 1) this is also where its persona (stored as a 'replace' override) and
+    // model are layered onto the catalog-assembled definition.
+    const agentConfig = await resolveAgentChatConfig(db, slug);
 
     let result: AgentChatResponse | null = null;
     if (workerBinding) {
@@ -128,12 +204,15 @@ export async function handleAgents(
     }
 
     if (!result) {
-      // No dedicated worker bound (local dev), or the bound worker is not usable yet.
+      // No dedicated worker bound (local dev / config agent), or the bound worker is not
+      // usable yet. Config agents (Tier 1) always land here with their catalog-assembled
+      // definition; code agents run their bundled definition (agentDef undefined).
       const chatReq: AgentChatRequest = { agentSlug: slug, messages };
       if (body.files?.length) chatReq.files = body.files;
       if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
       if (agentConfig.modelConfig) chatReq.modelConfig = agentConfig.modelConfig;
       if (agentConfig.override) chatReq.override = agentConfig.override;
+      if (configAgentDef) chatReq.agentDef = configAgentDef;
       result = await runAgentChat(env, chatReq, runtimeUrl, dispatchToken);
     }
 

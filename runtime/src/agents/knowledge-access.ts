@@ -48,3 +48,35 @@ export const ENDUSER_SCOPE: KnowledgeScope = {
 export function scopeForRole(role: string): KnowledgeScope {
   return role === "ops" ? OPS_SCOPE : ENDUSER_SCOPE;
 }
+
+// ─── Tier 1 (#67): bounded scope for a config (catalog) agent ───────────────────
+//
+// A config agent declares its own `knowledge_corpora` in the catalog. Unlike a code
+// agent (whose scope is the hardcoded scopeForAgent(<slug>)), a config agent's declared
+// scope is untrusted author input, so it is ALWAYS clamped here at read time — never
+// restricted, and only corpora inside the agent's allowed set [shared, <ownSlug>, enduser].
+// This is the runtime backstop that guarantees a config agent can never read another
+// agent's private corpus or any restricted-sensitivity document, regardless of what a bad
+// or stale catalog row claims. Author-time validation (catalog-validation.ts) mirrors it.
+
+/** The corpora a config agent named `ownSlug` may ever be granted. */
+export function allowedCorporaFor(ownSlug: string): string[] {
+  return [SHARED_CORPUS, ownSlug, ENDUSER_CORPUS];
+}
+
+/**
+ * Bounded read scope for a config agent. `declared` is the catalog's knowledge_corpora.
+ *   - null/empty declared → falls back to [shared, <ownSlug>] (a code agent's default).
+ *   - otherwise → the intersection of `declared` with the allowed set, so any stray or
+ *     malicious corpus (another agent's slug, "restricted") is silently dropped.
+ * `includeRestricted` is hard-wired false: a config agent is never ops.
+ */
+export function scopeForConfigAgent(
+  ownSlug: string,
+  declared?: string[] | null,
+): KnowledgeScope {
+  const allowed = new Set(allowedCorporaFor(ownSlug));
+  const requested = (declared ?? []).filter((c) => allowed.has(c));
+  const corpora = requested.length > 0 ? requested : [SHARED_CORPUS, ownSlug];
+  return { allowedCorpora: corpora, includeRestricted: false };
+}

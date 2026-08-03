@@ -1,4 +1,5 @@
 import type { Env, Run, RunFailureAlert, RunStep, Schedule } from "../types";
+import type { CatalogAgentRow, CatalogAgentToolRow } from "../agents/catalog-agent";
 
 // Minimal typed Supabase REST client: no Node deps, pure fetch.
 
@@ -316,6 +317,34 @@ export class SupabaseClient {
       "GET",
     );
     return rows[0] ?? null;
+  }
+
+  // ─── Agents catalog (Tier 1: config agents as data) ───────────────────────
+
+  /** All catalog agents (code ∪ config). Best-effort: [] on any failure so the runtime
+   *  behaves exactly as today (code agents only) when the catalog is empty/unreachable. */
+  async getCatalogAgents(): Promise<CatalogAgentRow[]> {
+    return this.request<CatalogAgentRow[]>(
+      `/rest/v1/agents?select=slug,display_name,card,source,lifecycle,knowledge_corpora&order=slug`,
+      "GET",
+    );
+  }
+
+  /** One catalog agent by slug, or null when it is not a catalog agent. */
+  async getCatalogAgent(slug: string): Promise<CatalogAgentRow | null> {
+    const rows = await this.request<CatalogAgentRow[]>(
+      `/rest/v1/agents?slug=eq.${encodeURIComponent(slug)}&select=slug,display_name,card,source,lifecycle,knowledge_corpora&limit=1`,
+      "GET",
+    );
+    return rows[0] ?? null;
+  }
+
+  /** A config agent's wired tools (agent_tools), ordered by position. */
+  async getAgentTools(slug: string): Promise<CatalogAgentToolRow[]> {
+    return this.request<CatalogAgentToolRow[]>(
+      `/rest/v1/agent_tools?agent_slug=eq.${encodeURIComponent(slug)}&select=agent_slug,orchestration_name,params,mode,position&order=position`,
+      "GET",
+    );
   }
 
   // ─── Run failure alert state ──────────────────────────────────────────────
