@@ -1,10 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env } from "../types";
 import { ingestDocument, queryDocuments } from "../agents/document-rag";
-import { OPS_SCOPE } from "../agents/knowledge-access";
+import { ENDUSER_CORPUS, scopeForRole } from "../agents/knowledge-access";
 import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
-import { json, parseCsvLine, requireOpsToken, rateLimited } from "./helpers";
+import { json, parseCsvLine, requireOpsToken, requireUser, rateLimited } from "./helpers";
 import { MODELS } from "../config/models";
 
 // ─── OCR helpers ──────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export async function handleDocuments(
 
   // POST /api/documents/ingest-file  (multipart: OCR via Claude then embed)
   if (pathname === "/api/documents/ingest-file" && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "documents", 20);
@@ -136,6 +136,9 @@ export async function handleDocuments(
       sourceName,
       sourceKind: isPdf ? "pdf" : "text",
       content: extractedText,
+      // Enduser uploads are fenced to the enduser corpus at internal sensitivity;
+      // ops uploads keep the default (shared / internal).
+      ...(authResult.role === "ops" ? {} : { corpus: ENDUSER_CORPUS, sensitivity: "internal" as const }),
     });
 
     if (run) {
@@ -151,7 +154,7 @@ export async function handleDocuments(
 
   // POST /api/documents/ingest
   if (pathname === "/api/documents/ingest" && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "documents", 20);
@@ -183,7 +186,18 @@ export async function handleDocuments(
         })
       : null;
 
-    const result = await ingestDocument(env, body);
+    // Endusers cannot choose corpus/sensitivity: force the enduser corpus at
+    // internal sensitivity so they can't write into shared/restricted knowledge.
+    const ingestReq = authResult.role === "ops"
+      ? body
+      : {
+          sourceName: body.sourceName,
+          sourceKind: body.sourceKind,
+          content: body.content,
+          corpus: ENDUSER_CORPUS,
+          sensitivity: "internal" as const,
+        };
+    const result = await ingestDocument(env, ingestReq);
 
     if (run) {
       await db.updateRun(run.id, {
@@ -198,7 +212,7 @@ export async function handleDocuments(
 
   // POST /api/documents/query
   if (pathname === "/api/documents/query" && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "documents", 20);
@@ -214,14 +228,16 @@ export async function handleDocuments(
       return json({ error: "question is required" }, 400);
     }
 
-    // Dashboard document search is an ops surface: full corpus access, incl. restricted.
-    const result = await queryDocuments(env, { ...body, allowedCorpora: OPS_SCOPE.allowedCorpora, includeRestricted: OPS_SCOPE.includeRestricted });
+    // Scope by role: ops gets the full corpus incl. restricted; endusers get the
+    // shared + enduser corpora and never restricted-sensitivity documents.
+    const scope = scopeForRole(authResult.role);
+    const result = await queryDocuments(env, { ...body, allowedCorpora: scope.allowedCorpora, includeRestricted: scope.includeRestricted });
     return json(result);
   }
 
   // POST /api/analyst/query
   if (pathname === "/api/analyst/query" && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "analyst", 20);
@@ -244,7 +260,7 @@ export async function handleDocuments(
 
   // POST /api/analyst/upload-csv
   if (pathname === "/api/analyst/upload-csv" && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "analyst", 20);

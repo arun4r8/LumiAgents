@@ -90,6 +90,49 @@ export async function requireOpsToken(
   return json({ error: "Invalid token" }, 401);
 }
 
+/**
+ * Authenticate any signed-in user (ops OR enduser) and return their id + role.
+ * Use this on surfaces endusers are allowed to reach (agent chat, orchestration
+ * runs, document upload). It does NOT require ops — callers that need ops-only
+ * behavior must use requireOpsToken. Internally-minted agent-dispatch tokens are
+ * accepted as a trusted principal (role "ops").
+ */
+export async function requireUser(
+  request: Request,
+  env: Env,
+): Promise<{ userId: string; role: string } | Response> {
+  const auth = request.headers.get("Authorization") ?? "";
+  if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+  const token = auth.slice(7);
+
+  // Primary: verify the bearer against Supabase Auth (any authenticated user).
+  try {
+    const userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (userRes.ok) {
+      const user = await userRes.json() as { id: string; app_metadata?: { role?: string } };
+      const role = user.app_metadata?.["role"] ?? "enduser";
+      return { userId: user.id, role };
+    }
+  } catch {
+    // network error: fall through
+  }
+
+  // Secondary: internally-minted agent-dispatch tokens (trusted).
+  if (env.SUPABASE_JWT_SECRET) {
+    const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
+    if (payload?.["sub"] === "agent-dispatch") {
+      return { userId: "agent-dispatch", role: "ops" };
+    }
+  }
+
+  return json({ error: "Invalid token" }, 401);
+}
+
 export function parseCsvLine(line: string): string[] {
   const result: string[] = [];
   let cur = "";

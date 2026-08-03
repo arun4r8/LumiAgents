@@ -3,7 +3,7 @@ import type { Env, OrchestrationDefinition, Run } from "../types";
 import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
 import { runOrchestrationInline } from "../run-inline";
-import { json, schemaToJsonSchema, requireOpsToken, rateLimited } from "./helpers";
+import { json, schemaToJsonSchema, requireUser, rateLimited } from "./helpers";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -52,7 +52,8 @@ export async function handleOrchestrations(
   // POST /api/orchestrations/:name/run
   const runMatch = pathname.match(/^\/api\/orchestrations\/([^/]+)\/run$/);
   if (runMatch && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    // Orchestration runs are open to any authenticated user (ops + enduser).
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "orchestration-run", 30);
@@ -77,7 +78,7 @@ export async function handleOrchestrations(
   // see run-inline.ts for why this is only safe for fast, read-only orchestrations.
   const runSyncMatch = pathname.match(/^\/api\/orchestrations\/([^/]+)\/run-sync$/);
   if (runSyncMatch && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "orchestration-run-sync", 30);

@@ -3,7 +3,7 @@ import { runAgentChat } from "../agents/agent-chat";
 import type { AgentChatRequest, AgentChatResponse, AgentSlug, ChatMessage, FileAttachment } from "../agents/agent-chat";
 import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken } from "../../../integrations/teams/bot";
-import { json, requireOpsToken, rateLimited } from "./helpers";
+import { json, requireUser, rateLimited } from "./helpers";
 
 async function mintDispatchToken(jwtSecret: string): Promise<string> {
   const enc = (s: string) =>
@@ -42,7 +42,8 @@ export async function handleAgents(
   // POST /api/agents/:slug/chat
   const agentMatch = pathname.match(/^\/api\/agents\/([^/]+)\/chat$/);
   if (agentMatch && request.method === "POST") {
-    const authResult = await requireOpsToken(request, env);
+    // Agent chat is open to any authenticated user (ops + enduser).
+    const authResult = await requireUser(request, env);
     if (authResult instanceof Response) return authResult;
 
     const rl = await rateLimited(env, authResult.userId, "agent-chat", 20);

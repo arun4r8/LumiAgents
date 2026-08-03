@@ -30,3 +30,21 @@ export const OPS_SCOPE: KnowledgeScope = {
   allowedCorpora: null,
   includeRestricted: true,
 };
+
+/** Corpus that endusers' own uploads land in — kept out of ops agents' retrieval
+ *  (agents read [shared, <agentSlug>], never this corpus). Full per-user isolation
+ *  is future work (private corpora); this at least fences enduser content off. */
+export const ENDUSER_CORPUS = "enduser";
+
+/** Scope for a signed-in enduser: the shared corpus + the enduser corpus, and
+ *  NEVER restricted-sensitivity documents. */
+export const ENDUSER_SCOPE: KnowledgeScope = {
+  allowedCorpora: [SHARED_CORPUS, ENDUSER_CORPUS],
+  includeRestricted: false,
+};
+
+/** Choose a read scope by caller role: ops gets everything, everyone else gets
+ *  the enduser scope (shared + enduser corpus, no restricted). */
+export function scopeForRole(role: string): KnowledgeScope {
+  return role === "ops" ? OPS_SCOPE : ENDUSER_SCOPE;
+}
