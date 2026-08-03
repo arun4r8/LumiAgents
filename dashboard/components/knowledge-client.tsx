@@ -48,6 +48,7 @@ interface Props {
   documents: OrcDocument[];
   corpusDocs: CorpusDoc[];
   deleteDocument: (id: string) => Promise<void>;
+  isOps?: boolean;
   initialTab?: KnowledgeTab;
 }
 
@@ -59,9 +60,15 @@ export function KnowledgeClient({
   documents,
   corpusDocs,
   deleteDocument,
+  isOps = true,
   initialTab = "editor",
 }: Props) {
-  const [tab, setTab] = useState<KnowledgeTab>(initialTab);
+  // Editor + Sync are the ops-only Obsidian vault surfaces (they hit ops-gated
+  // vault APIs). Endusers only get the Document Corpus (upload + search).
+  const visibleTabs: KnowledgeTab[] = isOps ? ["editor", "sync", "corpus"] : ["corpus"];
+  const [tab, setTab] = useState<KnowledgeTab>(
+    visibleTabs.includes(initialTab) ? initialTab : "corpus",
+  );
 
   return (
     <div className="page view-fade">
@@ -74,7 +81,7 @@ export function KnowledgeClient({
 
       {/* Tab bar */}
       <div style={{ display: "flex", gap: 2, marginBottom: 20, borderBottom: "1px solid var(--line)", paddingBottom: 0 }}>
-        {(["editor", "sync", "corpus"] as const).map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}

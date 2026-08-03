@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/sidebar";
+import { roleOf } from "@/lib/role";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -15,7 +16,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .select("id", { count: "exact", head: true })
     .eq("status", "pending");
 
-  const role = user.user_metadata?.role as string | undefined;
+  // Roles live in app_metadata (surfaced as the user_role claim); read them via
+  // the shared helper so the sidebar badge + gating see the real role.
+  const role = roleOf(user);
 
   return (
     <div className="lumi-app">

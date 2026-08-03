@@ -79,10 +79,12 @@ export function SettingsClient({
   updateAgentConfig, updateOrchestrationConfig,
   inviteMember, revokeMember, resendInvite,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("agents");
+  // Agents/orchestrations config + team are ops-only; endusers get account +
+  // appearance (they need account to change their password).
   const tabs: Tab[] = isOps
     ? ["agents", "orchestrations", "team", "account", "appearance"]
-    : ["agents", "orchestrations", "account", "appearance"];
+    : ["account", "appearance"];
+  const [tab, setTab] = useState<Tab>(isOps ? "agents" : "account");
 
   const memberSince = userCreatedAt
     ? new Date(userCreatedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
@@ -106,10 +108,10 @@ export function SettingsClient({
         ))}
       </div>
 
-      {tab === "agents" && (
+      {tab === "agents" && isOps && (
         <AgentsTab agentConfigs={agentConfigs} updateAgentConfig={updateAgentConfig} />
       )}
-      {tab === "orchestrations" && (
+      {tab === "orchestrations" && isOps && (
         <OrchestrationsTab orchestrations={orchestrations} agentConfigs={agentConfigs} updateOrchestrationConfig={updateOrchestrationConfig} />
       )}
       {tab === "account" && (
@@ -120,7 +122,7 @@ export function SettingsClient({
                 <span className="mono" style={{ fontSize: 13 }}>{userEmail}</span>
               </SettingsRow>
               <Divider />
-              <SettingsRow label="Role"><span className="chip">ops</span></SettingsRow>
+              <SettingsRow label="Role"><span className="chip">{isOps ? "ops" : "enduser"}</span></SettingsRow>
               {memberSince && (<><Divider /><SettingsRow label="Member since"><span style={{ fontSize: 13, color: "var(--ink-2)" }}>{memberSince}</span></SettingsRow></>)}
             </div>
           </Section>

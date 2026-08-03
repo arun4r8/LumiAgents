@@ -22,27 +22,32 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { signOut } from "@/app/(dashboard)/actions";
+import type { Role } from "@/lib/role";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
   badge?: number;
+  // Surfaces an enduser is allowed to see. Untagged items are ops-only.
+  enduserVisible?: boolean;
 }
 
 interface SidebarProps {
   userEmail: string;
-  userRole?: string;
+  userRole: Role;
   pendingApprovals: number;
 }
 
 export default function Sidebar({ userEmail, userRole, pendingApprovals }: SidebarProps) {
   const pathname = usePathname();
 
+  const isEnduser = userRole !== "ops";
+
   const nav: NavItem[] = [
     { href: "/overview",       label: "Overview",        icon: <LayoutDashboard /> },
     { href: "/runs",           label: "Runs",            icon: <Play /> },
-    { href: "/orchestrations", label: "Orchestrations",  icon: <GitBranch /> },
+    { href: "/orchestrations", label: "Orchestrations",  icon: <GitBranch />, enduserVisible: true },
     { href: "/schedules",      label: "Schedules",       icon: <Clock /> },
     { href: "/subscriptions",  label: "Subscriptions",   icon: <Mail /> },
     { href: "/awards",         label: "Awards",          icon: <Trophy /> },
@@ -51,11 +56,14 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
     { href: "/content-calendar", label: "Content Calendar", icon: <CalendarDays /> },
     { href: "/memory",         label: "Memory",          icon: <Brain /> },
     { href: "/approvals",      label: "Approvals",       icon: <CheckSquare />, badge: pendingApprovals || undefined },
-    { href: "/knowledge",      label: "Knowledge Base",  icon: <BookOpen /> },
+    { href: "/knowledge",      label: "Knowledge Base",  icon: <BookOpen />, enduserVisible: true },
     { href: "/data",           label: "Records",         icon: <Database /> },
-    { href: "/settings",        label: "Settings",        icon: <Settings /> },
+    { href: "/settings",        label: "Settings",        icon: <Settings />, enduserVisible: true },
     { href: "/infrastructure",  label: "Infrastructure",  icon: <Server /> },
   ];
+
+  // Endusers see only the surfaces they can use; ops sees everything.
+  const visibleNav = isEnduser ? nav.filter((item) => item.enduserVisible) : nav;
 
   const initials = userEmail
     ? userEmail.slice(0, 2).toUpperCase()
@@ -86,8 +94,8 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
           <Bot />
           <span className="grow">Agents</span>
         </Link>
-        <div className="nav-sect">Ops</div>
-        {nav.map((item) => (
+        {!isEnduser && <div className="nav-sect">Ops</div>}
+        {visibleNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}

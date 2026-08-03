@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { KnowledgeClient } from "@/components/knowledge-client";
+import { roleOf } from "@/lib/role";
 import type { OrcDocument, CorpusDoc } from "@/components/document-corpus";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,8 @@ export default async function KnowledgePage({
 }) {
   const { tab } = await searchParams;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isOps = roleOf(user) === "ops";
 
   // Get the vault-sync orchestration ID
   const { data: orchRow } = await supabase
@@ -131,7 +134,8 @@ export default async function KnowledgePage({
       documents={(corpusRes.data ?? []) as OrcDocument[]}
       corpusDocs={corpusDocs}
       deleteDocument={deleteDocument}
-      initialTab={initialTabFrom(tab)}
+      isOps={isOps}
+      initialTab={isOps ? initialTabFrom(tab) : "corpus"}
     />
   );
 }

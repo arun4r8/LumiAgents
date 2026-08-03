@@ -46,6 +46,17 @@ interface AgentChatClientProps {
 const TEXT_TYPES = new Set(["text/plain", "text/csv", "text/markdown", "application/json"]);
 const TEXT_EXTS  = /\.(txt|csv|md|json)$/i;
 
+// Map a raw runtime failure to a friendly, user-safe message. The real error is
+// kept in console.error for debugging; endusers never see raw runtime strings.
+function friendlyRuntimeError(err: unknown): string {
+  console.error("[agent-chat] runtime call failed:", err);
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/\b403\b|forbidden/i.test(msg)) {
+    return "You don't have access to this yet — ask an ops admin.";
+  }
+  return "Something went wrong — try again.";
+}
+
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let binary = "";
@@ -234,7 +245,7 @@ export default function AgentChatClient({
             history = [...batchHistory, { role: "assistant" as const, text: data.reply, runIds: batchRunIds }];
           }
         } catch (err) {
-          setError(`Batch ${i + 1}/${chunks.length} failed: ${err instanceof Error ? err.message : "network error"}`);
+          setError(`Batch ${i + 1}/${chunks.length} failed. ${friendlyRuntimeError(err)}`);
           setThinking(false);
           setBatchProgress(null);
           return;
@@ -265,7 +276,7 @@ export default function AgentChatClient({
         { role: "assistant", text: data.reply, runIds: data.runIds ?? [] },
       ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(friendlyRuntimeError(err));
     } finally {
       setThinking(false);
     }

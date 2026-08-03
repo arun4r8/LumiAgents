@@ -7,6 +7,17 @@ import { createClient } from "@/lib/supabase/client";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
+// Map a raw runtime failure to a friendly, user-safe message. The real error is
+// kept in console.error for debugging; endusers never see raw runtime strings.
+function friendlyRuntimeError(status: number | null, rawError: unknown): string {
+  console.error("[orchestrations] run failed:", status, rawError);
+  const msg = rawError instanceof Error ? rawError.message : String(rawError ?? "");
+  if (status === 403 || /\b403\b|forbidden/i.test(msg)) {
+    return "You don't have access to this yet — ask an ops admin.";
+  }
+  return "Something went wrong — try again.";
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface JsonSchemaProperty {
@@ -303,7 +314,7 @@ function OrchCard({
 
       if (!res.ok) {
         setPhase("error");
-        setResult({ runId: "", status: "error", error: data.error ?? `HTTP ${res.status}` });
+        setResult({ runId: "", status: "error", error: friendlyRuntimeError(res.status, data.error) });
         return;
       }
 
@@ -312,7 +323,7 @@ function OrchCard({
       setValues({});
     } catch (err) {
       setPhase("error");
-      setResult({ runId: "", status: "error", error: err instanceof Error ? err.message : "Network error" });
+      setResult({ runId: "", status: "error", error: friendlyRuntimeError(null, err) });
     }
   }
 

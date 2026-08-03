@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { roleOf } from "@/lib/role";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
@@ -26,7 +27,9 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/overview");
+    // Land ops on the fleet Overview; land endusers on their agent-first page.
+    const dest = roleOf(data.user) === "ops" ? "/overview" : "/agents";
+    router.push(dest);
     router.refresh();
   }
 
@@ -42,8 +45,7 @@ export default function LoginPage() {
         </div>
 
         <div>
-          <h2>Sign in</h2>
-          <div className="sb">Internal AI orchestration · ops only</div>
+          <h2>Sign in to LumiAgents</h2>
         </div>
 
         <form onSubmit={handleLogin} className="login-fields">
@@ -88,8 +90,6 @@ export default function LoginPage() {
               : "Continue"}
           </button>
         </form>
-
-        <div className="helper">SSO via Okta available · contact ops@lumiture.com</div>
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
