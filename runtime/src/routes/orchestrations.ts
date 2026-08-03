@@ -14,6 +14,7 @@ async function parseAndCreateRun(
   request: Request,
   env: Env,
   name: string,
+  userId: string,
 ): Promise<{ error: Response } | { orch: AnyOrch; db: SupabaseClient; run: Run; input: unknown }> {
   const orch = orchestrations.get(name);
   if (!orch) return { error: json({ error: `Orchestration "${name}" not found` }, 404) };
@@ -27,6 +28,10 @@ async function parseAndCreateRun(
     return { error: json({ error: "Invalid input", issues: parsed.error.issues }, 422) };
   }
 
+  // Record the triggering user so they can see their own run under RLS. Internal
+  // agent-dispatch calls aren't a real user, so keep those as "webhook".
+  const isRealUser = userId !== "agent-dispatch";
+
   const db = new SupabaseClient(env);
   const orchRecord = await db.getOrchestrationByName(name, orch.version);
   const run = await db.createRun({
@@ -34,7 +39,8 @@ async function parseAndCreateRun(
     orchestration_version: orch.version,
     status: "running",
     input: parsed.data,
-    triggered_by: "webhook",
+    triggered_by: isRealUser ? "user" : "webhook",
+    ...(isRealUser ? { triggered_by_user_id: userId } : {}),
     started_at: new Date().toISOString(),
   });
 
@@ -60,7 +66,7 @@ export async function handleOrchestrations(
     if (rl) return rl;
 
     const name = decodeURIComponent(runMatch[1] ?? "");
-    const created = await parseAndCreateRun(request, env, name);
+    const created = await parseAndCreateRun(request, env, name, authResult.userId);
     if ("error" in created) return created.error;
     const { run } = created;
 
@@ -85,7 +91,7 @@ export async function handleOrchestrations(
     if (rl) return rl;
 
     const name = decodeURIComponent(runSyncMatch[1] ?? "");
-    const created = await parseAndCreateRun(request, env, name);
+    const created = await parseAndCreateRun(request, env, name, authResult.userId);
     if ("error" in created) return created.error;
     const { orch, db, run, input } = created;
 

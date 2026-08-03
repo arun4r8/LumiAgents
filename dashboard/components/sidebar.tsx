@@ -46,7 +46,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
 
   const nav: NavItem[] = [
     { href: "/overview",       label: "Overview",        icon: <LayoutDashboard /> },
-    { href: "/runs",           label: "Runs",            icon: <Play /> },
+    { href: "/runs",           label: "Runs",            icon: <Play />, enduserVisible: true },
     { href: "/orchestrations", label: "Orchestrations",  icon: <GitBranch />, enduserVisible: true },
     { href: "/schedules",      label: "Schedules",       icon: <Clock /> },
     { href: "/subscriptions",  label: "Subscriptions",   icon: <Mail /> },
