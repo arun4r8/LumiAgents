@@ -11,6 +11,7 @@ import { handleAgents } from "./routes/agents";
 import { handleSchedules } from "./routes/schedules";
 import { handleRuns } from "./routes/runs";
 import { handleVault } from "./routes/vault";
+import { handleAgentBuilder } from "./routes/agent-builder";
 
 // Re-export the WorkflowEntrypoint so Cloudflare can locate the class by name.
 export { RunOrchestration } from "./workflow";
@@ -117,6 +118,7 @@ export default {
         handleDocuments,
         handleApprovals,
         handleAgents,
+        handleAgentBuilder,
         handleSchedules,
         handleVault,
         handleRuns,

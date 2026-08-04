@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import AgentChatClient from "@/components/agent-chat-client";
 import CustomizeAgentPanel from "@/components/customize-agent-panel";
 import AgentComposer, { type OrchestrationOption } from "@/components/agent-composer";
+import ProposeCapabilityPanel from "@/components/propose-capability-panel";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentDef } from "@/lib/agent-defs";
 import { getAgentCard, getOrchestrationOptions } from "@/lib/agent-catalog";
@@ -11,6 +12,7 @@ import {
   type AgentManifestDraft,
 } from "@/lib/agent-manifest";
 import { saveAgentOverrides, revertAgentOverride } from "./actions";
+import { proposeCapability } from "./propose-actions";
 import { createAgent, updateAgent, setAgentLifecycle, deleteAgent } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,8 @@ export default async function AgentDetailPage({ params }: PageProps) {
   // Ops-only authoring surfaces are prepared server-side; endusers only get the chat.
   const configEditor = isOps && card.source === "config" ? await loadConfigEditor(slug) : null;
   const codeCustomizer = isOps && card.source === "code" ? await loadCodeCustomizer(slug) : null;
+  // Tier 2 (#67): the proposed-state + pending PR for the "Propose new capability" panel.
+  const proposedState = isOps ? await loadProposedState(slug) : null;
 
   return (
     <>
@@ -90,8 +94,39 @@ export default async function AgentDetailPage({ params }: PageProps) {
           />
         </div>
       )}
+
+      {proposedState && (
+        <div className="page" style={{ paddingTop: 0 }}>
+          <ProposeCapabilityPanel
+            agentSlug={slug}
+            lifecycle={proposedState.lifecycle}
+            pendingPrUrl={proposedState.pendingPrUrl}
+            pendingPrNumber={proposedState.pendingPrNumber}
+            proposeCapability={proposeCapability}
+          />
+        </div>
+      )}
     </>
   );
+}
+
+// ─── Tier 2 (#67): the agent's proposed state + pending PR ───────────────────────
+
+async function loadProposedState(slug: string): Promise<{
+  lifecycle: string;
+  pendingPrUrl: string | null;
+  pendingPrNumber: number | null;
+} | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.schema("orchestration").from("agents")
+    .select("lifecycle, pending_pr_url, pending_pr_number").eq("slug", slug).maybeSingle();
+  if (!data) return null;
+  const row = data as { lifecycle: string; pending_pr_url: string | null; pending_pr_number: number | null };
+  return {
+    lifecycle: row.lifecycle,
+    pendingPrUrl: row.pending_pr_url ?? null,
+    pendingPrNumber: row.pending_pr_number ?? null,
+  };
 }
 
 // ─── Config agent: pre-fill the edit round-trip composer (Tier 1) ───────────────

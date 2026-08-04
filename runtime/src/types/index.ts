@@ -42,6 +42,18 @@ export interface Env {
   VAULT_REPO: string;            // set in wrangler.toml [vars]
   GITHUB_API_TOKEN: string;      // set via `wrangler secret put`
   GITHUB_WEBHOOK_SECRET?: string;
+  // ── Tier 2 agent builder (#67): GitHub App credential for opening code PRs ──────
+  // A dedicated GitHub App installed on LumitureLabs/LumiAgents with Contents:write +
+  // Pull requests:write and NOTHING else (no merge, no admin). Chosen over a PAT for a
+  // stable, installation-scoped identity. The runtime mints a short-lived RS256 JWT from
+  // the App key and exchanges it for an installation token (see integrations/github/app-auth.ts).
+  // ALL THREE are provisioned OUT-OF-BAND by ops (wrangler secret put) and are ABSENT in CI;
+  // every code path that needs them guards on their presence so their absence never breaks
+  // the build or unrelated routes. Never reuse GITHUB_API_TOKEN (that is the read-only vault
+  // credential scoped to a different repo).
+  GH_APP_ID?: string;                 // the GitHub App's numeric app id (JWT `iss`)
+  GH_APP_INSTALLATION_ID?: string;    // the installation id on LumitureLabs/LumiAgents
+  GH_APP_PRIVATE_KEY?: string;        // base64 of the App's PKCS8 PEM private key
   // Tavily web-search (GovCon incumbent research), set via `wrangler secret put`
   TAVILY_API_KEY?: string;
   // Resend transactional email (opportunity report dispatch), set via `wrangler secret put`
