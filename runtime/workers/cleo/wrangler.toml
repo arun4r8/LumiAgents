@@ -16,3 +16,20 @@ service = "lumiagents-runtime"
 
 [dev]
 port = 8792
+
+# ---------------------------------------------------------------------------
+# STAGING environment (issue #121). Purely additive; production config above is
+# unchanged. SUPABASE_URL is a placeholder overridden by CI with
+#   wrangler deploy --env staging --var SUPABASE_URL:$STAGING_SUPABASE_URL
+# Secrets: wrangler secret put ANTHROPIC_API_KEY --config workers/cleo/wrangler.toml --env staging
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "lumiagents-cleo-staging"
+
+[env.staging.vars]
+SUPABASE_URL = "https://STAGING-PROJECT-REF.supabase.co"  # overridden by CI (--var)
+ENVIRONMENT = "staging"
+
+[[env.staging.services]]
+binding = "RUNTIME_WORKER"
+service = "lumiagents-runtime-staging"

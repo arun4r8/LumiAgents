@@ -82,3 +82,71 @@ binding = "AI"
 [dev]
 port = 8787
 local_protocol = "http"
+# ---------------------------------------------------------------------------
+# STAGING environment (issue #121)
+#
+# Deployed automatically on every merge to `main` by
+# .github/workflows/deploy-staging.yml. Production config above is untouched —
+# staging is purely additive. Nothing here is inherited from the top level:
+# wrangler does NOT merge `vars`, `services`, `workflows`, `ai` or `triggers`
+# into a named environment, so each is restated in full below.
+#
+# SUPABASE_URL is a PLACEHOLDER. The staging Supabase project is provisioned
+# out-of-band (see docs/environments.md) and its project ref is deliberately not
+# committed; CI overrides the value at deploy time with
+#   wrangler deploy --env staging --var SUPABASE_URL:$STAGING_SUPABASE_URL
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "lumiagents-runtime-staging"
+
+[env.staging.vars]
+SUPABASE_URL = "https://STAGING-PROJECT-REF.supabase.co"  # overridden by CI (--var)
+JIRA_BASE_URL = "https://lumiture.atlassian.net"
+ENVIRONMENT = "staging"
+ALLOWED_ORIGINS = "https://lumiagents-dashboard-staging.lumiture.workers.dev"
+VAULT_OWNER = "LumitureLabs"
+VAULT_REPO  = "LumiKnowledge"
+
+# Secrets: the same list documented for production above, but set against the
+# staging Worker:  wrangler secret put <NAME> --env staging
+# Staging must have its own SUPABASE_SERVICE_ROLE_KEY / SUPABASE_JWT_SECRET
+# (from the staging Supabase project) — never reuse the production keys.
+
+[[env.staging.workflows]]
+name = "orchestration-workflow-staging"
+binding = "ORCHESTRATION_WORKFLOW"
+class_name = "RunOrchestration"
+script_name = "lumiagents-runtime-staging"
+
+# Per-agent Service Bindings, staging twins.
+[[env.staging.services]]
+binding = "ANGIE_WORKER"
+service = "lumiagents-angie-staging"
+
+[[env.staging.services]]
+binding = "BEADY_WORKER"
+service = "lumiagents-beady-staging"
+
+[[env.staging.services]]
+binding = "PATCH_WORKER"
+service = "lumiagents-patch-staging"
+
+[[env.staging.services]]
+binding = "MONEY_WORKER"
+service = "lumiagents-money-staging"
+
+[[env.staging.services]]
+binding = "CLEO_WORKER"
+service = "lumiagents-cleo-staging"
+
+[[env.staging.services]]
+binding = "DEWEY_WORKER"
+service = "lumiagents-dewey-staging"
+
+# Mirrors production so the scheduled-orchestration path is exercised before a
+# promote. Set `crons = []` here if staging cron noise becomes a problem.
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[env.staging.ai]
+binding = "AI"

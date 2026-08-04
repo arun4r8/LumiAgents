@@ -6,3 +6,16 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
+
+# ---------------------------------------------------------------------------
+# STAGING environment (issue #121). Deployed by
+# .github/workflows/deploy-staging.yml via
+#   pnpm opennextjs-cloudflare deploy -- --env staging
+# Production config above is unchanged.
+# ---------------------------------------------------------------------------
+[env.staging]
+name = "lumiagents-dashboard-staging"
+
+[env.staging.assets]
+directory = ".open-next/assets"
+binding = "ASSETS"

@@ -1,0 +1,289 @@
+# Deploy Staging (auto on merge to main)
+#
+# This is the pre-production gate created in #121. Every merge to `main` lands
+# here first: staging DB migrations, staging agent Workers, staging runtime,
+# staging dashboard, then a smoke test. Production is NOT touched by this
+# workflow — prod is promoted by hand via the "Deploy Worker (PRODUCTION —
+# manual)" / "Deploy Dashboard (PRODUCTION — manual)" workflows.
+#
+# The staging Supabase project is provisioned out-of-band (see
+# docs/environments.md). Until its secrets exist, every job here SKIPS with a
+# clear message instead of failing — a red X on `main` for infrastructure that
+# has not been created yet would train everyone to ignore the build status.
+name: Deploy Staging (auto)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Union of the paths filters on the two production deploy workflows.
+      - "runtime/**"
+      - "orchestrations/**"
+      - "integrations/**"
+      - "agents/**"
+      - "workers/**"
+      - "supabase/migrations/**"
+      - "dashboard/**"
+      - ".github/workflows/deploy-staging.yml"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  # Single source of truth for "is staging wired up yet?". Secrets cannot be
+  # referenced in job-level `if:` expressions, so we resolve them once here into
+  # a plain output that later jobs can gate on.
+  preflight:
+    name: Check staging configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+
+    steps:
+      - name: Resolve staging secrets
+        id: check
+        env:
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_RUNTIME_URL: ${{ secrets.STAGING_RUNTIME_URL }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+        run: |
+          missing=""
+          [ -n "$STAGING_SUPABASE_PROJECT_REF" ] || missing="$missing STAGING_SUPABASE_PROJECT_REF"
+          [ -n "$STAGING_RUNTIME_URL" ]          || missing="$missing STAGING_RUNTIME_URL"
+          [ -n "$STAGING_SUPABASE_URL" ]         || missing="$missing STAGING_SUPABASE_URL"
+          [ -n "$STAGING_SUPABASE_ANON_KEY" ]    || missing="$missing STAGING_SUPABASE_ANON_KEY"
+
+          if [ -n "$missing" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Staging not configured — skipping deploy"
+              echo
+              echo "The staging Supabase project is provisioned out-of-band and does not"
+              echo "exist yet, so this workflow skipped rather than failed."
+              echo
+              echo "Missing repository secrets:"
+              for s in $missing; do echo "- \`$s\`"; done
+              echo
+              echo "Follow the runbook in [docs/environments.md](../blob/main/docs/environments.md)"
+              echo "to provision staging, then re-run this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Staging not configured::Skipping staging deploy. Missing secrets:$missing. See docs/environments.md."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "✓ Staging is configured; proceeding."
+          fi
+
+  typecheck:
+    name: Typecheck
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (runtime + shared)
+        run: pnpm typecheck
+
+      - name: Typecheck (dashboard)
+        working-directory: dashboard
+        run: pnpm exec tsc --noEmit
+
+  migrate-staging:
+    name: Apply DB Migrations (staging)
+    needs: [preflight, typecheck]
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          # Same pinned version as the production workflow. Keep them in lockstep
+          # so staging validates the exact CLI behaviour prod will get.
+          version: 2.106.0
+
+      - name: Link staging project
+        run: supabase link --project-ref "$STAGING_SUPABASE_PROJECT_REF"
+        env:
+          STAGING_SUPABASE_PROJECT_REF: ${{ secrets.STAGING_SUPABASE_PROJECT_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Push migrations
+        run: supabase db push --yes
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  deploy-staging-workers:
+    name: Deploy Workers (staging)
+    needs: [preflight, migrate-staging]
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # wrangler.toml carries a placeholder SUPABASE_URL for staging; the real
+      # staging project ref is a secret, so it is injected here at deploy time.
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Same ordering rationale as production: the runtime's Service Bindings
+      # name the agent Workers, so the targets must already exist. On the very
+      # first staging deploy none of them do, hence agents first, runtime last.
+      - name: Deploy Angie (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/angie/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Beady (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/beady/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Patch (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/patch/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Money (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/money/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Cleo (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/cleo/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Dewey (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --config workers/dewey/wrangler.toml --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+      - name: Deploy Runtime (staging)
+        working-directory: runtime
+        run: pnpm exec wrangler deploy --env staging --var "SUPABASE_URL:$STAGING_SUPABASE_URL"
+
+  deploy-staging-dashboard:
+    name: Deploy Dashboard (staging)
+    needs: [preflight, deploy-staging-workers]
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build for Cloudflare (staging)
+        working-directory: dashboard
+        run: pnpm opennextjs-cloudflare build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_RUNTIME_URL: ${{ secrets.STAGING_RUNTIME_URL }}
+          NEXT_PUBLIC_EMAIL_CONFIGURED: "true"
+
+      - name: Deploy to Cloudflare Workers (staging)
+        working-directory: dashboard
+        run: pnpm opennextjs-cloudflare deploy -- --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  smoke-test-staging:
+    name: Smoke Test (staging)
+    needs: [preflight, deploy-staging-dashboard]
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Wait for propagation
+        run: sleep 20
+
+      - name: Health check
+        env:
+          RUNTIME_URL: ${{ secrets.STAGING_RUNTIME_URL }}
+        run: |
+          echo "→ GET $RUNTIME_URL/health"
+          response=$(curl -sf --retry 3 --retry-delay 5 "$RUNTIME_URL/health")
+          echo "$response" | jq .
+          status=$(echo "$response" | jq -r '.status')
+          if [ "$status" != "ok" ]; then
+            echo "Health check failed: status=$status"
+            exit 1
+          fi
+          environment=$(echo "$response" | jq -r '.environment')
+          if [ "$environment" != "staging" ]; then
+            echo "Expected environment=staging, got '$environment' — STAGING_RUNTIME_URL may point at production!"
+            exit 1
+          fi
+          echo "✓ Health check passed (environment=staging)"
+
+      - name: Orchestration catalogue
+        env:
+          RUNTIME_URL: ${{ secrets.STAGING_RUNTIME_URL }}
+        run: |
+          echo "→ GET $RUNTIME_URL/api/orchestrations"
+          response=$(curl -sf --retry 3 --retry-delay 5 "$RUNTIME_URL/api/orchestrations")
+          count=$(echo "$response" | jq 'length')
+          echo "Catalogue contains $count orchestrations"
+          if [ "$count" -lt 1 ]; then
+            echo "Catalogue is empty; registry may not have loaded"
+            exit 1
+          fi
+          echo "✓ Catalogue check passed"
+          echo "$response" | jq '[.[] | .name]'
+
+      - name: Staging deploy summary
+        run: |
+          {
+            echo "### Staging deploy succeeded"
+            echo
+            echo "\`main\` is live on staging. Promote to production when ready:"
+            echo "Actions → **Deploy Worker (PRODUCTION — manual)** → Run workflow"
+            echo "(and **Deploy Dashboard (PRODUCTION — manual)** if the dashboard changed)."
+          } >> "$GITHUB_STEP_SUMMARY"

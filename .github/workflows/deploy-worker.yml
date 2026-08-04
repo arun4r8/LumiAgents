@@ -1,19 +1,32 @@
-name: Deploy Worker
+# Deploy Worker (PRODUCTION) — MANUAL PROMOTION ONLY.
+#
+# There is deliberately no `push` trigger here (removed in #121). Merges to
+# `main` deploy to STAGING via deploy-staging.yml; production is promoted by a
+# human running this workflow from the Actions tab. Branch protection and
+# rulesets are unavailable on the org's Free plan for a private repo, so this
+# manual dispatch IS the pre-production gate. Do not re-add a push trigger.
+#
+# Every job below (typecheck → migrate → deploy → smoke-test → e2e) is
+# unchanged from the previous auto-deploy pipeline.
+name: Deploy Worker (PRODUCTION — manual)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "runtime/**"
-      - "orchestrations/**"
-      - "integrations/**"
-      - "agents/**"
-      - "workers/**"
-      - "supabase/migrations/**"
-      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to promote to production (branch, tag or SHA)"
+        required: false
+        default: main
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Two production deploys must never run at once: they push migrations and
+# overwrite the same Workers.
+concurrency:
+  group: deploy-production-worker
+  cancel-in-progress: false
 
 jobs:
   typecheck:
@@ -23,6 +36,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -47,6 +62,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: supabase/setup-cli@v1
         with:
@@ -73,6 +90,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -199,6 +218,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
