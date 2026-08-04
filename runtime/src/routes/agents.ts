@@ -80,9 +80,10 @@ export async function handleAgents(
   // are ops-only (RLS). Mirrors the open GET /api/orchestrations catalogue: only non-
   // sensitive card metadata is returned. Empty list on any failure (no-op safety).
   if (pathname === "/api/agents" && request.method === "GET") {
-    // Any authenticated user (ops + enduser) may read the card catalogue; not public.
-    const authResult = await requireUser(request, env);
-    if (authResult instanceof Response) return authResult;
+    // Public agent-card catalogue (slug/name/emoji/category only — no persona, tools,
+    // or config), mirroring the public GET /api/orchestrations. It is fetched during
+    // server-component render, where the Supabase session token isn't reliably available
+    // (getSession() returns null in RSC), so gating it here broke the whole Agents list.
     try {
       const rows = await new SupabaseClient(env).getCatalogAgents();
       return json(rows.map((r) => ({
