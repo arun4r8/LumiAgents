@@ -67,56 +67,31 @@ async function loadValidationContext(
   return { orchestrations, existingSlugs };
 }
 
-/** Persist the config-agent rows (persona → agent_config_overrides 'replace'; model →
- *  agent_configs; tools → agent_tools). Reused by create + update. */
-async function writeAgentData(
-  sb: Awaited<ReturnType<typeof createClient>>,
-  draft: ConfigAgentDraft,
-  userId: string,
-): Promise<string | null> {
-  // Model / max_tokens (reuses the Tier 0 config table).
-  const { error: cfgErr } = await sb.schema("orchestration").from("agent_configs").upsert({
-    agent_id: draft.slug,
-    model: draft.model,
-    max_tokens: draft.maxTokens,
-    updated_at: new Date().toISOString(),
-    updated_by: userId,
-  });
-  if (cfgErr) return cfgErr.message;
-
-  // Persona: a 'replace' override so the catalog agent's empty base is replaced wholesale.
-  const { error: ovrErr } = await sb.schema("orchestration").from("agent_config_overrides").insert({
-    agent_id: draft.slug,
-    system_prompt: draft.systemPrompt.trim(),
-    prompt_strategy: "replace",
-    enabled_tools: null,
-    updated_by: userId,
-  });
-  if (ovrErr) return ovrErr.message;
-
-  // Tools: replace the whole set (delete + insert) so an edit is idempotent.
-  const { error: delErr } = await sb.schema("orchestration").from("agent_tools")
-    .delete().eq("agent_slug", draft.slug);
-  if (delErr) return delErr.message;
-
-  if (draft.tools.length > 0) {
-    const { error: toolsErr } = await sb.schema("orchestration").from("agent_tools").insert(
-      draft.tools.map((t, i) => ({
-        agent_slug: draft.slug,
-        orchestration_name: t.orchestrationName,
-        params: t.params ?? null,
-        mode: t.mode,
-        position: i,
-      })),
-    );
-    if (toolsErr) return toolsErr.message;
-  }
-  return null;
+/** Args for the save_config_agent RPC — the whole write (agents + agent_configs +
+ *  agent_config_overrides + agent_tools) runs in one transaction inside the function,
+ *  so a partial failure rolls back cleanly (#114). owner/created_by/updated_by are set
+ *  from auth.uid() inside the RPC. */
+function rpcArgs(draft: ConfigAgentDraft, isCreate: boolean) {
+  return {
+    p_slug: draft.slug,
+    p_display_name: draft.displayName,
+    p_card: draft.card,
+    p_knowledge_corpora: draft.knowledgeCorpora,
+    p_model: draft.model,
+    p_max_tokens: draft.maxTokens,
+    p_system_prompt: draft.systemPrompt,
+    p_tools: draft.tools.map((t) => ({
+      orchestration_name: t.orchestrationName,
+      params: t.params ?? null,
+      mode: t.mode,
+    })),
+    p_is_create: isCreate,
+  };
 }
 
 /** Create a brand-new config agent (identity + card + persona + model + tools + knowledge). */
 export async function createAgent(manifest: AgentManifestDraft): Promise<SaveResult> {
-  const user = await requireOps();
+  await requireOps();
   const sb = await createClient();
   const draft = toConfigDraft(manifest);
 
@@ -124,26 +99,9 @@ export async function createAgent(manifest: AgentManifestDraft): Promise<SaveRes
   const errors = validateConfigAgent(draft, ctx);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
-  // Anchor row first. If any dependent write fails we compensate by deleting it, so a failed
-  // create never leaves a half-built agent (PostgREST has no cross-table transaction; the
-  // validation-first + compensating-delete gives practical atomicity).
-  const { error: agentErr } = await sb.schema("orchestration").from("agents").insert({
-    slug: draft.slug,
-    display_name: draft.displayName,
-    card: draft.card,
-    source: "config",
-    lifecycle: "active",
-    knowledge_corpora: draft.knowledgeCorpora,
-    owner: user.id,
-    created_by: user.id,
-  });
-  if (agentErr) return { ok: false, errors: { form: agentErr.message } };
-
-  const writeErr = await writeAgentData(sb, draft, user.id);
-  if (writeErr) {
-    await sb.schema("orchestration").from("agents").delete().eq("slug", draft.slug);
-    return { ok: false, errors: { form: writeErr } };
-  }
+  // One atomic write (agents + config + override + tools) — see save_config_agent (#114).
+  const { error } = await sb.schema("orchestration").rpc("save_config_agent", rpcArgs(draft, true));
+  if (error) return { ok: false, errors: { form: error.message } };
 
   revalidatePath("/agents");
   revalidatePath(`/agents/${draft.slug}`);
@@ -152,11 +110,11 @@ export async function createAgent(manifest: AgentManifestDraft): Promise<SaveRes
 
 /** Edit a config agent (slug is immutable). Re-runs full validation, then rewrites its rows. */
 export async function updateAgent(slug: string, manifest: AgentManifestDraft): Promise<SaveResult> {
-  const user = await requireOps();
+  await requireOps();
   const sb = await createClient();
   const draft = toConfigDraft({ ...manifest, slug }); // slug cannot be changed on edit
 
-  // Refuse to edit a code agent through this path (belt-and-suspenders; the UI never offers it).
+  // Friendly pre-check (the RPC also enforces both, and rolls back on violation).
   const { data: existing } = await sb.schema("orchestration").from("agents")
     .select("source").eq("slug", slug).maybeSingle();
   if (!existing) return { ok: false, errors: { form: `Unknown agent: ${slug}` } };
@@ -168,16 +126,9 @@ export async function updateAgent(slug: string, manifest: AgentManifestDraft): P
   const errors = validateConfigAgent(draft, ctx);
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
-  const { error: agentErr } = await sb.schema("orchestration").from("agents").update({
-    display_name: draft.displayName,
-    card: draft.card,
-    knowledge_corpora: draft.knowledgeCorpora,
-    updated_at: new Date().toISOString(),
-  }).eq("slug", slug);
-  if (agentErr) return { ok: false, errors: { form: agentErr.message } };
-
-  const writeErr = await writeAgentData(sb, draft, user.id);
-  if (writeErr) return { ok: false, errors: { form: writeErr } };
+  // One atomic write (agents + config + override + tools) — see save_config_agent (#114).
+  const { error } = await sb.schema("orchestration").rpc("save_config_agent", rpcArgs(draft, false));
+  if (error) return { ok: false, errors: { form: error.message } };
 
   revalidatePath("/agents");
   revalidatePath(`/agents/${slug}`);
