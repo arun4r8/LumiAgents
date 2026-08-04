@@ -5,10 +5,12 @@ import { requireOps } from "@/lib/require-ops";
 import { revalidatePath } from "next/cache";
 
 // Tier 2 agent builder (#67). Ops-only server action: forward a capability proposal to the
-// runtime's ops-gated draft endpoint, which generates the orchestration package and opens a
-// human-merge-gated PR. This action ONLY drafts — it never merges, and there is no merge path
-// anywhere in the dashboard. The runtime re-checks ops on its side (it holds the GitHub App
-// credential); this requireOps() is the caller-side gate, mirroring Tier 1's createAgent.
+// runtime's ops-gated draft endpoint, which generates the file set and opens a human-merge-gated
+// PR. Build 2 broadens the proposal to THREE kinds — a new tool (orchestration), a new data table,
+// or a new dedicated-Worker agent — each carrying a `kind` the runtime routes on. This action ONLY
+// drafts — it never merges, and there is no merge path anywhere in the dashboard. The runtime
+// re-checks ops on its side (it holds the GitHub App credential); this requireOps() is the
+// caller-side gate, mirroring Tier 1's createAgent.
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -21,7 +23,26 @@ export interface ProposeField {
   optional?: boolean;
 }
 
-export interface ProposeCapabilityInput {
+export type ProposeColumnType =
+  | "text"
+  | "int"
+  | "bigint"
+  | "boolean"
+  | "timestamptz"
+  | "jsonb"
+  | "uuid"
+  | "date"
+  | "numeric";
+
+export interface ProposeColumn {
+  name: string;
+  type: ProposeColumnType;
+  nullable: boolean;
+}
+
+/** New tool (Build 1): a new orchestration for an existing agent. */
+export interface OrchestrationProposal {
+  kind: "orchestration";
   agentSlug: string;
   capabilitySlug: string;
   description: string;
@@ -30,8 +51,35 @@ export interface ProposeCapabilityInput {
   output: ProposeField[];
 }
 
+/** New data table (Build 2): a new forward-only domain table with RLS. */
+export interface TableProposal {
+  kind: "table";
+  tableName: string;
+  columns: ProposeColumn[];
+  enduserReadable: boolean;
+  description?: string;
+}
+
+/** New agent (Build 2): a scaffold for a new dedicated-Worker agent. */
+export interface AgentProposal {
+  kind: "agent";
+  slug: string;
+  displayName: string;
+  card: {
+    emoji?: string;
+    category?: string;
+    description?: string;
+    suggestedPrompts?: string[];
+  };
+  persona: string;
+  tools: string[];
+  secrets?: string[];
+}
+
+export type ProposeCapabilityInput = OrchestrationProposal | TableProposal | AgentProposal;
+
 export type ProposeResult =
-  | { ok: true; prUrl: string; prNumber: number; branch: string }
+  | { ok: true; prUrl: string; prNumber: number; branch: string; kind: string }
   | { ok: false; error: string };
 
 export async function proposeCapability(input: ProposeCapabilityInput): Promise<ProposeResult> {
@@ -64,6 +112,7 @@ export async function proposeCapability(input: ProposeCapabilityInput): Promise<
     prUrl?: string;
     prNumber?: number;
     branch?: string;
+    kind?: string;
   };
 
   if (!res.ok) {
@@ -74,6 +123,9 @@ export async function proposeCapability(input: ProposeCapabilityInput): Promise<
     return { ok: false, error: "Runtime did not return a PR." };
   }
 
-  revalidatePath(`/agents/${input.agentSlug}`);
-  return { ok: true, prUrl: data.prUrl, prNumber: data.prNumber, branch: data.branch };
+  // Refresh the surfaces that show proposed state. A table proposal is not tied to an agent.
+  if (input.kind === "orchestration") revalidatePath(`/agents/${input.agentSlug}`);
+  revalidatePath("/agents");
+
+  return { ok: true, prUrl: data.prUrl, prNumber: data.prNumber, branch: data.branch, kind: data.kind ?? input.kind };
 }

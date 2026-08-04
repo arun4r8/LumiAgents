@@ -53,6 +53,9 @@ export default async function AgentDetailPage({ params }: PageProps) {
   const codeCustomizer = isOps && card.source === "code" ? await loadCodeCustomizer(slug) : null;
   // Tier 2 (#67): the proposed-state + pending PR for the "Propose new capability" panel.
   const proposedState = isOps ? await loadProposedState(slug) : null;
+  // Tier 2 Build 2 (#67): existing orchestration names, for the "new agent" form's tool picker
+  // (a new agent may only wire orchestrations that already exist).
+  const orchestrationNames = isOps ? await loadOrchestrationNames() : [];
 
   return (
     <>
@@ -102,6 +105,7 @@ export default async function AgentDetailPage({ params }: PageProps) {
             lifecycle={proposedState.lifecycle}
             pendingPrUrl={proposedState.pendingPrUrl}
             pendingPrNumber={proposedState.pendingPrNumber}
+            orchestrationNames={orchestrationNames}
             proposeCapability={proposeCapability}
           />
         </div>
@@ -127,6 +131,15 @@ async function loadProposedState(slug: string): Promise<{
     pendingPrUrl: row.pending_pr_url ?? null,
     pendingPrNumber: row.pending_pr_number ?? null,
   };
+}
+
+// ─── Tier 2 Build 2 (#67): existing orchestration names for the new-agent tool picker ──
+
+async function loadOrchestrationNames(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.schema("orchestration").from("orchestrations")
+    .select("name, is_active").eq("is_active", true).order("name");
+  return ((data ?? []) as { name: string }[]).map((o) => o.name);
 }
 
 // ─── Config agent: pre-fill the edit round-trip composer (Tier 1) ───────────────
