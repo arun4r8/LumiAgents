@@ -1,21 +1,27 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getAgentCards, type AgentCard } from "@/lib/agent-catalog";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { cardFromRow, type AgentCard } from "@/lib/agent-catalog";
 
 export const dynamic = "force-dynamic";
 
 // Tier 1 (#67): the agents list renders from the catalog (code ∪ config), not a hardcoded
 // array. Config agents created in-app appear here immediately. Ops see a "New agent" action
 // and can see disabled agents (badged); endusers see only active agents.
+// The catalog is read via the service-role admin client (bypasses RLS, reliable in
+// server-render) rather than a cross-worker fetch that needs a session token.
 
 export default async function AgentsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: { session } } = await supabase.auth.getSession();
   const isOps = user?.app_metadata?.role === "ops";
 
-  const all = await getAgentCards(session?.access_token);
+  const { data: rows } = await createAdminClient()
+    .schema("orchestration").from("agents")
+    .select("slug, display_name, card, source, lifecycle")
+    .order("display_name");
+  const all: AgentCard[] = (rows ?? []).map((r) => cardFromRow(r as Parameters<typeof cardFromRow>[0]));
   const agents = isOps ? all : all.filter((a) => a.lifecycle === "active");
 
   return (

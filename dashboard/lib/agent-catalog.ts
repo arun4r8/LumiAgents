@@ -47,6 +47,19 @@ function toCard(r: RawCatalogAgent): AgentCard {
   };
 }
 
+/** Map a raw orchestration.agents DB row (snake_case) to an AgentCard. Pure — safe to import
+ *  from server components that read the catalog directly via the service-role admin client
+ *  (reliable in server-render, unlike a cross-worker fetch that needs a session token). */
+export function cardFromRow(r: {
+  slug: string;
+  display_name: string;
+  card: RawCatalogAgent["card"];
+  source: "code" | "config";
+  lifecycle: "active" | "disabled";
+}): AgentCard {
+  return toCard({ slug: r.slug, displayName: r.display_name, card: r.card, source: r.source, lifecycle: r.lifecycle });
+}
+
 /** All agent cards (code ∪ config) from the runtime catalogue. Empty on any failure so the
  *  list page degrades gracefully rather than erroring. */
 export async function getAgentCards(token?: string): Promise<AgentCard[]> {

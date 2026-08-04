@@ -4,8 +4,9 @@ import CustomizeAgentPanel from "@/components/customize-agent-panel";
 import AgentComposer, { type OrchestrationOption } from "@/components/agent-composer";
 import ProposeCapabilityPanel from "@/components/propose-capability-panel";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAgentDef } from "@/lib/agent-defs";
-import { getAgentCard, getOrchestrationOptions } from "@/lib/agent-catalog";
+import { cardFromRow, getOrchestrationOptions } from "@/lib/agent-catalog";
 import { ALLOWED_MODELS, type PromptStrategy } from "@/lib/agent-overrides";
 import {
   DEFAULT_MAX_TOKENS,
@@ -42,9 +43,12 @@ export default async function AgentDetailPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: { session } } = await supabase.auth.getSession();
-  const card = await getAgentCard(slug, session?.access_token);
-  if (!card) notFound();
+  const { data: agentRow } = await createAdminClient()
+    .schema("orchestration").from("agents")
+    .select("slug, display_name, card, source, lifecycle")
+    .eq("slug", slug).maybeSingle();
+  if (!agentRow) notFound();
+  const card = cardFromRow(agentRow as Parameters<typeof cardFromRow>[0]);
 
   const isOps = user?.app_metadata?.role === "ops";
 
