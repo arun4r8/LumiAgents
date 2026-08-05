@@ -47,8 +47,8 @@ async function loadValidationContext(
 ): Promise<{ orchestrations: OrchestrationInfo[]; existingSlugs: string[] }> {
   const [catalogueRes, activeRows, agentRows] = await Promise.all([
     fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ name: string }[]>) : []))
-      .catch(() => [] as { name: string }[]),
+      .then((r) => (r.ok ? (r.json() as Promise<{ name: string; readOnly?: boolean }[]>) : []))
+      .catch(() => [] as { name: string; readOnly?: boolean }[]),
     sb.schema("orchestration").from("orchestrations").select("name, is_active"),
     sb.schema("orchestration").from("agents").select("slug"),
   ]);
@@ -59,6 +59,10 @@ async function loadValidationContext(
   const orchestrations: OrchestrationInfo[] = catalogueRes.map((o) => ({
     name: o.name,
     isActive: activeByName.get(o.name) ?? true,
+    // #127: forward the orchestration's own readOnly declaration so
+    // validateConfigAgent can accept sync mode where it is genuinely legal.
+    // Dropping it here made every sync mapping fail validation.
+    readOnly: o.readOnly,
   }));
   const existingSlugs = ((agentRows.data ?? []) as { slug: string }[])
     .map((a) => a.slug)

@@ -95,6 +95,9 @@ export interface OrchestrationOption {
 interface RawOrchestration {
   name: string;
   description: string | null;
+  /** #127: the orchestration's own read-only declaration, emitted by the runtime
+   *  catalogue. Sync dispatch is only legal against these. */
+  readOnly?: boolean;
 }
 
 /**
@@ -106,11 +109,14 @@ interface RawOrchestration {
 export async function getOrchestrationOptions(
   isActiveByName: Map<string, boolean>,
 ): Promise<OrchestrationOption[]> {
-  const readOnly = readOnlyOrchestrations();
   try {
     const res = await fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" });
     if (!res.ok) return [];
     const rows = (await res.json()) as RawOrchestration[];
+    // #127: derive the sync-eligible set from the catalogue's own readOnly flags.
+    // Called with no argument this fails closed (empty set), which silently hid the
+    // composer's sync toggle for every orchestration.
+    const readOnly = readOnlyOrchestrations(rows);
     return rows.map((o) => ({
       name: o.name,
       description: o.description,

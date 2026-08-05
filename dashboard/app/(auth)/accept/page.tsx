@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { roleOf } from "@/lib/role";
 import { useRouter } from "next/navigation";
 import { Loader2, Check } from "lucide-react";
 
@@ -30,7 +31,11 @@ export default function AcceptPage() {
       return;
     }
 
-    router.push("/overview");
+    // Land by role, exactly as login and the root redirect do. Endusers cannot see
+    // /overview (ops-only, and RLS empties it), so sending a freshly-invited enduser
+    // there made the first screen of the product a blank page with no way back.
+    const { data: { user } } = await supabase.auth.getUser();
+    router.push(roleOf(user) === "ops" ? "/overview" : "/agents");
     router.refresh();
   }
 
