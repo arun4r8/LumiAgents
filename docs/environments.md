@@ -301,15 +301,32 @@ The general shape: **`ADD COLUMN IF NOT EXISTS … CHECK (…)` is a trap.** If 
    ```
    They must sign out and back in to get a JWT with the claim. Also set Authentication → URL Configuration → Site URL and the redirect allow-list for that environment's dashboard.
 
-### The two settings that do NOT travel with `db push`
+### The settings that do NOT travel with `db push`
 
-Both are **project settings, not schema**. `db push` will never create them, nothing in the repo will tell you they are missing, and each breaks the app in a different, non-obvious way.
+All of these are **project settings, not schema**. `db push` will never create them, nothing in the repo will tell you they are missing, and each breaks the app in a different, non-obvious way.
 
 **1. Exposed schemas (`public, graphql_public, orchestration`).**
 A new project exposes `public, graphql_public` only. `orchestration` is where essentially the entire platform lives — orchestrations, runs, run_steps, tool_calls, artifacts, approvals, documents. Leave it off and PostgREST returns `PGRST106` / "The schema must be one of the following" for every dashboard and runtime query against it. The database is *correct*; the API in front of it refuses to serve it. Note that `supabase/config.toml`'s `[api] schemas` applies to the **local** stack only — it does not configure a hosted project.
 
 **2. The Auth access-token hook.**
 The migrations create `public.custom_access_token_hook`, `public.is_ops()` and `public.is_enduser()` and grant execute to `supabase_auth_admin` — but *turning the hook on* is a project setting. Without it, JWTs carry no `user_role` claim, so `is_ops()` is false for everyone, so every ops policy denies. Login works, the session is valid, and the app is simply empty everywhere. This is the classic failure mode: it looks like a data problem and it is a settings problem.
+
+**3. Auth URL configuration (`site_url` + redirect allow-list).**
+A new project ships with `site_url = http://localhost:3000` and an empty allow-list. Invite and password-reset links are built from `site_url`, so on a fresh environment they point at localhost and the redirect is refused. Set both to that environment's dashboard origin.
+
+**4. Signup must be disabled.**
+LumiAgents is invite-only, but a new Supabase project allows open signup by default. Leave it on and anyone who can reach the anon key can create themselves an account. Set `disable_signup = true`.
+
+**5. Invite/OTP lifetime (`mailer_otp_exp`).**
+Defaults to **3600 (1 hour)**. There is no SMTP on these projects, so invites are copy-paste links pasted into Teams — and a link that dies in an hour routinely expires before the recipient opens it. Both environments are set to **86400 (24h)**. Symptom when it is wrong: the invitee clicks the link and lands on `/login` with no explanation, because `verifyOtp` fails and the confirm route redirects there.
+
+These four are all reachable from the Management API, e.g.:
+
+```bash
+curl -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+  -d '{"disable_signup":true,"site_url":"https://<dashboard-origin>","uri_allow_list":"https://<dashboard-origin>/**","mailer_otp_exp":86400}'
+```
 
 Quick verification after a rebuild:
 
