@@ -29,7 +29,7 @@ async function getToken(): Promise<string> {
   return session.access_token;
 }
 
-export default async function IndustryDaysPage() {
+export async function IndustryDaysTab() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("industry_days")
@@ -45,7 +45,7 @@ export default async function IndustryDaysPage() {
     const id = formData.get("id") as string;
     const { error } = await supabase.from("industry_days").delete().eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/industry-days");
+    revalidatePath("/records/bd");
   }
 
   // Find now: fire beady/industry-day-sweep (async); results land here.
@@ -57,7 +57,7 @@ export default async function IndustryDaysPage() {
       { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
     );
     if (!res.ok) throw new Error(`Sweep failed (${res.status}): ${await res.text()}`);
-    revalidatePath("/industry-days");
+    revalidatePath("/records/bd");
   }
 
   return <IndustryDaysClient events={(data ?? []) as IndustryDay[]} dismiss={dismiss} findNow={findNow} />;

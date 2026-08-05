@@ -1,11 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import OverviewClient from "@/components/overview-client";
+import FirstRunNote from "@/components/first-run-note";
+import { roleOf } from "@/lib/role";
 
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
   const supabase = await createClient();
+
+  // M13 (#71): the ops first-run line, shown once. `onboarded_at` lives in
+  // user_metadata so it follows the account, not the browser.
+  const { data: { user } } = await supabase.auth.getUser();
+  const showFirstRun = roleOf(user) === "ops" && !user?.user_metadata?.onboarded_at;
 
   const [orchResult, runsResult, approvalsResult, stepsResult] = await Promise.all([
     supabase
@@ -101,12 +108,20 @@ export default async function OverviewPage() {
   }
 
   return (
-    <OverviewClient
-      runs={runs}
-      approvals={approvals}
-      orchestrations={orchestrations}
-      recentSteps={recentSteps}
-      decideApproval={decideApproval}
-    />
+    <>
+      {showFirstRun && (
+        <FirstRunNote
+          variant="line"
+          body="This is the whole fleet: every agent, what is running right now, what is waiting on a human, and what it is costing. Scheduled sweeps fire on their own, so these numbers move without anyone touching them. Anything that needs you shows up in Approvals with a count in the nav."
+        />
+      )}
+      <OverviewClient
+        runs={runs}
+        approvals={approvals}
+        orchestrations={orchestrations}
+        recentSteps={recentSteps}
+        decideApproval={decideApproval}
+      />
+    </>
   );
 }

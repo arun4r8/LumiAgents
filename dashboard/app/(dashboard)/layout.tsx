@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/sidebar";
+import Topbar from "@/components/topbar";
 import { roleOf } from "@/lib/role";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         pendingApprovals={pendingCount ?? 0}
       />
       <div className="lumi-main">
+        <Topbar isOps={role === "ops"} />
         {children}
       </div>
     </div>

@@ -59,7 +59,7 @@ export default async function ContentCalendarPage() {
       status: "idea",
     });
     if (error) throw new Error(error.message);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   async function updateEntry(formData: FormData) {
@@ -80,7 +80,7 @@ export default async function ContentCalendarPage() {
       })
       .eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   async function setStatus(formData: FormData) {
@@ -94,7 +94,7 @@ export default async function ContentCalendarPage() {
       .update({ status, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   async function deleteEntry(formData: FormData) {
@@ -103,7 +103,7 @@ export default async function ContentCalendarPage() {
     const id = formData.get("id") as string;
     const { error } = await supabase.from("content_calendar").delete().eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   // Draft with Cleo: fires cleo/content-draft (async); the draft lands back on the row.
@@ -123,7 +123,7 @@ export default async function ContentCalendarPage() {
     // Optimistically show it's being worked on.
     const supabase = await createClient();
     await supabase.from("content_calendar").update({ status: "drafting" }).eq("id", id);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   // Plan with Cleo: fires cleo/content-plan (async); seeds idea rows from a theme.
@@ -142,7 +142,7 @@ export default async function ContentCalendarPage() {
       },
     );
     if (!res.ok) throw new Error(`Plan failed (${res.status}): ${await res.text()}`);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
   }
 
   // Sync now: fire cleo/content-sync (async) to live-sync the calendar from the
@@ -158,7 +158,7 @@ export default async function ContentCalendarPage() {
       { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
     );
     if (!res.ok) throw new Error(`Sync failed (${res.status}): ${await res.text()}`);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
     return { started: true };
   }
 
@@ -176,7 +176,7 @@ export default async function ContentCalendarPage() {
     const supabase = await createClient();
     const { error } = await supabase.from("content_calendar").upsert(rows, { onConflict: "source_key" });
     if (error) throw new Error(error.message);
-    revalidatePath("/content-calendar");
+    revalidatePath("/records/content");
     return { imported: rows.length, skipped };
   }
 

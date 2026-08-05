@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { CalendarClock, Sparkles, Loader2, Trash2, ExternalLink, MapPin } from "lucide-react";
-import type { IndustryDay } from "@/app/(dashboard)/industry-days/page";
+import type { IndustryDay } from "@/app/(dashboard)/records/bd/industry-days";
 
 interface Props {
   events: IndustryDay[];

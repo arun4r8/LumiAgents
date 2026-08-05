@@ -3,9 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// Shared, kind-aware subscription actions. Used by the aggregate /subscriptions page
-// and by the contextual award-digest section on /awards. Every write goes to the
-// unified orchestration.subscriptions table; `kind` comes from the form.
+// Shared, kind-aware subscription actions. Used by the Settings → Subscriptions tab
+// (this folder keeps only the actions now that /subscriptions 308s into Settings)
+// and by the contextual award-digest section on the BD Pipeline Opportunities tab.
+// Every write goes to the unified orchestration.subscriptions table; `kind` comes
+// from the form.
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -113,8 +115,8 @@ export async function createSubscription(formData: FormData) {
       is_active: true,
     });
   if (error) throw new Error(error.message);
-  revalidatePath("/subscriptions");
-  revalidatePath("/awards");
+  revalidatePath("/settings");
+  revalidatePath("/records/bd");
 }
 
 export async function updateSubscription(formData: FormData) {
@@ -137,8 +139,8 @@ export async function updateSubscription(formData: FormData) {
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/subscriptions");
-  revalidatePath("/awards");
+  revalidatePath("/settings");
+  revalidatePath("/records/bd");
 }
 
 export async function toggleSubscription(formData: FormData) {
@@ -151,8 +153,8 @@ export async function toggleSubscription(formData: FormData) {
     .update({ is_active: !currentlyActive, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/subscriptions");
-  revalidatePath("/awards");
+  revalidatePath("/settings");
+  revalidatePath("/records/bd");
 }
 
 export async function deleteSubscription(formData: FormData) {
@@ -160,8 +162,8 @@ export async function deleteSubscription(formData: FormData) {
   const id = formData.get("id") as string;
   const { error } = await supabase.schema("orchestration").from("subscriptions").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/subscriptions");
-  revalidatePath("/awards");
+  revalidatePath("/settings");
+  revalidatePath("/records/bd");
 }
 
 // Send this subscription's digest now, routing to the orchestration for its kind.
@@ -176,6 +178,6 @@ export async function sendNow(formData: FormData) {
     body: JSON.stringify({ subscriptionId: id }),
   });
   if (!res.ok) throw new Error(`Send failed (${res.status}): ${await res.text()}`);
-  revalidatePath("/subscriptions");
-  revalidatePath("/awards");
+  revalidatePath("/settings");
+  revalidatePath("/records/bd");
 }

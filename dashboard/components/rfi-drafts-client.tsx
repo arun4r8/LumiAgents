@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { FileText, Sparkles, Loader2, Trash2, Copy, Check, ChevronRight, ChevronDown, AlertTriangle, ClipboardList, ShieldCheck } from "lucide-react";
-import type { RfiDraft, OppOption } from "@/app/(dashboard)/rfi-drafts/page";
+import type { RfiDraft, OppOption } from "@/app/(dashboard)/records/bd/rfi-drafts";
 
 interface Props {
   drafts: RfiDraft[];

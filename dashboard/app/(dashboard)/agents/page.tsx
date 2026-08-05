@@ -3,6 +3,8 @@ import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cardFromRow, type AgentCard } from "@/lib/agent-catalog";
+import { roleOf } from "@/lib/role";
+import FirstRunNote from "@/components/first-run-note";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,8 @@ export const dynamic = "force-dynamic";
 export default async function AgentsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const isOps = user?.app_metadata?.role === "ops";
+  // One source of truth for role — see lib/role.ts.
+  const isOps = roleOf(user) === "ops";
 
   const { data: rows } = await createAdminClient()
     .schema("orchestration").from("agents")
@@ -24,8 +27,21 @@ export default async function AgentsPage() {
   const all: AgentCard[] = (rows ?? []).map((r) => cardFromRow(r as Parameters<typeof cardFromRow>[0]));
   const agents = isOps ? all : all.filter((a) => a.lifecycle === "active");
 
+  // M1 (#71): the enduser welcome. /agents is the enduser landing (app/page.tsx
+  // sends non-ops here), so the welcome belongs on this screen. Persisted in
+  // user_metadata.onboarded_at, not localStorage.
+  const showWelcome = !isOps && !user?.user_metadata?.onboarded_at;
+
   return (
     <div className="page view-fade">
+      {showWelcome && (
+        <FirstRunNote
+          variant="welcome"
+          title="Welcome to LumiAgents"
+          body="An agent is a coworker you talk to in plain language. Tell one what you need — screen these resumes, find awards we could enter — and it does the work. Anything it does becomes a run: a step-by-step record you can open and watch, listed under Runs. You can also drop files into Library so the agents can search them. Agents take real actions, so read what one tells you it is about to do."
+          dismissLabel="Got it"
+        />
+      )}
       <div className="page-h">
         <div>
           <h1>Agents</h1>

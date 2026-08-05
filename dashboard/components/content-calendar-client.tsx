@@ -2,7 +2,7 @@
 
 import { Fragment, useRef, useState, useTransition } from "react";
 import { CalendarDays, Sparkles, Loader2, Trash2, Copy, Check, ChevronDown, ChevronRight, Plus, Wand2, Pencil, Upload, RefreshCw } from "lucide-react";
-import type { CalendarEntry } from "@/app/(dashboard)/content-calendar/page";
+import type { CalendarEntry } from "@/app/(dashboard)/records/content/page";
 
 interface Props {
   entries: CalendarEntry[];

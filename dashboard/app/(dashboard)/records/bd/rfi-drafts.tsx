@@ -63,7 +63,7 @@ async function getToken(): Promise<string> {
   return session.access_token;
 }
 
-export default async function RfiDraftsPage() {
+export async function RfiDraftsTab() {
   const supabase = await createClient();
 
   const { data: drafts } = await supabase
@@ -95,7 +95,7 @@ export default async function RfiDraftsPage() {
       },
     );
     if (!res.ok) throw new Error(`Draft failed (${res.status}): ${await res.text()}`);
-    revalidatePath("/rfi-drafts");
+    revalidatePath("/records/bd");
   }
 
   // Answer the intake gate: re-runs beady/rfi-draft with the confirmed answers, which
@@ -118,7 +118,7 @@ export default async function RfiDraftsPage() {
       },
     );
     if (!res.ok) throw new Error(`Draft failed (${res.status}): ${await res.text()}`);
-    revalidatePath("/rfi-drafts");
+    revalidatePath("/records/bd");
   }
 
   async function deleteDraft(formData: FormData) {
@@ -127,7 +127,7 @@ export default async function RfiDraftsPage() {
     const id = formData.get("id") as string;
     const { error } = await supabase.from("rfi_drafts").delete().eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/rfi-drafts");
+    revalidatePath("/records/bd");
   }
 
   return (

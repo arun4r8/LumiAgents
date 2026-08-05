@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Trophy, Trash2, Loader2, ExternalLink } from "lucide-react";
-import type { Award } from "@/app/(dashboard)/awards/page";
+import type { Award } from "@/app/(dashboard)/records/bd/opportunities";
 
 interface Props {
   awards: Award[];

@@ -37,7 +37,7 @@ export async function insertRow(
   const supabase = await createClient();
   const { error } = await supabase.from(table).insert(data);
   if (error) return { error: error.message };
-  revalidatePath("/data");
+  revalidatePath("/records/data");
   return {};
 }
 
@@ -52,7 +52,7 @@ export async function bulkInsert(
   const { error } = await supabase.from(table).insert(rows);
 
   if (error) return { inserted: 0, error: error.message };
-  revalidatePath("/data");
+  revalidatePath("/records/data");
   return { inserted: rows.length };
 }
 
@@ -64,6 +64,6 @@ export async function deleteRow(
   const supabase = await createClient();
   const { error } = await supabase.from(table).delete().eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath("/data");
+  revalidatePath("/records/data");
   return {};
 }

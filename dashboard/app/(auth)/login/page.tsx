@@ -39,7 +39,7 @@ export default function LoginPage() {
         {/* Brand */}
         <div className="login-brand">
           <div className="brand row gap-sm" style={{ padding: 0 }}>
-            <div className="brand-mark" />
+            <div className="brand-mark" aria-hidden="true">L</div>
             <span className="brand-name">Lumi<em>Agents</em></span>
           </div>
         </div>

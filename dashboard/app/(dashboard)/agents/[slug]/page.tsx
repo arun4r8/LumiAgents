@@ -5,6 +5,7 @@ import AgentComposer, { type OrchestrationOption } from "@/components/agent-comp
 import ProposeCapabilityPanel from "@/components/propose-capability-panel";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { roleOf } from "@/lib/role";
 import { getAgentDef } from "@/lib/agent-defs";
 import { cardFromRow, getOrchestrationOptions } from "@/lib/agent-catalog";
 import { ALLOWED_MODELS, type PromptStrategy } from "@/lib/agent-overrides";
@@ -55,7 +56,8 @@ export default async function AgentDetailPage({ params }: PageProps) {
   if (!agentRow) notFound();
   const card = cardFromRow(agentRow as Parameters<typeof cardFromRow>[0]);
 
-  const isOps = user?.app_metadata?.role === "ops";
+  // One source of truth for role — see lib/role.ts.
+  const isOps = roleOf(user) === "ops";
 
   // Ops-only authoring surfaces are prepared server-side; endusers only get the chat.
   const configEditor = isOps && card.source === "config" ? await loadConfigEditor(slug) : null;

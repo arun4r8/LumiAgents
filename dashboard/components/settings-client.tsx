@@ -9,6 +9,7 @@ import {
 import { useTransition, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { agentColor } from "@/lib/agent-style";
+import { SubscriptionsClient, type Subscription, type SubscriptionKind } from "@/components/subscriptions-client";
 
 // ─── Models available to pick ─────────────────────────────────────────────────
 
@@ -64,31 +65,54 @@ interface Props {
   userEmail: string;
   userCreatedAt: string | null;
   isOps: boolean;
+  /** ?tab= from the URL — this is what makes /subscriptions 308 onto a tab. */
+  initialTab?: string;
   members: TeamMember[];
   agentConfigs: AgentConfig[];
   orchestrations: OrchestrationType[];
+  subscriptions: Subscription[];
+  subscriptionsIntro: string;
+  subscriptionsInitialKind: SubscriptionKind | "all";
+  emailConfigured: boolean;
   updateAgentConfig: (agentId: string, data: { model: string; max_tokens: number; notes: string | null }) => Promise<void>;
   updateOrchestrationConfig: (id: string, data: { description: string | null; model: string | null; notes: string | null; cron: string | null }) => Promise<void>;
   inviteMember: (formData: FormData) => Promise<{ link: string; email: string; role: "ops" | "enduser" }>;
   revokeMember: (formData: FormData) => Promise<void>;
   resendInvite: (formData: FormData) => Promise<{ link: string }>;
+  createSubscription: (formData: FormData) => Promise<void>;
+  updateSubscription: (formData: FormData) => Promise<void>;
+  toggleSubscription: (formData: FormData) => Promise<void>;
+  deleteSubscription: (formData: FormData) => Promise<void>;
+  sendNow: (formData: FormData) => Promise<void>;
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-type Tab = "account" | "agents" | "orchestrations" | "team" | "appearance";
+type Tab = "account" | "agents" | "orchestrations" | "team" | "subscriptions" | "appearance";
+
+const TAB_LABEL: Record<Tab, string> = {
+  account: "Account",
+  agents: "Agents",
+  orchestrations: "Orchestrations",
+  team: "Team",
+  subscriptions: "Subscriptions",
+  appearance: "Appearance",
+};
 
 export function SettingsClient({
-  userId, userEmail, userCreatedAt, isOps, members, agentConfigs, orchestrations,
+  userId, userEmail, userCreatedAt, isOps, initialTab, members, agentConfigs, orchestrations,
+  subscriptions, subscriptionsIntro, subscriptionsInitialKind, emailConfigured,
   updateAgentConfig, updateOrchestrationConfig,
   inviteMember, revokeMember, resendInvite,
+  createSubscription, updateSubscription, toggleSubscription, deleteSubscription, sendNow,
 }: Props) {
-  // Agents/orchestrations config + team are ops-only; endusers get account +
-  // appearance (they need account to change their password).
+  // Agents/orchestrations config, team and subscriptions are ops-only; endusers
+  // get account + appearance (they need account to change their password).
   const tabs: Tab[] = isOps
-    ? ["agents", "orchestrations", "team", "account", "appearance"]
+    ? ["agents", "orchestrations", "team", "subscriptions", "account", "appearance"]
     : ["account", "appearance"];
-  const [tab, setTab] = useState<Tab>(isOps ? "agents" : "account");
+  const requested = tabs.find((t) => t === initialTab);
+  const [tab, setTab] = useState<Tab>(requested ?? (isOps ? "agents" : "account"));
 
   const memberSince = userCreatedAt
     ? new Date(userCreatedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
@@ -105,9 +129,8 @@ export function SettingsClient({
 
       <div className="tabs" style={{ marginBottom: 24 }}>
         {tabs.map((t) => (
-          <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}
-            style={{ textTransform: "capitalize" }}>
-            {t}
+          <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+            {TAB_LABEL[t]}
           </button>
         ))}
       </div>
@@ -142,6 +165,20 @@ export function SettingsClient({
           inviteMember={inviteMember}
           revokeMember={revokeMember}
           resendInvite={resendInvite}
+        />
+      )}
+      {tab === "subscriptions" && isOps && (
+        <SubscriptionsClient
+          subscriptions={subscriptions}
+          intro={subscriptionsIntro}
+          initialTab={subscriptionsInitialKind}
+          emailConfigured={emailConfigured}
+          embedded
+          createSubscription={createSubscription}
+          toggleSubscription={toggleSubscription}
+          deleteSubscription={deleteSubscription}
+          updateSubscription={updateSubscription}
+          sendNow={sendNow}
         />
       )}
       {tab === "appearance" && <AppearanceTab />}

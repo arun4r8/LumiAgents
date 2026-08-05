@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { AwardsClient } from "@/components/awards-client";
 import { SubscriptionsClient, type Subscription } from "@/components/subscriptions-client";
-import { createSubscription, updateSubscription, toggleSubscription, deleteSubscription, sendNow } from "../subscriptions/actions";
+import { createSubscription, updateSubscription, toggleSubscription, deleteSubscription, sendNow } from "../../subscriptions/actions";
 
 const EMAIL_CONFIGURED = process.env.NEXT_PUBLIC_EMAIL_CONFIGURED === "true";
 
@@ -27,7 +27,7 @@ export interface Award {
   last_scored_at: string;
 }
 
-export default async function AwardsPage() {
+export async function OpportunitiesTab() {
   const supabase = await createClient();
 
   const { data } = await supabase
@@ -50,7 +50,7 @@ export default async function AwardsPage() {
     const id = formData.get("id") as string;
     const { error } = await supabase.from("awards").delete().eq("id", id);
     if (error) throw new Error(error.message);
-    revalidatePath("/awards");
+    revalidatePath("/records/bd");
   }
 
   return (
@@ -62,7 +62,7 @@ export default async function AwardsPage() {
             subscriptions={(awardSubs ?? []) as Subscription[]}
             lockedKind="award"
             title="Award Digest Subscriptions"
-            intro="Email the award digest (industry recognition + government small business awards) to recipients on a cadence. Manage all subscriptions together on the Subscriptions page."
+            intro="Email the award digest (industry recognition + government small business awards) to recipients on a cadence. Manage all subscriptions together under Settings → Subscriptions."
             emailConfigured={EMAIL_CONFIGURED}
             embedded
             createSubscription={createSubscription}

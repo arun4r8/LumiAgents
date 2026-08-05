@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import AgentComposer from "@/components/agent-composer";
 import { createClient } from "@/lib/supabase/server";
+import { roleOf } from "@/lib/role";
 import { getOrchestrationOptions } from "@/lib/agent-catalog";
 import { emptyManifest } from "@/lib/agent-manifest";
 import { createAgent, updateAgent, setAgentLifecycle, deleteAgent } from "../actions";
@@ -14,7 +15,8 @@ export const dynamic = "force-dynamic";
 export default async function NewAgentPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user?.app_metadata?.role !== "ops") notFound();
+  // One source of truth for role — see lib/role.ts.
+  if (roleOf(user) !== "ops") notFound();
 
   const { data: activeRows } = await supabase.schema("orchestration")
     .from("orchestrations").select("name, is_active");

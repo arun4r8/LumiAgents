@@ -405,7 +405,7 @@ function downloadJobXlsx(job: Record<string, unknown>, results: Record<string, u
   XLSX.writeFile(wb, `resume-results-${jobLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-function ResumeResultsPanel({
+export function ResumeResultsPanel({
   resumeJobs, resumeResults,
 }: { resumeJobs: Record<string, unknown>[]; resumeResults: Record<string, unknown>[] }) {
   const resultsByJob = new Map<string, Record<string, unknown>[]>();
@@ -481,7 +481,7 @@ function ResumeResultsPanel({
 
 // ─── Candidates panel ──────────────────────────────────────────────────────────
 
-function CandidatesPanel({ candidates }: { candidates: Record<string, unknown>[] }) {
+export function CandidatesPanel({ candidates }: { candidates: Record<string, unknown>[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "shortlisted" | "pending">("all");
 
@@ -597,7 +597,7 @@ function CandidatesPanel({ candidates }: { candidates: Record<string, unknown>[]
 
 // ─── Staff requests panel ─────────────────────────────────────────────────────
 
-function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, unknown>[] }) {
+export function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<string, unknown>[] }) {
   return (
     <div style={{ marginBottom: 28 }}>
       <div className="section-h">
