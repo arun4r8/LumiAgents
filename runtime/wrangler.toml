@@ -104,13 +104,23 @@ SUPABASE_URL = "https://STAGING-PROJECT-REF.supabase.co"  # overridden by CI (--
 JIRA_BASE_URL = "https://lumiture.atlassian.net"
 ENVIRONMENT = "staging"
 ALLOWED_ORIGINS = "https://lumiagents-dashboard-staging.lumiture.workers.dev"
+# NOTE: these point at the PRODUCTION vault repo. That is safe ONLY because staging
+# deliberately has no GITHUB_API_TOKEN — the Knowledge Base editor PUTs file contents
+# (runtime/src/routes/vault.ts), so a staging token here would commit to the real vault.
+# Before adding that secret, fork to LumiKnowledge-staging and repoint VAULT_REPO.
 VAULT_OWNER = "LumitureLabs"
 VAULT_REPO  = "LumiKnowledge"
 
-# Secrets: the same list documented for production above, but set against the
-# staging Worker:  wrangler secret put <NAME> --env staging
-# Staging must have its own SUPABASE_SERVICE_ROLE_KEY / SUPABASE_JWT_SECRET
-# (from the staging Supabase project) — never reuse the production keys.
+# Secrets: staging intentionally runs with ONLY three —
+#   SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET (both staging-specific,
+#   never production's) and ANTHROPIC_API_KEY.
+# Everything else (GITHUB_API_TOKEN, MSGRAPH_*, RESEND_*, JIRA_*, GH_APP_*, TEAMS_*,
+# SAM_GOV/TAVILY/APOLLO keys) is deliberately UNSET because those integrations write to
+# production systems — the real vault, the real content-calendar workbook, real email,
+# real Jira tickets, real PRs — and there is no staging copy of those systems.
+# Those features failing in staging is the safety mechanism, not a bug.
+# See docs/environments.md → "Deliberately withheld from staging".
+#   wrangler secret put <NAME> --env staging
 
 [[env.staging.workflows]]
 name = "orchestration-workflow-staging"

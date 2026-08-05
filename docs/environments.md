@@ -134,11 +134,43 @@ for a in angie beady patch money cleo dewey; do
 done
 ```
 
-Judgement calls worth making deliberately when provisioning staging secrets:
+### ⚠️ Deliberately withheld from staging — do not "fix" these
 
-- **Leave `N8N_QUEUE_ENABLED` unset in staging** unless you are specifically testing the queue drainer — staging should not drain the production n8n call queue.
-- **Point `RESEND_FROM` at a non-customer-facing sender**, or leave `RESEND_API_KEY` unset, so staging never emails real recipients. `ALERT_EMAIL` likewise.
-- **`GITHUB_WEBHOOK_SECRET` / vault sync**: the production GitHub webhook points at the production runtime. Do not add a second webhook to `LumiKnowledge` for staging unless you want staging writing to the vault repo.
+Staging shares a Cloudflare account and the same *external* SaaS systems as production.
+Several integrations **write to the real world**, and there is no staging copy of the thing
+they write to. Giving staging production credentials for these does not make staging more
+useful — it makes staging able to damage production.
+
+**As of 2026-08-05 staging intentionally has only three Worker secrets:**
+`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `ANTHROPIC_API_KEY` (all staging-specific).
+
+Everything below is **deliberately unset**. Each one fails closed — the feature errors in
+staging, which is the intended behaviour. If you are tempted to add one because "the tab is
+broken in staging", that broken tab is the safety mechanism working:
+
+| Secret | What staging would do to PRODUCTION if given it |
+|---|---|
+| `GITHUB_API_TOKEN` | The Knowledge Base editor `PUT`s to `/repos/{VAULT_OWNER}/{VAULT_REPO}/contents/...` (`runtime/src/routes/vault.ts`). Staging's `VAULT_REPO` points at the real `LumitureLabs/LumiKnowledge`, so **editing a note in staging commits to the production vault.** |
+| `MSGRAPH_TENANT_ID` / `_CLIENT_ID` / `_CLIENT_SECRET` + `CONTENT_CALENDAR_*` | The content-calendar sync writes cells into the **real** Excel workbook on the Lumiture Labs SharePoint site. |
+| `RESEND_API_KEY` / `RESEND_FROM` / `ALERT_EMAIL` | **Sends real email to real people** — digests, alerts, approval requests. |
+| `JIRA_EMAIL` / `JIRA_API_TOKEN` | Creates and transitions **real Jira tickets**. |
+| `GH_APP_ID` / `GH_APP_INSTALLATION_ID` / `GH_APP_PRIVATE_KEY` | The Tier 2 agent builder opens **real pull requests** against this repo. |
+| `TEAMS_*` | Posts into **real Teams channels**. |
+| `SAM_GOV_API_KEY` / `TAVILY_API_KEY` / `APOLLO_API_KEY` | No write risk, but burns the **shared production API quota/budget**. |
+| `GITHUB_WEBHOOK_SECRET` | The production vault webhook points at the production runtime. Do not add a second webhook on `LumiKnowledge` for staging. |
+| `N8N_QUEUE_ENABLED` | Staging would drain the **production** n8n call queue. |
+
+**If you genuinely need one of these exercised in staging**, do not copy the production
+credential. Instead give staging its own isolated target:
+
+- Vault → fork to a `LumiKnowledge-staging` repo and repoint `VAULT_REPO` in
+  `[env.staging.vars]`, with a token scoped to that fork only.
+- Email → a Resend test key with a non-customer-facing `RESEND_FROM`.
+- Graph/content calendar → a separate throwaway workbook and its own app registration.
+- Jira → a sandbox project.
+
+Staging exists to validate **code, migrations and deploys** — not to exercise live
+third-party writes. Keep it that way.
 
 ---
 
