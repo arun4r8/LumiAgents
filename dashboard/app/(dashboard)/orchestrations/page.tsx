@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { roleOf } from "@/lib/role";
 import { OrchestrationsClient } from "@/components/orchestrations-client";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,11 @@ const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export default async function OrchestrationsPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Pausing/resuming a schedule is an ops-only UPDATE under RLS, so endusers must
+  // not be shown a toggle that would optimistically flip and then silently revert.
+  const isOps = roleOf(user) === "ops";
 
   const { data: orchestrations } = await supabase
     .schema("orchestration")
@@ -62,5 +68,11 @@ export default async function OrchestrationsPage() {
     revalidatePath("/orchestrations");
   }
 
-  return <OrchestrationsClient orchestrations={orcList} toggleOrchestration={toggleOrchestration} />;
+  return (
+    <OrchestrationsClient
+      orchestrations={orcList}
+      toggleOrchestration={toggleOrchestration}
+      isOps={isOps}
+    />
+  );
 }

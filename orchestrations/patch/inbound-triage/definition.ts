@@ -3,12 +3,12 @@ import { defineOrchestration, step, llm_decide, llm_extract, await_approval } fr
 import { sendTeamsMessage, sendTeamsCard } from "./tools";
 
 export const inputSchema = z.object({
-  source: z.enum(["email", "teams"]),
+  source: z.enum(["email", "teams"]).describe("Channel the message arrived on"),
   messageId: z.string().describe("External message ID for deduplication"),
   from: z.string().describe("Sender email or Teams user"),
-  subject: z.string().optional(),
+  subject: z.string().optional().describe("Message subject line, when the channel has one"),
   body: z.string().describe("Full message body"),
-  receivedAt: z.string().datetime().optional(),
+  receivedAt: z.string().datetime().optional().describe("ISO timestamp the message was received. Defaults to now"),
 });
 
 export const outputSchema = z.object({

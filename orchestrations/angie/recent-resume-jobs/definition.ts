@@ -7,8 +7,8 @@ import { sbHeaders } from "@/runtime/utils/supabase";
 // resume_jobs row for the role description, ranked by overall_score.
 
 export const inputSchema = z.object({
-  limit: z.number().int().min(1).max(50).default(10),
-  sinceHours: z.number().min(1).max(24 * 30).default(24),
+  limit: z.number().int().min(1).max(50).default(10).describe("Max candidates to return, highest overall score first."),
+  sinceHours: z.number().min(1).max(24 * 30).default(24).describe("Only include résumés scored in the last N hours (e.g. 24 for today's batch)."),
 });
 
 export const outputSchema = z.object({

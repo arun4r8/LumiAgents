@@ -39,7 +39,7 @@ export const inputSchema = z.discriminatedUnion("operation", [
   z.object({
     operation: z.literal("search"),
     jql: z.string().describe("JQL query string (e.g. 'project=OPS AND status=Open AND priority=High')"),
-    maxResults: z.number().int().min(1).max(50).default(20),
+    maxResults: z.number().int().min(1).max(50).default(20).describe("Max tickets to return from the search"),
   }),
 ]);
 

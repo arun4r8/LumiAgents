@@ -7,8 +7,8 @@ import { sbHeaders } from "@/runtime/utils/supabase";
 // content-sync all touch it whenever they write a row.
 
 export const inputSchema = z.object({
-  limit: z.number().int().min(1).max(50).default(10),
-  sinceHours: z.number().min(1).max(24 * 30).default(24),
+  limit: z.number().int().min(1).max(50).default(10).describe("Max calendar entries to return, most recent first."),
+  sinceHours: z.number().min(1).max(24 * 30).default(24).describe("Only include entries touched in the last N hours (e.g. 24 for today's activity)."),
 });
 
 export const outputSchema = z.object({

@@ -7,8 +7,8 @@ import { sbHeaders } from "@/runtime/utils/supabase";
 // touched them, so `last_scored_at` stands in (only cleo/award-sweep writes it).
 
 export const inputSchema = z.object({
-  limit: z.number().int().min(1).max(50).default(10),
-  sinceHours: z.number().min(1).max(24 * 30).default(24),
+  limit: z.number().int().min(1).max(50).default(10).describe("Max awards to return, highest fit score first."),
+  sinceHours: z.number().min(1).max(24 * 30).default(24).describe("Only include awards scored in the last N hours (e.g. 24 for today's sweep)."),
 });
 
 export const outputSchema = z.object({

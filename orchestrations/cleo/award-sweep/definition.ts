@@ -57,9 +57,9 @@ function governmentQueries(year: number): string[] {
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const inputSchema = z.object({
-  includeIndustry:  z.boolean().default(true),
-  includeGovernment: z.boolean().default(true),
-  minScore: z.number().int().min(1).max(10).default(5),
+  includeIndustry:  z.boolean().default(true).describe("Sweep industry and trade-press award programmes."),
+  includeGovernment: z.boolean().default(true).describe("Sweep government and public-sector award programmes."),
+  minScore: z.number().int().min(1).max(10).default(5).describe("Minimum relevance score to keep."),
 });
 
 const setAsideEnum   = z.enum(["none", "8(a)", "SDVOSB", "WOSB", "HUBZone", "other"]);

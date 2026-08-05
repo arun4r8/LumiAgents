@@ -8,8 +8,8 @@ import { sbHeaders } from "@/runtime/utils/supabase";
 // it upserts or demotes) — see orchestrations/beady/opportunity-sweep/definition.ts.
 
 export const inputSchema = z.object({
-  limit: z.number().int().min(1).max(50).default(10),
-  sinceHours: z.number().min(1).max(24 * 30).default(24),
+  limit: z.number().int().min(1).max(50).default(10).describe("Max opportunities to return, highest fit score first."),
+  sinceHours: z.number().min(1).max(24 * 30).default(24).describe("Only include opportunities scored in the last N hours (e.g. 24 for today's sweep)."),
 });
 
 export const outputSchema = z.object({

@@ -6,19 +6,24 @@ import { sbHeaders } from "@/runtime/utils/supabase";
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const inputSchema = z.object({
-  requestType: z.enum(["new_hire", "backfill", "contractor", "equipment", "access", "general"]),
+  requestType: z
+    .enum(["new_hire", "backfill", "contractor", "equipment", "access", "general"])
+    .describe("Kind of request being raised"),
   requestText: z
     .string()
     .min(10)
     .describe("Plain-language description of the request"),
   requestedBy: z.string().describe("Name or email of the requester"),
-  urgency: z.enum(["immediate", "this_week", "this_month", "no_rush"]).default("this_month"),
+  urgency: z
+    .enum(["immediate", "this_week", "this_month", "no_rush"])
+    .default("this_month")
+    .describe("How soon the request needs to be actioned"),
   contractId: z
     .string()
     .uuid()
     .optional()
     .describe("Contract this request is associated with"),
-  notifyTeams: z.boolean().default(true),
+  notifyTeams: z.boolean().default(true).describe("Post a Teams card when the request is filed"),
 });
 
 export const outputSchema = z.object({

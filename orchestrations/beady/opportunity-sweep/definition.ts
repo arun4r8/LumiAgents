@@ -39,10 +39,10 @@ export const inputSchema = z.object({
     .array(z.string())
     .optional()
     .describe("DoD branch filter for SBIR (e.g. ['ARMY', 'USAF']). Omit for all."),
-  postedWithinDays: z.number().int().min(1).max(90).default(30),
-  minScore: z.number().int().min(1).max(10).default(5),
-  samLimit: z.number().int().min(1).max(50).default(50),
-  sbirLimit: z.number().int().min(1).max(200).default(50),
+  postedWithinDays: z.number().int().min(1).max(90).default(30).describe("Only sweep notices posted in the last N days."),
+  minScore: z.number().int().min(1).max(10).default(5).describe("Minimum fit score to keep an opportunity."),
+  samLimit: z.number().int().min(1).max(50).default(50).describe("Max SAM.gov notices to pull per sweep."),
+  sbirLimit: z.number().int().min(1).max(200).default(50).describe("Max SBIR topics to pull per sweep."),
   samNoticeTypes: z
     .array(z.string())
     .default(["o", "p", "r"])

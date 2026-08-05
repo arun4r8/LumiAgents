@@ -7,10 +7,10 @@ import { scopeForAgent } from "@/runtime/agents/knowledge-access";
 
 export const ingestInputSchema = z.object({
   sourceName: z.string().describe("Human-readable label for the document"),
-  sourceKind: z.enum(["pdf", "text", "csv", "url"]),
+  sourceKind: z.enum(["pdf", "text", "csv", "url"]).describe("What the content was extracted from"),
   content: z.string().min(1).describe("Extracted text content of the document"),
   storagePath: z.string().optional().describe("Supabase Storage path if file-backed"),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional().describe("Arbitrary key/value tags stored alongside the document (e.g. author, contract)"),
   corpus: z.string().optional().describe("Ownership/visibility corpus. 'shared' (default, every agent) or an agent slug for a private corpus."),
   sensitivity: z.enum(["internal", "restricted"]).optional().describe("'internal' (default, team-usable) or 'restricted' (ops-only; never surfaces in agent retrieval)."),
 });

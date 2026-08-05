@@ -179,27 +179,221 @@ export function parseCsvLine(line: string): string[] {
   return result;
 }
 
-export function schemaToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  if (schema instanceof z.ZodObject) {
-    const shape = schema.shape as Record<string, z.ZodTypeAny>;
+// ─── zod → JSON Schema ─────────────────────────────────────────────────────────
+// The dashboard run form is rendered entirely from this output, so it has to carry
+// the authoring metadata (`.describe()`, `.default()`, `.min()`/`.max()`) through to
+// the browser and not just the bare type — otherwise every describe() string written
+// in orchestrations/**/definition.ts is discarded and the form falls back to raw
+// property keys. See #128.
+
+type JsonSchemaNode = Record<string, unknown>;
+
+// The subset of zod's internal `_def` we read. Every field is optional, so the cast
+// from ZodTypeDef is safe for any wrapper type.
+interface ZodDefLike {
+  description?: string;
+  innerType?: z.ZodTypeAny;
+  defaultValue?: () => unknown;
+  schema?: z.ZodTypeAny;
+}
+
+interface Unwrapped {
+  base: z.ZodTypeAny;
+  description: string | undefined;
+  defaultValue: unknown;
+  hasDefault: boolean;
+  nullable: boolean;
+  optional: boolean;
+}
+
+/**
+ * Peel the wrappers zod stacks around a base type. `.optional()`, `.default()` and
+ * `.nullable()` each wrap the inner schema, and `.describe()` clones whatever it is
+ * called on and hangs the description off that clone — so `z.string().optional()
+ * .describe("…")` carries its description on the ZodOptional while `z.string()
+ * .describe("…").optional()` carries it on the inner ZodString. Both the metadata
+ * and the underlying type must therefore be collected on the way down.
+ */
+function unwrapSchema(schema: z.ZodTypeAny): Unwrapped {
+  let cur: z.ZodTypeAny = schema;
+  let description: string | undefined;
+  let defaultValue: unknown;
+  let hasDefault = false;
+  let nullable = false;
+  let optional = false;
+
+  // Bounded: guards against a pathological/self-referential wrapper chain.
+  for (let depth = 0; depth < 20; depth++) {
+    const def = cur._def as ZodDefLike;
+    if (description === undefined && typeof def.description === "string") {
+      description = def.description;
+    }
+    if (cur instanceof z.ZodOptional) {
+      optional = true;
+      cur = cur.unwrap();
+      continue;
+    }
+    if (cur instanceof z.ZodNullable) {
+      nullable = true;
+      cur = cur.unwrap();
+      continue;
+    }
+    if (cur instanceof z.ZodDefault) {
+      if (!hasDefault && typeof def.defaultValue === "function") {
+        defaultValue = def.defaultValue();
+        hasDefault = true;
+      }
+      cur = def.innerType as z.ZodTypeAny;
+      continue;
+    }
+    if (cur instanceof z.ZodEffects) {
+      cur = def.schema as z.ZodTypeAny;
+      continue;
+    }
+    break;
+  }
+
+  return { base: cur, description, defaultValue, hasDefault, nullable, optional };
+}
+
+// True when a property may be omitted from the payload: `.optional()` or `.default()`
+// anywhere in its wrapper chain. `.nullable()` alone still requires the key.
+function isOmittable(schema: z.ZodTypeAny): boolean {
+  const { optional, hasDefault } = unwrapSchema(schema);
+  return optional || hasDefault;
+}
+
+function stringNode(base: z.ZodString, key?: string): JsonSchemaNode {
+  const node: JsonSchemaNode = { type: "string" };
+  let format: string | undefined;
+  for (const check of base._def.checks) {
+    if (check.kind === "min") node["minLength"] = check.value;
+    else if (check.kind === "max") node["maxLength"] = check.value;
+    else if (check.kind === "uuid") format ??= "uuid";
+    else if (check.kind === "email") format ??= "email";
+    else if (check.kind === "url") format ??= "uri";
+    else if (check.kind === "datetime") format ??= "date-time";
+  }
+  // Base64 document payloads are file uploads in the UI, never something a human
+  // types. The key name is the only reliable signal zod gives us.
+  if (format === undefined && key !== undefined && /pdfbase64$/i.test(key)) format = "pdf-file";
+  if (format !== undefined) node["format"] = format;
+  return node;
+}
+
+function numberNode(base: z.ZodNumber): JsonSchemaNode {
+  const node: JsonSchemaNode = { type: "number" };
+  for (const check of base._def.checks) {
+    if (check.kind === "min") node["minimum"] = check.value;
+    else if (check.kind === "max") node["maximum"] = check.value;
+  }
+  return node;
+}
+
+function arrayNode(base: z.ZodArray<z.ZodTypeAny>, key?: string): JsonSchemaNode {
+  const node: JsonSchemaNode = { type: "array", items: schemaToJsonSchema(base.element) };
+  const def = base._def;
+  if (def.minLength) node["minItems"] = def.minLength.value;
+  if (def.maxLength) node["maxItems"] = def.maxLength.value;
+  if (key !== undefined && /pdfbase64s$/i.test(key)) node["format"] = "pdf-files";
+  return node;
+}
+
+function objectNode(base: z.ZodObject<z.ZodRawShape>): JsonSchemaNode {
+  const shape = base.shape as Record<string, z.ZodTypeAny>;
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+  for (const [k, v] of Object.entries(shape)) {
+    properties[k] = schemaToJsonSchema(v, k);
+    if (!isOmittable(v)) required.push(k);
+  }
+  return { type: "object", properties, required };
+}
+
+function literalValue(schema: z.ZodTypeAny): string | undefined {
+  if (schema instanceof z.ZodLiteral) return String(schema.value);
+  if (schema instanceof z.ZodEnum) return (schema.options as string[])[0];
+  return undefined;
+}
+
+/**
+ * A discriminated union is rendered as a discriminator <select> that swaps the field
+ * set beneath it, so the form needs the per-variant properties, not just `type:
+ * "object"`. `oneOf` is the standard-JSON-Schema view (agent tool definitions read
+ * this same output); `discriminator` + `variants` is the flattened view the form
+ * consumes. The discriminator key itself is omitted from each variant's properties
+ * because the selector supplies it.
+ */
+function discriminatedUnionNode(
+  base: z.ZodDiscriminatedUnion<string, z.ZodDiscriminatedUnionOption<string>[]>,
+): JsonSchemaNode {
+  const discriminator = base._def.discriminator;
+  const options = base.options as z.ZodObject<z.ZodRawShape>[];
+
+  const variants = options.flatMap((option) => {
+    const shape = option.shape as Record<string, z.ZodTypeAny>;
+    const value = literalValue(shape[discriminator] as z.ZodTypeAny);
+    if (value === undefined) return [];
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const [k, v] of Object.entries(shape)) {
-      properties[k] = schemaToJsonSchema(v);
-      if (!(v instanceof z.ZodOptional) && !(v instanceof z.ZodDefault)) required.push(k);
+      if (k === discriminator) continue;
+      properties[k] = schemaToJsonSchema(v, k);
+      if (!isOmittable(v)) required.push(k);
     }
-    return { type: "object", properties, required };
+    const { description } = unwrapSchema(option);
+    return [{
+      value,
+      ...(description !== undefined ? { description } : {}),
+      properties,
+      required,
+    }];
+  });
+
+  return {
+    type: "object",
+    discriminator,
+    variants,
+    oneOf: options.map((option) => schemaToJsonSchema(option)),
+    required: [discriminator],
+  };
+}
+
+/**
+ * Convert a zod schema to a JSON-Schema-shaped object for the catalogue API.
+ * `key` is the property name when called for an object member; it is used only to
+ * infer upload formats, which zod cannot express.
+ */
+export function schemaToJsonSchema(schema: z.ZodTypeAny, key?: string): Record<string, unknown> {
+  const { base, description, defaultValue, hasDefault, nullable } = unwrapSchema(schema);
+
+  let node: JsonSchemaNode;
+  if (base instanceof z.ZodObject) node = objectNode(base as z.ZodObject<z.ZodRawShape>);
+  else if (base instanceof z.ZodString) node = stringNode(base, key);
+  else if (base instanceof z.ZodNumber) node = numberNode(base);
+  else if (base instanceof z.ZodBoolean) node = { type: "boolean" };
+  else if (base instanceof z.ZodArray) node = arrayNode(base as z.ZodArray<z.ZodTypeAny>, key);
+  else if (base instanceof z.ZodEnum) node = { type: "string", enum: base.options as string[] };
+  else if (base instanceof z.ZodLiteral) {
+    const value = base.value as unknown;
+    const literalType = typeof value === "number" ? "number" : typeof value === "boolean" ? "boolean" : "string";
+    node = { type: literalType, const: value, enum: [value] };
+  } else if (base instanceof z.ZodDiscriminatedUnion) {
+    node = discriminatedUnionNode(
+      base as z.ZodDiscriminatedUnion<string, z.ZodDiscriminatedUnionOption<string>[]>,
+    );
+  } else if (base instanceof z.ZodUnion) {
+    node = { anyOf: (base.options as z.ZodTypeAny[]).map((o) => schemaToJsonSchema(o)) };
+  } else if (base instanceof z.ZodRecord) {
+    node = { type: "object", additionalProperties: schemaToJsonSchema(base.valueSchema as z.ZodTypeAny) };
+  } else {
+    node = {};
   }
-  if (schema instanceof z.ZodString) return { type: "string" };
-  if (schema instanceof z.ZodNumber) return { type: "number" };
-  if (schema instanceof z.ZodBoolean) return { type: "boolean" };
-  if (schema instanceof z.ZodArray) return { type: "array", items: schemaToJsonSchema(schema.element) };
-  if (schema instanceof z.ZodEnum) return { type: "string", enum: schema.options as string[] };
-  if (schema instanceof z.ZodOptional) return schemaToJsonSchema(schema.unwrap());
-  if (schema instanceof z.ZodDefault) return schemaToJsonSchema(schema._def.innerType as z.ZodTypeAny);
-  if (schema instanceof z.ZodNullable) return { ...schemaToJsonSchema(schema.unwrap()), nullable: true };
-  if (schema instanceof z.ZodDiscriminatedUnion) return { type: "object" };
-  return {};
+
+  if (nullable) node["nullable"] = true;
+  if (description !== undefined) node["description"] = description;
+  if (hasDefault) node["default"] = defaultValue;
+  return node;
 }
 
 // ─── Per-user rate limiting (fixed window via claim_rate_limit RPC) ─────────────

@@ -7,7 +7,7 @@ import { vaultSourceUri } from "../../../integrations/github/base";
 export const inputSchema = z.object({
   repoOwner:    z.string().describe("GitHub owner (user or org) of the Obsidian vault repo"),
   repoName:     z.string().describe("Repository name of the Obsidian vault"),
-  branch:       z.string().default("main"),
+  branch:       z.string().default("main").describe("Branch of the vault repo to sync from"),
   changedPaths: z.array(z.string()).optional()
     .describe("Specific file paths to sync, supplied by GitHub push webhook. Omit for full vault sync."),
   removedPaths: z.array(z.string()).optional()
