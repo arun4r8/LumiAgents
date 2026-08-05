@@ -161,16 +161,20 @@ Record the project ref from the dashboard URL (`https://supabase.com/dashboard/p
 
 Migrations are **forward-only**; the staging project starts empty and replays all of them from scratch.
 
+> **The chain does not replay against an empty project on its own.** Run `supabase/bootstrap-fresh-project.sql` first. See [Rebuilding the database from scratch](#rebuilding-the-database-from-scratch) below — it is the authoritative procedure and this step is a summary of it.
+
 ```bash
 export SUPABASE_ACCESS_TOKEN=<your personal access token>
+# 0. Set exposed schemas, then run supabase/bootstrap-fresh-project.sql in the SQL Editor.
 supabase link --project-ref <staging-ref>
-supabase db push --yes
+supabase db push --yes    # expect to run this more than once
 ```
 
-Watch out for two things on this first run:
+Watch out for these on this first run:
 
 - `supabase/config.toml` pins `project_id = "cuaknazkpmwvnkmwtamp"`. `supabase link` may report config drift against the staging project. `db push` uses the *linked* ref, not `project_id`, so this is informational — but read the output rather than skipping past it, and **do not** commit a changed `project_id`.
 - Any extension the production project enabled by hand (rather than in a migration) has to be enabled on staging by hand too. If `db push` fails on a missing extension, enable it in Database → Extensions and re-run.
+- The CLI applies migrations in **batches**, not all in one transaction. A `db push` that stops part-way has still committed everything before the failing migration, and a clean `db push` may need several consecutive runs before it reports nothing left to apply. Keep running it until it says so.
 
 `supabase/seed.sql` is **not** applied by `db push`. Apply it manually if staging needs the seed data.
 
@@ -216,6 +220,91 @@ Chicken-and-egg on `STAGING_RUNTIME_URL`: you don't know the URL until the Worke
 ### 6. Prove it works
 
 Actions → **Deploy Staging (auto)** → Run workflow. It should go green through `smoke-test-staging`, and the health check asserts `environment == "staging"` — which is also the guard that catches `STAGING_RUNTIME_URL` accidentally pointing at production.
+
+---
+
+## Rebuilding the database from scratch
+
+**The finding: `supabase/migrations/` cannot rebuild this database from nothing.**
+
+This was discovered standing up the staging Supabase project. Replaying all 77 migrations against a brand-new, empty project does not work — it fails, gets fixed, and fails again, seven times over. The reason is that the chain was written against a database that already existed. The n8n-era schema — `public.users`, `opportunities`, `assessments`, the finance and résumé tables, a trigger function — was built by hand in the Supabase dashboard and **never captured in a migration**. The earliest migrations `ALTER` it, enable RLS on it, and hang foreign keys off it. Nothing creates it.
+
+Treat this as a **disaster-recovery gap, not staging friction**. If the production project were lost, this repository could not reconstruct it. `supabase/bootstrap-fresh-project.sql` is what closes the gap: an idempotent script that recreates just enough of the pre-migration schema for the chain to replay. It is deliberately **not** a migration and must never be moved into `supabase/migrations/` — it describes the state the chain assumes, and the CLI must not record it as applied.
+
+### Troubleshooting: the failures, in the order they occur
+
+Every row here is a real error from a real empty-project replay. All of them are handled by the bootstrap script; the table is here so the errors are recognisable if you hit a *new* one of the same species.
+
+| # | Symptom | Cause | Fix |
+|---|---|---|---|
+| 1 | `20260506000002_supabase_auth_migration.sql` → `ERROR: relation "public.users" does not exist` | The legacy `public.users` table (`user_id, firstname, lastname, email, role, is_active, username, password, created_at`) predates migrations. `20260724000003` later drops it, so it exists only *inside* the chain. | Bootstrap creates it. |
+| 2 | `20260506000004_prune_and_harden.sql` → `ERROR: relation "public.opportunities" does not exist`, then the same for ~20 more | That migration enables RLS on the whole n8n-era table set: `assessments, budget_lines, candidates, capability_statements, company_profiles, contracts, employees, icp_profiles, incumbent_research, indirect_rates, invoices, labor_records, opportunities, opportunity_documents, past_performance, prompt_bank, resume_jobs, resume_queue, resume_results, staff_requests` — plus the two retired vector stores `opportunity_documents_vt` and `past_performance_vt`, which **no longer exist in production at all** (`20260724000001` drops them). None are created by any migration. | Bootstrap creates all 22. |
+| 3 | `ERROR: there is no unique constraint matching given keys for referenced table "opportunities"` | A bootstrapped table without a PRIMARY KEY can't be the target of the FK a later migration adds (`202605080911` → `govcon_assessments.opportunity_id REFERENCES public.opportunities(id)`). | Bootstrap declares `opportunities.id` as PRIMARY KEY (and gives every legacy table a PK). |
+| 4 | `ERROR: constraint "opportunities_source_check" of relation "opportunities" does not exist` | `20260506000005` creates that CHECK as a side effect of `ADD COLUMN IF NOT EXISTS source … CHECK (…)`. If `source` already exists, Postgres skips the whole action **including the CHECK** — and `20260530000001` then does an *unguarded* `DROP CONSTRAINT opportunities_source_check`. | Bootstrap adds the constraint explicitly, with the original 3-value list (`manual, sam_gov, govcon_api`); `20260530000001` is what adds `sbir`. |
+| 5 | `ERROR: function public.set_updated_at() does not exist` | A legacy trigger function. `20260506000005` attaches it to three tables; no migration defines it. (`orchestration.set_updated_at()` is a different, properly-migrated function.) | Bootstrap creates it. |
+| 6 | `20260524000001_resume_native_scoring.sql` → `ERROR: column "leadership_and_inititative_score" does not exist` | That migration *fixes a typo*: it renames `resume_results.leadership_and_inititative_score` → `…initiative…`. A bootstrap seeded from production's **current** schema already has the corrected name, so the rename has nothing to rename. | Bootstrap creates the column with the **original typo'd spelling**. This is load-bearing; do not "fix" it in the bootstrap script. |
+| 7 | `20260709000002_knowledge_corpus_sensitivity.sql` → `ERROR: type extensions.vector does not exist` | A new Supabase project installs `vector` into `public`; production has it in `extensions`. Two earlier migrations (`20260506000003`, `20260624000002`) reference the type by **bare** name, and one later migration references `extensions.vector`. `db push` runs with a search_path that excludes `extensions`. | `ALTER EXTENSION vector SET SCHEMA extensions;` — in the bootstrap, guarded, together with appending `extensions` to the migration role's `search_path` so the bare references still resolve. See the ordering note in section 0 of the script if you prefer not to touch `search_path`. |
+
+The general shape: **`ADD COLUMN IF NOT EXISTS … CHECK (…)` is a trap.** If the column exists, the constraint silently doesn't get created, and a later unguarded `DROP CONSTRAINT` blows up. Rows 4 and 6 are both versions of "the bootstrap must reproduce the schema as it was *before* the chain ran, not as it is *now*".
+
+### Procedure
+
+1. **Create the project.** Same org, same region as production, Postgres major version **17** (matches `[db] major_version` in `supabase/config.toml`). Record the project ref.
+2. **Set the exposed schemas** — Project Settings → API → *Exposed schemas* → `public, graphql_public, orchestration`. Do this **before** anything else; see below for why it matters.
+3. **Run the bootstrap.** SQL Editor → paste `supabase/bootstrap-fresh-project.sql` → Run. Or `psql "$DATABASE_URL" -f supabase/bootstrap-fresh-project.sql`. It is idempotent and safe to re-run at any point.
+4. **Link and push.**
+   ```bash
+   export SUPABASE_ACCESS_TOKEN=<personal access token>
+   supabase link --project-ref <ref>
+   supabase db push --yes
+   ```
+   **Run `db push` repeatedly until it reports nothing left to apply.** The CLI applies migrations in batches rather than in one transaction, so a single invocation routinely stops early even when nothing is wrong. If it stops on an *error*, everything before the failing migration is already committed — fix, re-run, and it picks up where it left off.
+5. **Enable the JWT access-token hook** — Authentication → Hooks → *Customize Access Token (JWT) Claims* → enable → `public.custom_access_token_hook` → Save.
+6. **Create ops users** — add them in Authentication → Users, then set the role:
+   ```sql
+   update auth.users
+   set raw_app_meta_data = raw_app_meta_data || '{"role":"ops"}'::jsonb
+   where email = '<ops-user@…>';
+   ```
+   They must sign out and back in to get a JWT with the claim. Also set Authentication → URL Configuration → Site URL and the redirect allow-list for that environment's dashboard.
+
+### The two settings that do NOT travel with `db push`
+
+Both are **project settings, not schema**. `db push` will never create them, nothing in the repo will tell you they are missing, and each breaks the app in a different, non-obvious way.
+
+**1. Exposed schemas (`public, graphql_public, orchestration`).**
+A new project exposes `public, graphql_public` only. `orchestration` is where essentially the entire platform lives — orchestrations, runs, run_steps, tool_calls, artifacts, approvals, documents. Leave it off and PostgREST returns `PGRST106` / "The schema must be one of the following" for every dashboard and runtime query against it. The database is *correct*; the API in front of it refuses to serve it. Note that `supabase/config.toml`'s `[api] schemas` applies to the **local** stack only — it does not configure a hosted project.
+
+**2. The Auth access-token hook.**
+The migrations create `public.custom_access_token_hook`, `public.is_ops()` and `public.is_enduser()` and grant execute to `supabase_auth_admin` — but *turning the hook on* is a project setting. Without it, JWTs carry no `user_role` claim, so `is_ops()` is false for everyone, so every ops policy denies. Login works, the session is valid, and the app is simply empty everywhere. This is the classic failure mode: it looks like a data problem and it is a settings problem.
+
+Quick verification after a rebuild:
+
+```sql
+-- schema replayed to HEAD?
+select count(*) from supabase_migrations.schema_migrations;   -- expect 77 (as of 2026-08-04)
+
+-- hook + helpers present?
+select proname from pg_proc
+where proname in ('custom_access_token_hook','is_ops','is_enduser','set_updated_at');
+
+-- vector in the right schema?
+select n.nspname from pg_extension e join pg_namespace n on n.oid = e.extnamespace
+where e.extname = 'vector';                                    -- expect 'extensions'
+
+-- typo fixed by 20260524000001?
+select column_name from information_schema.columns
+where table_name = 'resume_results' and column_name like 'leadership%';
+                                                               -- expect leadership_and_initiative_score
+```
+
+Then sign in as an ops user and confirm the dashboard lists orchestrations. That single check exercises the exposed schemas *and* the hook at once.
+
+### Keeping the gap from getting worse
+
+- New migrations must not deepen the assumption. Guard anything that touches a legacy object: `IF EXISTS` / `IF NOT EXISTS` on drops and adds, `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`.
+- If a migration must depend on a legacy table's shape, add that shape to `bootstrap-fresh-project.sql` in the same PR.
+- The bootstrap script is minimal on purpose. It creates the columns the migrations actually touch, not production's real legacy column lists, which are not recoverable from this repo. That is fine — these tables are vestigial, several are dropped by the chain itself, and no application code reads them. It is *not* fine if someone starts writing to one.
 
 ---
 
@@ -279,3 +368,4 @@ If a promote is actively breaking production and you need the previous Worker ba
 - **No staging E2E.** Staging runs the smoke test only. The E2E suite needs an ops account and credentials (`E2E_OPS_EMAIL` / `E2E_OPS_PASSWORD`); add `STAGING_E2E_*` equivalents and a staging E2E job once staging has ops users.
 - **`wrangler deploy` with no `--env` now warns.** Because `wrangler.toml` defines environments, the production deploy step prints "Multiple environments are defined… no target environment was specified" and deploys the top-level (production) config. That is correct behaviour and the production commands were deliberately left untouched; passing `--env=""` would silence it and is verified to produce identical bindings, if the noise ever bothers anyone.
 - **Shared Cloudflare API token.** Staging and production deploy with the same `CLOUDFLARE_API_TOKEN`. A GitHub Team upgrade with environment-scoped secrets is the clean fix.
+- **The n8n-era schema is still not in the migration chain.** `supabase/bootstrap-fresh-project.sql` makes a from-scratch rebuild *possible* (see [Rebuilding the database from scratch](#rebuilding-the-database-from-scratch)), but it is a hand-maintained side file, not something CI exercises, and it reproduces only the columns the migrations touch. The real fixes, in increasing order of effort: (a) a CI job that provisions a throwaway project and replays bootstrap + all migrations, so this rots loudly instead of silently; (b) capture the legacy tables' true shapes from a production dump; (c) squash the chain into a single baseline migration taken from production and retire the bootstrap entirely. Until then, a rebuild is a documented manual procedure, and it is only verified as far as the last person who ran it.

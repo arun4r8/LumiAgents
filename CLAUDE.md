@@ -65,6 +65,7 @@ When adding a new orchestration, **clone the closest existing one** in `/orchest
 - **No secrets in code.** Wrangler secrets for Workers, Supabase Vault for app-level secrets. If you find a hardcoded credential, stop and tell the user.
 - **RLS-first.** When adding a table, write the RLS policy in the same migration. A table without RLS does not get merged.
 - **Migrations are forward-only and reviewed.** Never edit an applied migration; add a new one.
+- **Migrations are not replayable from scratch on their own.** The chain assumes a pre-existing n8n-era schema that was never captured in a migration, so an empty Supabase project needs `supabase/bootstrap-fresh-project.sql` run *before* the first `supabase db push` (it is not a migration — never put it in `supabase/migrations/`). Don't deepen that assumption: guard anything touching a legacy object with `IF EXISTS` / `IF NOT EXISTS`, use `DROP CONSTRAINT IF EXISTS` before `ADD CONSTRAINT`, and never rely on `ADD COLUMN IF NOT EXISTS … CHECK (…)` to create a constraint (the CHECK is silently skipped when the column already exists). If a new migration needs a legacy table's shape, add that shape to the bootstrap script in the same PR. See `docs/environments.md` → "Rebuilding the database from scratch".
 
 ## Conventions you should follow unless there's reason not to
 
