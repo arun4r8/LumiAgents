@@ -124,7 +124,13 @@
    Ramp assignment (dark → light flips automatically, the steps do the work):
      --bg   page ground          --bg-1 subtle raise (neutral-900)
      --bg-2 tonal surface/hover (neutral-800, the README's card + nav-hover fill)
-     --line hairlines (neutral-800)   --line-2 control edges (neutral-700)
+     --line hairlines ON THE PAGE GROUND + card outer edges (neutral-800, the
+            README's value; against a tonal card it reads as no edge at all,
+            which is the intent — the fill carries the shape)
+     --line-2 rules INSIDE a tonal surface (table rows, card footers, panel
+            headers, list separators) and control edges (neutral-700). A
+            neutral-800 rule on a neutral-800 surface has zero contrast, so
+            anything that has to stay legible on a filled card takes this step.
      --ink → --ink-4 walk --color-text, neutral-300/400/500/600
 
    PHASING: these aliases are disposable. Phases 4–6 rebuild every screen
@@ -383,7 +389,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--ink-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-bottom-width: 2px;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
@@ -565,7 +571,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 500;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   background: var(--bg-1);
   color: var(--ink-1);
   line-height: 1;
@@ -605,8 +611,13 @@ h1, h2, h3, h4, h5, h6 {
 .btn.sm { height: 24px; padding: 0 9px; font-size: 11.5px; border-radius: var(--radius-sm); }
 .btn.icon { width: 30px; padding: 0; justify-content: center; }
 .btn.icon.sm { width: 24px; }
-.btn.primary  { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.btn.primary:hover { background: var(--ink-1); border-color: var(--ink-1); }
+/* README: "Buttons are outlined, never filled (primary = accent outline on
+   transparent)". The old primary was a solid --ink slab, which under the new
+   palette is a near-white glare in dark mode. This is the Nocturne .btn-primary
+   treatment; the filled .btn.accent below stays for the rare emphasis case. */
+.btn.primary  { background: transparent; color: var(--color-accent); border-color: var(--color-accent); }
+.btn.primary:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-color: var(--color-accent); }
+.btn.primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
 .btn.accent   { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
 .btn.accent:hover { filter: brightness(.95); }
 .btn.success  { background: var(--ok); color: var(--color-bg); border-color: var(--ok); }
@@ -655,12 +666,12 @@ table.tbl thead th {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 8px var(--row-pad-x);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   background: var(--bg-1);
 }
 table.tbl tbody td {
   padding: var(--row-pad-y) var(--row-pad-x);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   color: var(--ink-1);
   vertical-align: middle;
 }
@@ -714,7 +725,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--ink-3); pointer-events: none; }
 .search input {
   background: var(--bg-1);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   height: 28px;
   border-radius: var(--radius-md);
   padding: 0 10px 0 28px;
@@ -728,7 +739,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 /* ── tabs ─────────────────────────────────────────────────────────── */
 .tabs {
   display: flex; gap: 2px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   margin-bottom: 16px;
 }
 .tabs button {
@@ -750,7 +761,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 /* ── segmented window toggle ──────────────────────────────────────── */
 .winseg {
   display: inline-flex;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -758,7 +769,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   appearance: none;
   background: transparent;
   border: 0;
-  border-left: 1px solid var(--line);
+  border-left: 1px solid var(--line-2);
   color: var(--ink-2);
   font-family: inherit;
   font-size: 11.5px;
@@ -791,7 +802,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .json-pane .jh {
   display: flex; align-items: center; justify-content: space-between;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   background: var(--bg);
 }
 .json-pane .jh .ttl {
@@ -844,7 +855,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .tl-rail .line {
   width: 2px;
   flex: 1;
-  background: var(--line);
+  background: var(--line-2);
   margin-top: 2px;
   margin-bottom: -2px;
   min-height: 12px;
@@ -877,7 +888,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .tl-detail .prose {
   padding: 10px 12px;
   background: var(--bg-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius-sm);
   color: var(--ink-1);
   font-size: 12.5px;
@@ -978,7 +989,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .orch-card .meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .orch-card .ft {
   display: flex; align-items: center; justify-content: space-between;
-  border-top: 1px solid var(--line); padding-top: 10px;
+  border-top: 1px solid var(--line-2); padding-top: 10px;
   color: var(--ink-2); font-size: 12px;
 }
 .orch-card .ft a {
@@ -1007,7 +1018,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 }
 .ex-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .ex-chip {
-  border: 1px solid var(--line); background: var(--bg); color: var(--ink-1);
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--ink-1);
   padding: 6px 12px; border-radius: var(--radius-pill); font-size: 12.5px; cursor: pointer;
   font-family: var(--sans);
   transition: background .12s, border-color .12s;
@@ -1018,7 +1029,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   border-radius: var(--radius-lg); background: var(--bg-2); overflow: hidden;
 }
 .answer-card .ah {
-  padding: 14px 18px; border-bottom: 1px solid var(--line);
+  padding: 14px 18px; border-bottom: 1px solid var(--line-2);
   display: flex; align-items: center; justify-content: space-between;
   background: var(--bg-1);
 }
@@ -1031,11 +1042,11 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   font-family: var(--mono); font-size: 12.5px;
 }
 .answer-card .body table.data th,
-.answer-card .body table.data td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+.answer-card .body table.data td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); text-align: left; }
 .answer-card .body table.data th { color: var(--ink-2); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-1); }
 .sql-block {
   margin: 0; padding: 14px 16px;
-  background: var(--bg-2); border-top: 1px solid var(--line);
+  background: var(--bg-2); border-top: 1px solid var(--line-2);
   font-family: var(--mono); font-size: 12px; line-height: 1.55;
   color: var(--ink-1); white-space: pre; overflow-x: auto;
 }
@@ -1248,7 +1259,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   grid-template-columns: 8px 28px auto auto 1fr;
   gap: 8px; align-items: baseline;
   padding: 6px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
 }
 .stream-row.fresh { animation: fresh-fade 1.4s forwards; }
 @keyframes fresh-fade { from { background: var(--accent-soft); } to { background: transparent; } }
@@ -1278,7 +1289,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .thru {
   display: grid; grid-template-columns: repeat(24, 1fr);
   align-items: end; height: 100px; gap: 2px;
-  padding: 8px 0; border-bottom: 1px solid var(--line);
+  padding: 8px 0; border-bottom: 1px solid var(--line-2);
 }
 .thru-bar {
   display: flex; flex-direction: column; justify-content: flex-end;
@@ -1319,7 +1330,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .spend { display: flex; flex-direction: column; gap: 14px; }
 .spend-tot {
   display: flex; gap: 32px;
-  padding-bottom: 12px; border-bottom: 1px solid var(--line);
+  padding-bottom: 12px; border-bottom: 1px solid var(--line-2);
 }
 .spend-tot-cell { display: flex; flex-direction: column; gap: 1px; }
 .spend-tot-v {
@@ -1344,12 +1355,12 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .spend-tok { font-size: 11.5px; min-width: 44px; text-align: right; }
 .spend-track {
   height: 8px; background: var(--bg-2);
-  border: 1px solid var(--line); position: relative;
+  border: 1px solid var(--line-2); position: relative;
 }
 .spend-fill { height: 100%; min-width: 2px; transition: width .2s; }
 .spend-note {
   font-size: 10.5px; color: var(--ink-3);
-  padding-top: 4px; border-top: 1px solid var(--line);
+  padding-top: 4px; border-top: 1px solid var(--line-2);
 }
 
 /* mono-id copy widget */
@@ -1416,14 +1427,14 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
 .ag-cat {
   position: absolute; top: 10px; right: 10px; z-index: 2;
   background: var(--bg-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   font-size: 10px; font-weight: 600; letter-spacing: .01em;
   padding: 3px 7px;
 }
 .ag-art {
   aspect-ratio: 1 / 1;
   overflow: hidden;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
 }
 .ag-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ag-body { padding: 12px 13px 13px; }
@@ -1436,7 +1447,7 @@ table.tbl tbody tr:last-child td { border-bottom: 0; }
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11.5px; font-weight: 600;
   padding: 5px 9px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-2);
   white-space: nowrap;
   transition: background .15s, color .15s;
 }
