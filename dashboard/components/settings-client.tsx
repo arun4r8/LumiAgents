@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useTransition, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { agentColor } from "@/lib/agent-style";
 
 // ─── Models available to pick ─────────────────────────────────────────────────
 
@@ -17,13 +18,16 @@ const MODELS = [
   { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5",  desc: "Fastest · lowest cost" },
 ] as const;
 
+// Colours come from the shared agent identity tokens (app/lumi.css), not a
+// third private palette — this file used to disagree with lib/agent-style on
+// cleo's and dewey's hues.
 const AGENT_META: Record<string, { label: string; role: string; color: string }> = {
-  angie: { label: "Angie", role: "HR & Recruiting",                color: "oklch(62% 0.18 280)" },
-  beady: { label: "Beady", role: "GovCon Business Development",    color: "oklch(58% 0.17 145)" },
-  cleo:  { label: "Cleo",  role: "Eminence, Awards & Proposals",   color: "oklch(62% 0.17 320)" },
-  dewey: { label: "Dewey", role: "Knowledge Librarian",            color: "oklch(60% 0.15 230)" },
-  money: { label: "Money", role: "Finance & Analytics",            color: "oklch(62% 0.16 85)"  },
-  patch: { label: "Patch", role: "IT Operations",                  color: "oklch(60% 0.16 30)"  },
+  angie: { label: "Angie", role: "HR & Recruiting",                color: agentColor("angie") },
+  beady: { label: "Beady", role: "GovCon Business Development",    color: agentColor("beady") },
+  cleo:  { label: "Cleo",  role: "Eminence, Awards & Proposals",   color: agentColor("cleo")  },
+  dewey: { label: "Dewey", role: "Knowledge Librarian",            color: agentColor("dewey") },
+  money: { label: "Money", role: "Finance & Analytics",            color: agentColor("money") },
+  patch: { label: "Patch", role: "IT Operations",                  color: agentColor("patch") },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -213,14 +217,14 @@ function AgentCard({ agentId, meta, config, updateAgentConfig }: {
         background: `color-mix(in oklch, ${meta.color} 6%, var(--bg))`,
       }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 0, flexShrink: 0,
+          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
           background: meta.color, display: "flex", alignItems: "center",
-          justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 15,
+          justifyContent: "center", color: "var(--color-bg)", fontWeight: 500, fontSize: 16,
         }}>
           {meta.label[0]}
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14.5, color: meta.color }}>{meta.label}</div>
+          <div style={{ fontWeight: 600, fontSize: 14.5, color: meta.color }}>{meta.label}</div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{meta.role}</div>
         </div>
         {updatedAt && <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>Updated {updatedAt}</div>}
@@ -327,7 +331,7 @@ function OrchestrationsTab({ orchestrations, agentConfigs, updateOrchestrationCo
               border: `1px solid color-mix(in oklch, ${meta.color} 20%, transparent)`,
             }}>
               <Bot style={{ width: 14, height: 14, color: meta.color }} />
-              <span style={{ fontWeight: 700, fontSize: 13.5, color: meta.color }}>{meta.label}</span>
+              <span style={{ fontWeight: 600, fontSize: 13.5, color: meta.color }}>{meta.label}</span>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>·</span>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{meta.role}</span>
               <span className="chip muted" style={{ marginLeft: "auto", fontSize: 11 }}>

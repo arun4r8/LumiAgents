@@ -681,7 +681,7 @@ function StatCard({ icon, label, value, accent }: {
         <span style={{ fontSize: 11.5, fontWeight: 500 }}>{label}</span>
       </div>
       <div style={{
-        fontSize: 22, fontWeight: 700,
+        fontSize: 22, fontWeight: 600,
         color: accent === "ok" ? "var(--ok)" : accent === "err" ? "var(--err)" : "var(--ink)",
       }}>
         {value}

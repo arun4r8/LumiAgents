@@ -150,7 +150,7 @@ export default function CustomizeAgentPanel(props: Props) {
       }}>
         <SlidersHorizontal style={{ width: 15, height: 15, color: "var(--accent)" }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Customize {displayName}</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Customize {displayName}</div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
             Ops-only. Persona, model, and enabled tools. No code deploy.
           </div>

@@ -561,19 +561,19 @@ function DocCorpus({
         {/* Stats row */}
         <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{corpusDocs.length}</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{corpusDocs.length}</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>documents</div>
           </div>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{totalChunks.toLocaleString()}</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{totalChunks.toLocaleString()}</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>chunks</div>
           </div>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{(totalChars / 1000).toFixed(0)}k</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{(totalChars / 1000).toFixed(0)}k</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>characters</div>
           </div>
           <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>
               {vaultCount} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>/ {uploadedCount}</span>
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>vault / uploaded</div>
@@ -689,15 +689,15 @@ function DocCorpus({
     <div>
       <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
         <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{documents.length}</div>
+          <div style={{ fontSize: 22, fontWeight: 600 }}>{documents.length}</div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>documents</div>
         </div>
         <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{(totalChars / 1000).toFixed(0)}k</div>
+          <div style={{ fontSize: 22, fontWeight: 600 }}>{(totalChars / 1000).toFixed(0)}k</div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>characters</div>
         </div>
         <div className="card" style={{ padding: "12px 18px", flex: 1 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>
+          <div style={{ fontSize: 22, fontWeight: 600 }}>
             {vaultCount} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-3)" }}>/ {documents.length - vaultCount}</span>
           </div>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>vault / uploaded</div>

@@ -8,6 +8,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
+import { AgentMark } from "@/components/agent-mark";
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -298,7 +299,7 @@ export default function AgentChatClient({
       {/* Page header */}
       <div className="page-h">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 28, lineHeight: 1 }} aria-hidden="true">{agentEmoji}</span>
+          <AgentMark slug={slug} name={agentName} size={32} />
           <div>
             <h1 style={{ margin: 0 }}>{agentName}</h1>
             <div className="sub">{description}</div>

@@ -268,7 +268,7 @@ function ScoreBadge({ score, max = 10 }: { score: unknown; max?: number }) {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3,
-      fontWeight: 700, fontSize: 13, color,
+      fontWeight: 600, fontSize: 13, color,
     }}>
       <Star style={{ width: 11, height: 11, fill: color, stroke: "none" }} />
       {n}/{max}

@@ -14,7 +14,7 @@ type TypeFilter = "all" | "industry" | "government";
 
 function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
   return (
-    <span style={{ display: "inline-block", background: bg, color: fg, borderRadius: 0, padding: "2px 9px", fontSize: 11, fontWeight: 700, textTransform: "capitalize", whiteSpace: "nowrap" }}>
+    <span style={{ display: "inline-block", background: bg, color: fg, borderRadius: 0, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize", whiteSpace: "nowrap" }}>
       {text}
     </span>
   );
@@ -169,7 +169,7 @@ function AwardRow({ award: a, dismissAward }: { award: Award; dismissAward: Prop
       </td>
       <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{deadline ?? "-"}</td>
       <td style={{ padding: "12px 14px" }}>
-        <span style={{ display: "inline-block", background: fit.bg, color: fit.fg, borderRadius: 0, padding: "2px 10px", fontWeight: 700, fontSize: 12.5 }}>{a.fit_score ?? "-"}</span>
+        <span style={{ display: "inline-block", background: fit.bg, color: fit.fg, borderRadius: 0, padding: "2px 10px", fontWeight: 600, fontSize: 12.5 }}>{a.fit_score ?? "-"}</span>
       </td>
       <td style={{ padding: "12px 14px" }}>{a.prestige ? <Badge text={a.prestige} {...(PRESTIGE_COLORS[a.prestige] ?? PRESTIGE_COLORS.low)} /> : "-"}</td>
       <td style={{ padding: "12px 14px" }}>{a.effort ? <Badge text={a.effort} {...(EFFORT_COLORS[a.effort] ?? EFFORT_COLORS.medium)} /> : "-"}</td>
