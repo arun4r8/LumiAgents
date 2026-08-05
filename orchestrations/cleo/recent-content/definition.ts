@@ -26,6 +26,8 @@ export default defineOrchestration({
   name: "cleo/recent-content",
   version: 1,
   triggerMode: "agent",
+  // #127: single GET against content_calendar; no writes, no await_approval.
+  readOnly: true,
   description:
     "Content calendar items updated recently (drafted, advanced, or synced), most recent first. Cleo's 'what have you done in the content calendar' tool.",
   inputSchema,

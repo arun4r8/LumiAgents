@@ -41,12 +41,27 @@ async function resolveConfigAgent(
   return { def };
 }
 
-async function mintDispatchToken(jwtSecret: string): Promise<string> {
+/**
+ * Mint the short-lived token an agent uses to call back into the runtime.
+ *
+ * `sub`/`user_role` are the authorization principal and are deliberately unchanged:
+ * agent dispatch is still a trusted ops-equivalent machine caller. `act_for` (#127) is
+ * ATTRIBUTION ONLY — the id of the signed-in end user whose chat message caused this
+ * dispatch. routes/orchestrations.ts stamps it into `triggered_by_user_id` so the run
+ * shows up for that user under enduser RLS. No route may grant access based on it.
+ */
+async function mintDispatchToken(jwtSecret: string, actForUserId?: string): Promise<string> {
   const enc = (s: string) =>
     btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
   const header = enc(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const now = Math.floor(Date.now() / 1000);
-  const payload = enc(JSON.stringify({ sub: "agent-dispatch", user_role: "ops", iat: now, exp: now + 300 }));
+  const payload = enc(JSON.stringify({
+    sub: "agent-dispatch",
+    user_role: "ops",
+    ...(actForUserId ? { act_for: actForUserId } : {}),
+    iat: now,
+    exp: now + 300,
+  }));
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(jwtSecret),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
@@ -132,7 +147,11 @@ export async function handleAgents(
       return json({ error: `Unknown agent: ${slug}` }, 404);
     }
 
-    const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET);
+    // The real end user behind this chat turn. If the caller was itself an agent-dispatch
+    // principal (agent → agent), carry through whoever it was already acting for rather
+    // than losing attribution. Undefined for a genuine machine caller.
+    const actFor = authResult.userId === "agent-dispatch" ? authResult.actFor : authResult.userId;
+    const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET, actFor);
 
     let body: { messages?: ChatMessage[]; files?: FileAttachment[]; conversationId?: string };
     try { body = await request.json() as typeof body; }

@@ -49,10 +49,34 @@ async function verifyJwt(
   }
 }
 
+/**
+ * The authenticated principal a route is acting as.
+ *
+ * `userId` + `role` are the ONLY authorization inputs. `actFor` is attribution-only
+ * (#127): it carries the id of the real end user on whose behalf an internally-minted
+ * agent-dispatch token was created, so a run started through agent chat can be stamped
+ * with `triggered_by_user_id` and become visible to that user under the enduser RLS
+ * policy (`triggered_by_user_id = auth.uid()`). It grants nothing — the principal is
+ * still `agent-dispatch` with role `ops`, and no route may widen access based on it.
+ */
+export interface AuthPrincipal {
+  userId: string;
+  role: string;
+  actFor?: string;
+}
+
+/** Pull the attribution-only `act_for` claim off a verified dispatch-token payload. */
+function actForClaim(payload: Record<string, unknown>): { actFor?: string } {
+  const raw = payload["act_for"];
+  // Never let the reserved internal principal be echoed back as an end user.
+  if (typeof raw !== "string" || raw === "" || raw === "agent-dispatch") return {};
+  return { actFor: raw };
+}
+
 export async function requireOpsToken(
   request: Request,
   env: Env,
-): Promise<{ userId: string } | Response> {
+): Promise<AuthPrincipal | Response> {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
   const token = auth.slice(7);
@@ -71,7 +95,7 @@ export async function requireOpsToken(
       const user = await userRes.json() as { id: string; app_metadata?: { role?: string } };
       const role = user.app_metadata?.["role"];
       if (role !== "ops") return json({ error: "Forbidden: ops role required" }, 403);
-      return { userId: user.id };
+      return { userId: user.id, role };
     }
   } catch {
     // network error: fall through
@@ -83,7 +107,8 @@ export async function requireOpsToken(
   if (env.SUPABASE_JWT_SECRET) {
     const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
     if (payload?.["sub"] === "agent-dispatch") {
-      return { userId: "agent-dispatch" };
+      // `act_for` is surfaced for attribution only; the principal stays agent-dispatch/ops.
+      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload) };
     }
   }
 
@@ -95,12 +120,13 @@ export async function requireOpsToken(
  * Use this on surfaces endusers are allowed to reach (agent chat, orchestration
  * runs, document upload). It does NOT require ops — callers that need ops-only
  * behavior must use requireOpsToken. Internally-minted agent-dispatch tokens are
- * accepted as a trusted principal (role "ops").
+ * accepted as a trusted principal (role "ops"), and their attribution-only `act_for`
+ * claim is surfaced as `actFor` (see AuthPrincipal).
  */
 export async function requireUser(
   request: Request,
   env: Env,
-): Promise<{ userId: string; role: string } | Response> {
+): Promise<AuthPrincipal | Response> {
   const auth = request.headers.get("Authorization") ?? "";
   if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
   const token = auth.slice(7);
@@ -126,7 +152,7 @@ export async function requireUser(
   if (env.SUPABASE_JWT_SECRET) {
     const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
     if (payload?.["sub"] === "agent-dispatch") {
-      return { userId: "agent-dispatch", role: "ops" };
+      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload) };
     }
   }
 

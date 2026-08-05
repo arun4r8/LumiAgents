@@ -68,6 +68,10 @@ export const queryOutputSchema = z.object({
 export const documentQuery = defineOrchestration({
   name: "patch/document-query",
   version: 1,
+  // #127: retrieval only — embed the question, match_document_chunks (read-only RPC),
+  // one Claude synthesis call. No writes, no await_approval. (patch/document-ingest,
+  // above, is the write side and is deliberately NOT flagged.)
+  readOnly: true,
   description: "Answer a question using the company document knowledge base (RAG)",
   inputSchema: queryInputSchema,
   outputSchema: queryOutputSchema,

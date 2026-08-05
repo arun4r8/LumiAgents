@@ -104,6 +104,21 @@ export interface OrchestrationDefinition<
   outputSchema: TOutput;
   cron?: string;
   triggerMode?: "manual" | "agent";
+  /**
+   * Explicit declaration that `run()` performs NO writes (no INSERT/UPDATE/DELETE to
+   * business data, no outbound email/Teams/Jira side effect) and contains NO
+   * `await_approval`. Bookkeeping the framework itself does — run/run_step rows, LLM
+   * usage — does not count.
+   *
+   * Only `readOnly: true` orchestrations may execute on the synchronous inline path
+   * (`POST /api/orchestrations/:name/run-sync`), which has no durable execution and can
+   * retry a step up to 4x in-process (primitives/step.ts) — harmless for a read, a
+   * duplicate side effect for a write. It is also the single signal the config-agent
+   * validator uses to decide whether a tool may be wired `mode: "sync"` (#127).
+   *
+   * Absent/false is the safe default: the orchestration is async-only.
+   */
+  readOnly?: boolean;
   access: {
     triggerableBy: string[];
     visibleTo: string[];

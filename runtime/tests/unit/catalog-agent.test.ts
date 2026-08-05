@@ -85,16 +85,33 @@ describe("buildConfigAgentDefinition", () => {
   });
 });
 
+// #127: this used to derive the sync-eligible set from any orchestration a code agent
+// marked mode:'sync', which mislabelled patch/ticket-ops (sync for search_tickets, async
+// for create_ticket/update_ticket on the SAME orchestration). It now reads the explicit
+// OrchestrationDefinition.readOnly flag off the catalog.
 describe("readOnlyOrchestrations", () => {
-  it("derives the sync-eligible set from the code agents' toolMaps", () => {
-    const set = readOnlyOrchestrations();
-    // these are marked mode:'sync' by code agents today
-    expect(set.has("cleo/recent-content")).toBe(true);
-    expect(set.has("cleo/recent-awards")).toBe(true);
-    expect(set.has("dewey/knowledge-search")).toBe(true);
-    // a mutating/async orchestration must NOT be sync-eligible
-    expect(set.has("cleo/content-draft")).toBe(false);
-    expect(set.has("cleo/award-sweep")).toBe(false);
+  const catalog = [
+    { name: "cleo/recent-content", isActive: true, readOnly: true },
+    { name: "dewey/knowledge-search", isActive: true, readOnly: true },
+    { name: "cleo/content-draft", isActive: true },
+    { name: "cleo/award-sweep", isActive: true, readOnly: false },
+    // The regression: an agent marks one of its transforms sync against this
+    // orchestration, but the orchestration itself writes (creates Jira issues).
+    { name: "patch/ticket-ops", isActive: true },
+  ];
+
+  it("returns exactly the orchestrations that declare readOnly: true", () => {
+    const set = readOnlyOrchestrations(catalog);
+    expect([...set].sort()).toEqual(["cleo/recent-content", "dewey/knowledge-search"]);
+  });
+
+  it("does not classify a write orchestration as read-only just because a tool is sync", () => {
+    expect(readOnlyOrchestrations(catalog).has("patch/ticket-ops")).toBe(false);
+  });
+
+  it("fails closed: no catalog, or a catalog without the flag, yields nothing sync-eligible", () => {
+    expect(readOnlyOrchestrations().size).toBe(0);
+    expect(readOnlyOrchestrations([{ name: "cleo/recent-content", isActive: true }]).size).toBe(0);
   });
 });
 
@@ -120,9 +137,12 @@ describe("validateConfigAgent", () => {
   const ctx = {
     orchestrations: [
       { name: "cleo/content-plan", isActive: true },
-      { name: "cleo/recent-content", isActive: true },
+      // the only sync-eligible entry: it declares readOnly (#127)
+      { name: "cleo/recent-content", isActive: true, readOnly: true },
       { name: "cleo/award-sweep", isActive: true },
       { name: "beady/rfi-draft", isActive: false },
+      // writes, but a code agent marks one of its transforms sync — must stay async-only
+      { name: "patch/ticket-ops", isActive: true },
     ] as OrchestrationInfo[],
     existingSlugs: ["taken-slug"],
   };
@@ -169,9 +189,16 @@ describe("validateConfigAgent", () => {
     ] }, ctx).tools).toMatch(/Duplicate/);
   });
 
-  it("rejects sync mode on a non-read-only orchestration", () => {
+  it("rejects sync mode on an orchestration that does not declare readOnly", () => {
     const errs = validateConfigAgent({ ...valid, tools: [{ orchestrationName: "cleo/award-sweep", mode: "sync" }] }, ctx);
     expect(errs.tools).toMatch(/sync/);
+  });
+
+  // #127 regression: patch/ticket-ops was accepted as sync because agents/patch/index.ts
+  // marks search_tickets sync against it, even though create_ticket/update_ticket write.
+  it("rejects sync mode on patch/ticket-ops even though a code agent marks a tool sync", () => {
+    const errs = validateConfigAgent({ ...valid, tools: [{ orchestrationName: "patch/ticket-ops", mode: "sync" }] }, ctx);
+    expect(errs.tools).toMatch(/not declared readOnly/);
   });
 
   it("rejects at least-one-tool violations", () => {

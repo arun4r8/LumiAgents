@@ -28,6 +28,9 @@ export default defineOrchestration({
   name: "dewey/knowledge-search",
   version: 1,
   triggerMode: "agent",
+  // #127: queryDocuments = embed + match_document_chunks (read-only RPC) + one Claude
+  // call. No writes, no await_approval.
+  readOnly: true,
   description:
     "Answer a question from the shared central knowledge base (RAG over the 'shared' corpus). Dewey's primary tool.",
   inputSchema,

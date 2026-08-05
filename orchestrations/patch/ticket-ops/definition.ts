@@ -72,6 +72,10 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "patch/ticket-ops",
   version: 1,
+  // #127: deliberately NOT readOnly. `operation: "search"` is a pure JQL read, but
+  // "create" and "update" create Jira issues, transition them, add comments and post
+  // Teams cards. Read-only-ness is a property of the orchestration, not of one branch
+  // of its input, so this may never run on the retrying inline path.
   description: "Create, update, or search Jira tickets for ops. Patch's primary ticketing interface",
   inputSchema,
   outputSchema,

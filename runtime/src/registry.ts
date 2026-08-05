@@ -30,6 +30,7 @@ import moneyDataAnalyst       from "../../orchestrations/money/data-analyst/defi
 import moneyFinancialReport   from "../../orchestrations/money/financial-report/definition";
 import patchInboundTriage     from "../../orchestrations/patch/inbound-triage/definition";
 import patchTicketOps         from "../../orchestrations/patch/ticket-ops/definition";
+import patchTicketSearch      from "../../orchestrations/patch/ticket-search/definition";
 import patchStaffRequest      from "../../orchestrations/patch/staff-request/definition";
 import * as patchDocumentRag  from "../../orchestrations/patch/document-rag/definition";
 import systemMemoryMaintenance from "../../orchestrations/system/memory-maintenance/definition";
@@ -67,6 +68,7 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(moneyFinancialReport   as unknown as AnyOrch),
   reg(patchInboundTriage     as unknown as AnyOrch),
   reg(patchTicketOps         as unknown as AnyOrch),
+  reg(patchTicketSearch      as unknown as AnyOrch),
   reg(patchStaffRequest      as unknown as AnyOrch),
   reg(patchDocumentRag.documentIngest as unknown as AnyOrch),
   reg(patchDocumentRag.documentQuery  as unknown as AnyOrch),

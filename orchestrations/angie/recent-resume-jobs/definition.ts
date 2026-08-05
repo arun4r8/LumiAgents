@@ -28,6 +28,8 @@ export default defineOrchestration({
   name: "angie/recent-resume-jobs",
   version: 1,
   triggerMode: "agent",
+  // #127: single GET against resume_results/resume_jobs; no writes, no await_approval.
+  readOnly: true,
   description:
     "Top-scored candidates from résumé scoring jobs run recently, ranked by overall score. Angie's 'who scored well from today's batch' tool.",
   inputSchema,

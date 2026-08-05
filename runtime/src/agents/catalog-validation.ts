@@ -6,11 +6,16 @@
 // existing slugs read from the DB) AND by runtime unit tests. It stays pure — no CF /
 // Supabase / fetch — so it is trivially testable and cannot drift between the two callers.
 //
-// It also derives, from the six code agents' own toolMaps, the set of orchestrations that
-// are PROVABLY safe to run in `mode: 'sync'` — a code agent already vouches for each by
-// marking its tool `mode: 'sync'` (run-inline.ts: sync is only correct for fast, read-only
-// orchestrations — no await_approval, no mutation). Reusing that existing signal is exactly
-// the rule §3.3 asks for, rather than re-deriving read-only-ness from scratch.
+// Sync eligibility (#127): a tool may be wired `mode: 'sync'` only if its orchestration
+// DECLARES `readOnly: true` (OrchestrationDefinition.readOnly), surfaced to callers on
+// GET /api/orchestrations and enforced server-side by POST /:name/run-sync.
+//
+// This replaces the previous inference, which built the "provably read-only" set from any
+// orchestration a code agent marked `mode: 'sync'`. That was unsound: mode belongs to the
+// TRANSFORM, not the orchestration. agents/patch/index.ts marks `search_tickets` sync and
+// `create_ticket`/`update_ticket` async on the SAME orchestration, so `patch/ticket-ops`
+// — which creates Jira issues — was classified read-only and a config agent could have
+// been pointed at it through the retrying inline path.
 
 import { AGENTS } from "../../../agents";
 import { MODELS } from "../config/models";
@@ -25,16 +30,19 @@ export function codeAgentSlugs(): string[] {
   return Object.keys(AGENTS);
 }
 
-/** Orchestrations a code agent already runs in sync mode — provably read-only, so a config
- *  agent may also mark them `mode: 'sync'`. Any other orchestration is async-only. */
-export function readOnlyOrchestrations(): Set<string> {
-  const set = new Set<string>();
-  for (const agent of Object.values(AGENTS)) {
-    for (const mapping of Object.values(agent.toolMap)) {
-      if (mapping.mode === "sync") set.add(mapping.orchestration);
-    }
-  }
-  return set;
+/**
+ * The names in `catalog` that declare `readOnly: true` — the only orchestrations a config
+ * agent may wire as `mode: 'sync'`. Everything else is async-only.
+ *
+ * Takes the catalog as an argument rather than reading the registry, because this module
+ * is imported by the Next.js dashboard, which cannot resolve the runtime's `@/runtime`
+ * path alias. Feed it the payload of GET /api/orchestrations, which now carries `readOnly`.
+ * No catalog → the empty set (fail closed: nothing is sync-eligible).
+ */
+export function readOnlyOrchestrations(
+  catalog: readonly { name: string; readOnly?: boolean }[] = [],
+): Set<string> {
+  return new Set(catalog.filter((o) => o.readOnly === true).map((o) => o.name));
 }
 
 /** kebab-case slug: lowercase alphanumerics separated by single hyphens. */
@@ -66,6 +74,9 @@ export interface ConfigAgentDraft {
 export interface OrchestrationInfo {
   name: string;
   isActive: boolean;
+  /** From OrchestrationDefinition.readOnly, via GET /api/orchestrations. Absent → not
+   *  sync-eligible (fail closed). */
+  readOnly?: boolean;
 }
 
 export interface ValidateContext {
@@ -125,7 +136,7 @@ export function validateConfigAgent(
 
   // ── Tools ───────────────────────────────────────────────────────────────────
   const active = new Map(ctx.orchestrations.map((o) => [o.name, o.isActive]));
-  const readOnly = readOnlyOrchestrations();
+  const readOnly = readOnlyOrchestrations(ctx.orchestrations);
   if (!draft.tools || draft.tools.length === 0) {
     errors.tools = "Select at least one tool (orchestration) for this agent.";
   } else {
@@ -144,7 +155,7 @@ export function validateConfigAgent(
         toolErrors.push(`Orchestration is inactive: ${name}.`);
       }
       if (t.mode === "sync" && !readOnly.has(name)) {
-        toolErrors.push(`"${name}" is not a read-only orchestration and cannot run in sync mode.`);
+        toolErrors.push(`"${name}" is not declared readOnly and cannot run in sync mode.`);
       }
     }
     if (toolErrors.length > 0) errors.tools = toolErrors.join(" ");

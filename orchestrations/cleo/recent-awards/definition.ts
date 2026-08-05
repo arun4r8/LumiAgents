@@ -31,6 +31,8 @@ export default defineOrchestration({
   name: "cleo/recent-awards",
   version: 1,
   triggerMode: "agent",
+  // #127: single GET against awards; no writes, no await_approval.
+  readOnly: true,
   description:
     "Awards the sweep has found/touched recently, ranked by fit score. Cleo's 'what did the award sweep find' tool.",
   inputSchema,

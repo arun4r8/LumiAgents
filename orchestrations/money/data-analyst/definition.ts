@@ -19,6 +19,11 @@ export const outputSchema = z.object({
 export default defineOrchestration({
   name: "money/data-analyst",
   version: 1,
+  // #127: runDataAnalyst generates SQL, rejects anything not starting with SELECT, and
+  // executes it through orchestration.analyst_query, which itself raises on non-SELECT
+  // and on forbidden keywords (supabase/migrations/20260527000001_security_p0.sql).
+  // No sessionKey is passed here, so the storeCsvUpload write path is never reached.
+  readOnly: true,
   description: "Answer business questions by generating and running SQL against Lumiture's data, then interpreting the results",
   inputSchema,
   outputSchema,

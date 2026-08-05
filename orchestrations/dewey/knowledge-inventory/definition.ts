@@ -19,6 +19,8 @@ export default defineOrchestration({
   name: "dewey/knowledge-inventory",
   version: 1,
   triggerMode: "agent",
+  // #127: single GET against orch_documents, tallied in memory; no writes.
+  readOnly: true,
   description:
     "Summarize the shared knowledge base: document counts by corpus and sensitivity, plus the most recent documents. Dewey's librarian overview.",
   inputSchema,

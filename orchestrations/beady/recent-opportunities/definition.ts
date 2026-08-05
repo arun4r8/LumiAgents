@@ -28,6 +28,8 @@ export default defineOrchestration({
   name: "beady/recent-opportunities",
   version: 1,
   triggerMode: "agent",
+  // #127: single GET against opportunities; no writes, no await_approval.
+  readOnly: true,
   description:
     "Opportunities the sweep has touched recently, ranked by fit score. Beady's 'what did today's sweep find' tool.",
   inputSchema,
