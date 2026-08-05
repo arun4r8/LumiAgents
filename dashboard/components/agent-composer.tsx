@@ -313,8 +313,11 @@ export default function AgentComposer(props: Props) {
       <div style={CARD}>
         <label style={LABEL}>Knowledge corpora</label>
         <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>
-          Bounded to shared, this agent&apos;s own corpus, and the enduser corpus. Restricted
-          documents and other agents&apos; private corpora are never accessible.
+          What this agent may be recorded as reading: shared, its own corpus, and the enduser
+          corpus. <strong>This is a record, not an enforced limit.</strong> At retrieval time a
+          config agent inherits the knowledge scope of the orchestrations it wires — e.g. wiring{" "}
+          <span style={{ fontFamily: "var(--mono)" }}>dewey/knowledge-search</span> reads Dewey&apos;s
+          corpus whatever is ticked here. Choose tools with that in mind.
         </div>
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           {knowledgeChoices.map((c) => (

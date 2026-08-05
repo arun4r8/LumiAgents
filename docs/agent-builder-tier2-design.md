@@ -109,7 +109,7 @@ The existing `GITHUB_API_TOKEN` is **wrong for Tier 2 on every axis**: it is sco
 | Repo scope | **`LumitureLabs/LumiAgents` only.** Not org-wide, not the vault repo. |
 | Permissions | `Contents: write` (blobs/trees/commits/refs) + `Pull requests: write`. **Nothing else** — no `Administration`, no `Actions`, no `Secrets`, no `Workflows`, no `Merge`. |
 | Provisioning | **Out-of-band by an ops engineer**, stored only as the runtime secret. The app **never** accepts or stores this token value (CLAUDE.md: "No secrets in code"; `agent-builder-design.md` §6.4: the app never accepts secret values). |
-| Merge capability | **None.** The token can open a PR; it cannot merge one (auto-merge is prohibited, §3). Branch protection (§3b) additionally requires a *human* review that a token cannot supply. |
+| Merge capability | ~~**None.** The token can open a PR; it cannot merge one.~~ **CORRECTED 2026-08-05 (audit of #67):** this was wrong at the permission level. `PUT /pulls/{n}/merge` requires exactly `Contents: write` + `Pull requests: write` — precisely what this credential has; GitHub has no separate "Merge" permission to withhold. What actually prevents a merge is that **no code path anywhere in this repo calls the merge endpoint** (grep for `/merge`), plus the human reviewer. And note branch protection is *not* a backstop either: the org is on the **GitHub Free plan** with a private repo, where branch protection and rulesets are unavailable (`docs/environments.md`). Treat "no merge call in the code" as the control; do not cite the token scopes. |
 
 **Approval friction to expect (past experience).** A fine-grained PAT on an **org-owned** repo requires **org-owner approval** before it can act, and org policy may cap fine-grained-PAT lifetimes (forcing periodic rotation → a recurring ops task). This is the same class of friction as the SAM.gov key renewal that has bitten sweeps. Budget for: (a) an org owner approving the PAT/App up front; (b) a rotation runbook; (c) the possibility that org policy *disallows* PATs entirely, which forces the GitHub App path (v2). This is the single biggest thing the product owner should decide before any build (§5).
 
@@ -122,10 +122,28 @@ The existing `GITHUB_API_TOKEN` is **wrong for Tier 2 on every axis**: it is sco
 ### 3.1 What already enforces this in the repo
 
 - **CI on the PR** — `.github/workflows/ci.yml` runs on every `pull_request` to `main`: typecheck (runtime + dashboard), lint, and `vitest run` (`ci.yml:10-86`). A generated orchestration that does not typecheck, lint, or pass its emitted unit test **cannot go green**, so it cannot be a mergeable PR. (Today `vitest` runs with `--passWithNoTests`; the generator emitting a real `unit.test.ts` per §1.1 is what makes this gate bite for generated code.)
-- **Auto-deploy on merge** — `.github/workflows/deploy-worker.yml` fires on push to `main` touching `orchestrations/**`, `runtime/**`, `supabase/migrations/**` (`deploy-worker.yml:6-13`): it typechecks, then **`supabase db push --yes`** applies the seed migration (`deploy-worker.yml:63-66`), then deploys the agent Workers + runtime (`:68-138`). So the moment ops merges, the new orchestration is registered in the catalog and live in the runtime with no further human action. **The governance gate rides entirely on the human merge**, because merge is the only manual step between "app drafted code" and "code runs in prod."
+- ~~**Auto-deploy on merge**~~ — **CORRECTED 2026-08-05 (#121 landed after this design).** There is no longer a push trigger on `deploy-worker.yml`. A merge to `main` deploys **staging** (`deploy-staging.yml`: staging Supabase `db push`, `*-staging` Workers, staging dashboard, smoke test). **Production is a manual `workflow_dispatch` promotion** a human runs from the Actions tab. So there are now *two* human gates between "app drafted code" and "code runs in prod": the merge, and the promotion. Every machine-drafted PR body and migration header says this explicitly — a reviewer must never be told that merging ships to customers. See `docs/environments.md`.
 - **The migration auto-applies on merge.** This is why §3b treats a generated migration as the sharpest edge: `db push --yes` runs whatever migration is in the PR. The control is that the migration is *reviewed by a human before merge* and is a forward-only `INSERT ... ON CONFLICT` catalog registration (the `register_dewey.sql` shape) — never DDL that drops data — in the first slice.
 
 ### 3.2 Agent lifecycle states + surfacing the PR
+
+> **AS BUILT, CORRECTED 2026-08-05 (audit of #67).** This subsection describes the *designed*
+> model. Two things about it were actively harmful once built, and the shipped code no longer
+> does them:
+>
+> 1. **A pending proposal must NOT move the donor agent's `lifecycle`.** The design put the donor
+>    agent into `proposed`, but the agents list shows non-ops callers only `lifecycle='active'`
+>    — so proposing a new tool for Cleo removed **Cleo** from every end user's Agents page.
+>    A pending proposal is now recorded in its own table, `orchestration.agent_proposals`
+>    (`20260805000001_agent_proposals.sql`), and touches nothing an end user can see. Only a
+>    genuinely new (agent-kind) agent should ever sit in a non-active lifecycle.
+> 2. **There is no merge webhook, and none is wanted.** The way out of `open` is *pull-based*:
+>    `GET /api/agent-builder/tier2/proposals` asks GitHub about each recorded PR and clears the
+>    proposal when it is merged or closed-unmerged, and ops can always cancel one by hand
+>    (`POST /api/agent-builder/tier2/proposals/cancel`). The `pr_state`/`deprecated` parts of the
+>    table below remain unbuilt.
+>
+> Read the rest of this subsection as design history, not as a description of the code.
 
 The `orchestration.agents` catalog already has a `lifecycle` column, currently `CHECK (lifecycle IN ('active','disabled'))` (`20260803000004_agents_catalog.sql:26`). Tier 2 needs the `proposed` state from the manifest (`agent-builder-design.md` §2.1). **A forward migration widens the CHECK to include `proposed` (and `deprecated`)** and adds columns to track the open PR:
 

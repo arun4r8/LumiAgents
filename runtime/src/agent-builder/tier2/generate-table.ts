@@ -7,10 +7,12 @@
 // rules (RLS in the same migration; forward-only; no destructive DDL). The migration is the whole
 // file set; it goes through the identical openPR + human-merge gate as every other kind. Nothing
 // is executed here — the SQL ships into a PR as a diff an ops engineer reviews before merge, and
-// only then does deploy-worker.yml's `supabase db push` apply it.
+// only then does `supabase db push` apply it, to STAGING (deploy-staging.yml). Production is a
+// separate manual promotion (#121, docs/environments.md).
 
 import type { PrFile } from "./pr";
-import { defaultTimestamp, Tier2ValidationError } from "./generate";
+import { defaultTimestamp } from "./generate";
+import { Tier2ValidationError } from "./errors";
 import { assertNoDestructiveSql } from "./guards";
 
 /** Column types the generator is allowed to emit. Anything else is rejected at validation. */
@@ -103,8 +105,11 @@ const MACHINE_HEADER =
   `-- ⚠️  MACHINE-DRAFTED by the LumiAgents Tier 2 agent builder (#67, Build 2) — REVIEW BEFORE MERGE.\n` +
   `-- A new domain table. Forward-only: CREATE TABLE IF NOT EXISTS + RLS + policies + GRANTs only.\n` +
   `-- No DROP/TRUNCATE/DELETE and no destructive ALTER (the one ALTER enables RLS). It was NOT\n` +
-  `-- executed during generation; it applies on merge via deploy-worker.yml. The human merge is\n` +
-  `-- the entire gate. See docs/agent-builder-tier2-design.md and .claude/skills/write-migration.\n`;
+  `-- executed during generation. Since #121, merging applies it to STAGING only\n` +
+  `-- (deploy-staging.yml → \`supabase db push\` against the staging project). PRODUCTION is a\n` +
+  `-- separate MANUAL promotion — a human runs "Deploy Worker (PRODUCTION — manual)" from the\n` +
+  `-- Actions tab. See docs/environments.md, docs/agent-builder-tier2-design.md and\n` +
+  `-- .claude/skills/write-migration.\n`;
 
 /** Map an allowlisted spec type to the concrete Postgres type emitted in DDL. */
 function pgType(t: ColumnType): string {
@@ -127,8 +132,12 @@ export function renderTableMigration(spec: TableSpec, timestamp: string): PrFile
   const qualified = `orchestration.${t}`;
   const path = `supabase/migrations/${timestamp}_create_${t}.sql`;
 
+  // Collapse EVERY line break (CR as well as LF) to a space. The description is interpolated
+  // into a single `-- ...` comment line; Postgres ends a `--` comment at a carriage return too,
+  // so stripping only "\n" let a description like "notes\rDROP TABLE orchestration.runs;" break
+  // out of the comment into an executable statement (audit #67).
   const desc = spec.description?.trim()
-    ? spec.description.trim().replace(/\n/g, " ")
+    ? spec.description.trim().replace(/[\r\n]+/g, " ")
     : `New ${t} domain table (machine-drafted).`;
 
   // NOTE: we intentionally do NOT emit "DROP POLICY IF EXISTS" (it contains DROP). Replay-safety

@@ -105,49 +105,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Agent Workers deploy before the runtime: the runtime's Service Bindings name them,
-      # so on the first deploy of a new agent Worker the target must already exist.
-      - name: Deploy Angie
+      # Agent Workers deploy before the runtime: the runtime's Service Bindings name them, so on
+      # the first deploy of a new agent Worker the target must already exist.
+      #
+      # DISCOVERED, not enumerated (#67 audit). The six agent Workers used to be six hardcoded
+      # steps, so merging an agent-builder "new agent" PR added a [[services]] binding to a Worker
+      # that no job deployed — and the runtime deploy then failed on the missing binding target.
+      # Globbing runtime/workers/*/wrangler.toml means a generated agent Worker deploys with no
+      # hand-edit of this file. The ordering rule is preserved: every agent Worker first (in a
+      # deterministic, alphabetical glob order), the runtime last.
+      - name: Deploy agent Workers (discovered from runtime/workers/*/wrangler.toml)
         working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/angie/wrangler.toml
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Beady
-        working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/beady/wrangler.toml
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Patch
-        working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/patch/wrangler.toml
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Money
-        working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/money/wrangler.toml
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Cleo
-        working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/cleo/wrangler.toml
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy Dewey
-        working-directory: runtime
-        run: pnpm exec wrangler deploy --config workers/dewey/wrangler.toml
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          configs=(workers/*/wrangler.toml)
+          if [ ${#configs[@]} -eq 0 ]; then
+            echo "No agent Worker configs found under runtime/workers/*/wrangler.toml"
+            exit 1
+          fi
+          echo "Discovered ${#configs[@]} agent Worker config(s): ${configs[*]}"
+          for cfg in "${configs[@]}"; do
+            echo "::group::wrangler deploy --config $cfg"
+            pnpm exec wrangler deploy --config "$cfg"
+            echo "::endgroup::"
+          done
 
       - name: Deploy Runtime
         working-directory: runtime

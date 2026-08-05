@@ -3,8 +3,19 @@
 // The Tier 2 codegen flow opens PRs against LumitureLabs/LumiAgents. That write power must
 // NOT ride on GITHUB_API_TOKEN (the read-only vault credential scoped to a different repo).
 // Instead a dedicated GitHub App — installed on LumitureLabs/LumiAgents with Contents:write +
-// Pull requests:write and nothing else — provides a stable, installation-scoped identity that
-// can open a PR but can never merge one (the human merge is the whole governance gate).
+// Pull requests:write and nothing else — provides a stable, installation-scoped identity.
+//
+// ⚠️  CORRECTION (audit #67). Earlier comments here and in the Tier 2 design claimed this
+// credential "can never merge". That is NOT true at the permission level: `PUT /pulls/{n}/merge`
+// requires exactly Contents:write + Pull requests:write, which is precisely what this App has.
+// GitHub has no separate "merge" permission to withhold. What actually prevents a merge is:
+//   1. NO CODE CALLS IT. There is no `/merge` request anywhere in this repo — that is the real,
+//      auditable control, and it is the one to protect in review (grep for `/merge` in CI if you
+//      want it enforced mechanically).
+//   2. NOT branch protection — the LumitureLabs org is on the GitHub Free plan with a private
+//      repo, where branch protection and rulesets are unavailable (docs/environments.md).
+// Do not treat the App's scopes as a merge guarantee; the guarantee is the absent code path plus
+// the human reviewer.
 //
 // Flow: mint a short-lived RS256 JWT (iss = GH_APP_ID, exp ≤ 10 min) signed with the App's
 // private key via WebCrypto, POST it to the installation access-tokens endpoint, and cache the

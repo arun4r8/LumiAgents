@@ -13,7 +13,12 @@ import {
   type AgentManifestDraft,
 } from "@/lib/agent-manifest";
 import { saveAgentOverrides, revertAgentOverride } from "./actions";
-import { proposeCapability } from "./propose-actions";
+import {
+  proposeCapability,
+  listProposals,
+  cancelProposal,
+  type PendingProposal,
+} from "./propose-actions";
 import { createAgent, updateAgent, setAgentLifecycle, deleteAgent } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -55,11 +60,18 @@ export default async function AgentDetailPage({ params }: PageProps) {
   // Ops-only authoring surfaces are prepared server-side; endusers only get the chat.
   const configEditor = isOps && card.source === "config" ? await loadConfigEditor(slug) : null;
   const codeCustomizer = isOps && card.source === "code" ? await loadCodeCustomizer(slug) : null;
-  // Tier 2 (#67): the proposed-state + pending PR for the "Propose new capability" panel.
-  const proposedState = isOps ? await loadProposedState(slug) : null;
+  // Tier 2 (#67): the "Propose new capability" panel is ops-only AND code-agent-only. Its only
+  // kind that makes sense for a config agent is "table"/"agent", while its default and headline
+  // kind — "New tool" — always 400s there: validateSpec requires an agentSlug that exists in the
+  // code REGISTRY (registryValidationContext derives slugs from orchestration names), and a config
+  // agent has no registered orchestrations of its own. Rather than offer a button that cannot
+  // work, the panel renders only for `source === "code"`.
+  const showProposePanel = isOps && card.source === "code";
+  // Pending proposals (orchestration.agent_proposals) — a badge, never a visibility change.
+  const pendingProposals = showProposePanel ? await loadPendingProposals(slug) : [];
   // Tier 2 Build 2 (#67): existing orchestration names, for the "new agent" form's tool picker
   // (a new agent may only wire orchestrations that already exist).
-  const orchestrationNames = isOps ? await loadOrchestrationNames() : [];
+  const orchestrationNames = showProposePanel ? await loadOrchestrationNames() : [];
 
   return (
     <>
@@ -102,15 +114,15 @@ export default async function AgentDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {proposedState && (
+      {showProposePanel && (
         <div className="page" style={{ paddingTop: 0 }}>
           <ProposeCapabilityPanel
             agentSlug={slug}
-            lifecycle={proposedState.lifecycle}
-            pendingPrUrl={proposedState.pendingPrUrl}
-            pendingPrNumber={proposedState.pendingPrNumber}
+            pendingProposals={pendingProposals}
             orchestrationNames={orchestrationNames}
             proposeCapability={proposeCapability}
+            listProposals={listProposals}
+            cancelProposal={cancelProposal}
           />
         </div>
       )}
@@ -118,23 +130,24 @@ export default async function AgentDetailPage({ params }: PageProps) {
   );
 }
 
-// ─── Tier 2 (#67): the agent's proposed state + pending PR ───────────────────────
+// ─── Tier 2 (#67): pending proposals for this agent ──────────────────────────────
+//
+// Read straight from orchestration.agent_proposals. Deliberately a plain DB read with no GitHub
+// round-trip: reconciling every open PR on every page render would put a third-party API on the
+// critical path of an agent page. The panel offers an explicit "Check PR status" action that
+// calls the runtime, which does reconcile.
+//
+// Note what is NOT here any more: the agent's `lifecycle`. A pending proposal used to set the
+// donor agent's lifecycle to 'proposed', and the agents list hides anything non-active from
+// end users — so proposing a tool for Cleo hid Cleo from everyone. A proposal is now a badge.
 
-async function loadProposedState(slug: string): Promise<{
-  lifecycle: string;
-  pendingPrUrl: string | null;
-  pendingPrNumber: number | null;
-} | null> {
+async function loadPendingProposals(slug: string): Promise<PendingProposal[]> {
   const supabase = await createClient();
-  const { data } = await supabase.schema("orchestration").from("agents")
-    .select("lifecycle, pending_pr_url, pending_pr_number").eq("slug", slug).maybeSingle();
-  if (!data) return null;
-  const row = data as { lifecycle: string; pending_pr_url: string | null; pending_pr_number: number | null };
-  return {
-    lifecycle: row.lifecycle,
-    pendingPrUrl: row.pending_pr_url ?? null,
-    pendingPrNumber: row.pending_pr_number ?? null,
-  };
+  const { data } = await supabase.schema("orchestration").from("agent_proposals")
+    .select("id, kind, agent_slug, target, pr_number, pr_url, branch, status, created_at")
+    .eq("agent_slug", slug).eq("status", "open")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as PendingProposal[];
 }
 
 // ─── Tier 2 Build 2 (#67): existing orchestration names for the new-agent tool picker ──

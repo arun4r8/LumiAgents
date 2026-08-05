@@ -13,20 +13,27 @@
 // These are pure, network-free, and unit-tested. They are a defense-in-depth backstop; human
 // review remains the hard gate.
 
-import { Tier2ValidationError } from "./generate";
+import { Tier2ValidationError } from "./errors";
 
 // ─── Destructive-SQL guard ──────────────────────────────────────────────────────
 
-/** Strip whole-line SQL comments so a rollback note in a `-- ...` comment never trips a guard. */
+/**
+ * Strip whole-line SQL comments so a rollback note in a `-- ...` comment never trips a guard.
+ *
+ * Splits on BOTH CR and LF. Postgres ends a `--` comment at a carriage return as well as a line
+ * feed, so splitting on "\n" alone let a CRLF/CR-embedded payload hide behind a leading `--`:
+ * `-- rollback\rDROP TABLE x;` is one "line" to a \n-split but two statements to Postgres, and
+ * the DROP sailed straight past assertNoDestructiveSql. Any CR is a line break here too.
+ */
 export function executableSql(sql: string): string {
   return sql
-    .split("\n")
+    .split(/[\r\n]+/)
     .filter((l) => !l.trim().startsWith("--"))
     .join("\n");
 }
 
 function firstLine(s: string): string {
-  return (s.split("\n").find((l) => l.trim().length > 0) ?? s).trim().slice(0, 120);
+  return (s.split(/[\r\n]+/).find((l) => l.trim().length > 0) ?? s).trim().slice(0, 120);
 }
 
 /**

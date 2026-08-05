@@ -49,15 +49,31 @@ export function scopeForRole(role: string): KnowledgeScope {
   return role === "ops" ? OPS_SCOPE : ENDUSER_SCOPE;
 }
 
-// ─── Tier 1 (#67): bounded scope for a config (catalog) agent ───────────────────
+// ─── Tier 1 (#67): the config-agent corpus allow-list ───────────────────────────
 //
-// A config agent declares its own `knowledge_corpora` in the catalog. Unlike a code
-// agent (whose scope is the hardcoded scopeForAgent(<slug>)), a config agent's declared
-// scope is untrusted author input, so it is ALWAYS clamped here at read time — never
-// restricted, and only corpora inside the agent's allowed set [shared, <ownSlug>, enduser].
-// This is the runtime backstop that guarantees a config agent can never read another
-// agent's private corpus or any restricted-sensitivity document, regardless of what a bad
-// or stale catalog row claims. Author-time validation (catalog-validation.ts) mirrors it.
+// ⚠️  READ THIS BEFORE RELYING ON `scopeForConfigAgent`.
+//
+// A config agent declares `knowledge_corpora` in its catalog row, and the composer +
+// catalog-validation.ts clamp that declaration to [shared, <ownSlug>, enduser] at AUTHOR time.
+// That is an author-time bound on what may be STORED — it is NOT a read-time enforcement of
+// what the agent actually retrieves.
+//
+// What actually happens at read time: a config agent has no retrieval path of its own. It runs
+// the orchestrations it wires, and each of those hardcodes its own scope — `dewey/knowledge-search`
+// calls `scopeForAgent("dewey")`, `patch/document-rag` calls `scopeForAgent("patch")`, and so on
+// (grep: those are the only production callers of scopeForAgent). So a config agent that wires
+// `dewey/knowledge-search` reads dewey's private corpus regardless of what its own
+// `knowledge_corpora` says. **A config agent inherits the knowledge scope of the orchestrations
+// it wires.**
+//
+// `scopeForConfigAgent` below has ZERO production call sites (audit #67). It is kept because it
+// is the correct clamp to apply once a scope can be threaded into orchestration execution, and
+// catalog-validation.ts already shares `allowedCorporaFor` with it. Wiring it through means
+// carrying a KnowledgeScope from the catalog row into the orchestration run context — a change
+// to run-inline.ts / routes/agents.ts / the OrchestrationContext type, i.e. real plumbing, not
+// a doc fix. Until that exists, do not describe the declared scope as a guarantee anywhere: the
+// old comment here claimed a runtime backstop that "guarantees a config agent can never read
+// another agent's private corpus", and that claim was false.
 
 /** The corpora a config agent named `ownSlug` may ever be granted. */
 export function allowedCorporaFor(ownSlug: string): string[] {
@@ -70,6 +86,10 @@ export function allowedCorporaFor(ownSlug: string): string[] {
  *   - otherwise → the intersection of `declared` with the allowed set, so any stray or
  *     malicious corpus (another agent's slug, "restricted") is silently dropped.
  * `includeRestricted` is hard-wired false: a config agent is never ops.
+ *
+ * NOT ENFORCED ANYWHERE YET — this function has no production callers (see the section comment
+ * above). Retrieval scope comes from the wired orchestration's own `scopeForAgent(<donorSlug>)`.
+ * Wire this in before citing it as a control.
  */
 export function scopeForConfigAgent(
   ownSlug: string,

@@ -13,6 +13,12 @@ import { MODELS } from "../../config/models";
 import { orchestrations } from "../../registry";
 import { ghAppFetch as realGhAppFetch, type GhAppFetch } from "../../integrations/github/app-auth";
 import type { PrFile } from "./pr";
+import { assertNoDestructiveSql, assertNoInlineSecrets } from "./guards";
+import { Tier2ValidationError } from "./errors";
+
+// Re-exported for the many call sites that import it from here (it now lives in errors.ts so
+// guards.ts can throw it without an import cycle back into this module).
+export { Tier2ValidationError } from "./errors";
 
 const REPO = "LumitureLabs/LumiAgents";
 
@@ -37,16 +43,6 @@ export interface OrchestrationSpec {
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const FIELD_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-/** Thrown when a spec is invalid; the route maps it to a 400 with the messages. */
-export class Tier2ValidationError extends Error {
-  readonly details: string[];
-  constructor(details: string[]) {
-    super(`Invalid capability spec: ${details.join("; ")}`);
-    this.name = "Tier2ValidationError";
-    this.details = details;
-  }
-}
 
 export interface ValidationContext {
   existingOrchestrationNames: Set<string>;
@@ -325,7 +321,10 @@ export function renderMigration(spec: OrchestrationSpec, timestamp: string): PrF
     `-- MACHINE-DRAFTED by the LumiAgents Tier 2 agent builder (#67) — REVIEW BEFORE MERGE.\n` +
     `-- Registers the new orchestration ${name} in the catalog so the dashboard/composer can see it.\n` +
     `-- Forward-only INSERT ... ON CONFLICT (never DDL, never destructive). ops-triggerable / ops-visible.\n` +
-    `-- Applies on merge via deploy-worker.yml's \`supabase db push --yes\`; the human merge is the gate.\n` +
+    `-- Since #121, merging applies this to STAGING only (deploy-staging.yml runs \`supabase db push\`\n` +
+    `-- against the staging project). PRODUCTION is a separate, MANUAL promotion: a human runs the\n` +
+    `-- "Deploy Worker (PRODUCTION — manual)" workflow from the Actions tab. Merging ships nothing to\n` +
+    `-- customers by itself; the human merge plus the human promotion are the two gates.\n` +
     `--\n` +
     `-- Rollback:\n` +
     `--   DELETE FROM orchestration.orchestrations WHERE name = '${name}' AND version = 1;\n\n` +
@@ -351,8 +350,10 @@ export function manifestPath(spec: OrchestrationSpec): string {
 /**
  * Render (or extend) the agent's canonical manifest recording the new tool. If no manifest
  * exists yet, create a minimal one; otherwise append the tool under tools.enabled with a
- * lifecycle: proposed marker. Deterministic; does not attempt a full YAML parse/merge (the
- * human reviews the diff), it just records the new capability idempotently.
+ * `status: proposed` marker ON THE TOOL. The AGENT's own lifecycle stays `active`: this kind adds
+ * a capability to an agent that is already live, and marking the agent proposed is exactly the
+ * bug that hid live agents from end users (#67). Deterministic; does not attempt a full YAML
+ * parse/merge (the human reviews the diff), it just records the new capability idempotently.
  */
 export function renderManifest(existing: string | null, spec: OrchestrationSpec): PrFile {
   const path = manifestPath(spec);
@@ -366,9 +367,11 @@ export function renderManifest(existing: string | null, spec: OrchestrationSpec)
     const content =
       `# MACHINE-DRAFTED by the LumiAgents Tier 2 agent builder (#67) — REVIEW BEFORE MERGE.\n` +
       `# Canonical manifest for agent "${spec.agentSlug}". Records capabilities (tools) proposed/shipped\n` +
-      `# through the agent builder. The tool below is 'proposed' until an ops engineer merges this PR.\n` +
+      `# through the agent builder. The TOOL below is 'proposed' until an ops engineer merges this PR;\n` +
+      `# the AGENT stays 'active' throughout — a pending proposal never takes a live agent away from\n` +
+      `# end users (the agents list hides anything non-active). See #67.\n` +
       `agent: ${spec.agentSlug}\n` +
-      `lifecycle: proposed\n` +
+      `lifecycle: active\n` +
       `tools:\n` +
       `  enabled:\n` +
       toolBlock.replace(/^/gm, "  ");
@@ -466,6 +469,13 @@ export interface GeneratedPackage {
  * first (refuses on any error), clones the closest donor, drafts the definition.ts run() body via
  * the LLM (proposal only — never executed), and templates the registry edit, the seed migration,
  * and the manifest. Returns { path, content }[] ready for openPR. No tools.ts / new integration.
+ *
+ * Safety: EVERY file in the set is screened by assertNoInlineSecrets and the migration by
+ * assertNoDestructiveSql before it can reach a PR. This kind is the only one whose content a
+ * MODEL writes (the definition.ts run() body), so it is the kind that most needs the screen —
+ * it was the one kind that had never been wired to guards.ts (audit #67). The screen runs over
+ * the definition, the post-edit registry.ts, the migration and the manifest alike, because the
+ * spec's description/intent (untrusted ops input) is interpolated into all of them.
  */
 export async function generateOrchestrationPackage(
   env: Env,
@@ -500,10 +510,18 @@ export async function generateOrchestrationPackage(
   };
   const registryFile: PrFile = { path: "runtime/src/registry.ts", content: newRegistry };
 
+  const files = [definitionFile, registryFile, migration, manifest];
+
+  // Safety backstop (the LLM draft is untrusted content): no inline secret VALUE in any file,
+  // and the generated migration must stay forward-only / non-destructive. Both throw
+  // Tier2ValidationError, which the route maps to a 400 — nothing reaches a PR.
+  for (const f of files) assertNoInlineSecrets(f.content, f.path);
+  assertNoDestructiveSql(migration.content);
+
   return {
     orchestrationName: orchestrationName(spec),
     usedDonor: donor.path,
-    files: [definitionFile, registryFile, migration, manifest],
+    files,
   };
 }
 

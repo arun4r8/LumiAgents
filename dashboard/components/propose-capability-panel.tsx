@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GitPullRequest, Plus, Trash2, Loader2, ExternalLink, AlertTriangle, ShieldCheck, Wrench, Table2, Bot } from "lucide-react";
+import { GitPullRequest, Plus, Trash2, Loader2, ExternalLink, ShieldCheck, Wrench, Table2, Bot, RefreshCw, XCircle } from "lucide-react";
 import type {
+  CancelResult,
+  PendingProposal,
+  ProposalListResult,
   ProposeCapabilityInput,
   ProposeColumn,
   ProposeColumnType,
@@ -16,18 +19,24 @@ import type {
 // KIND of proposal — a new tool (orchestration), a new data table, or a new dedicated-Worker agent
 // — and fills the matching form; the server action forwards `kind` + the spec to the runtime, which
 // opens a human-merge-gated PR. There is NO merge button — an ops engineer must review and merge
-// the PR before anything goes live. The parent renders this for ops only; the server action +
-// runtime re-check ops.
+// the PR before anything goes live. The parent renders this for ops only, and only on CODE agents
+// (the "New tool" kind always 400s on a config agent, whose slug is not in the code registry);
+// the server action + runtime re-check ops.
+//
+// Pending proposals are shown as a BADGE (#67 audit). They used to be an agent-lifecycle change,
+// which hid the agent from every end user. They also used to have no way out — this panel now
+// offers both exits: "Check PR status" (the runtime reconciles against GitHub: merged or
+// closed-unmerged both clear it) and "Cancel proposal".
 
 type Kind = "orchestration" | "table" | "agent";
 
 interface Props {
   agentSlug: string;
-  lifecycle: string;
-  pendingPrUrl: string | null;
-  pendingPrNumber: number | null;
+  pendingProposals: PendingProposal[];
   orchestrationNames: string[];
   proposeCapability: (input: ProposeCapabilityInput) => Promise<ProposeResult>;
+  listProposals: (agentSlug: string) => Promise<ProposalListResult>;
+  cancelProposal: (agentSlug: string, prNumber: number) => Promise<CancelResult>;
 }
 
 const LABEL: React.CSSProperties = {
@@ -144,6 +153,11 @@ export default function ProposeCapabilityPanel(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ prUrl: string; prNumber: number; branch: string } | null>(null);
 
+  // Pending-proposal state: server-rendered list, then whatever a reconcile/cancel returns.
+  const [proposals, setProposals] = useState<PendingProposal[]>(props.pendingProposals);
+  const [proposalBusy, setProposalBusy] = useState(false);
+  const [proposalNote, setProposalNote] = useState<string | null>(null);
+
   // Orchestration form
   const [capabilitySlug, setCapabilitySlug] = useState("");
   const [description, setDescription] = useState("");
@@ -222,6 +236,51 @@ export default function ProposeCapabilityPanel(props: Props) {
     setSelectedTools((cur) => (cur.includes(name) ? cur.filter((t) => t !== name) : [...cur, name]));
   }
 
+  /** Ask the runtime to reconcile every pending PR against GitHub, then re-render. */
+  function checkPrStatus() {
+    setProposalNote(null);
+    setProposalBusy(true);
+    start(async () => {
+      const res = await props.listProposals(props.agentSlug);
+      setProposalBusy(false);
+      if (!res.ok) {
+        setProposalNote(res.error);
+        return;
+      }
+      const cleared = proposals.length - res.proposals.length;
+      setProposals(res.proposals);
+      setProposalNote(
+        !res.reconciled
+          ? "The GitHub App is not configured here, so PR status could not be checked."
+          : cleared > 0
+            ? `${cleared} proposal${cleared === 1 ? "" : "s"} resolved (merged or closed) and cleared.`
+            : "Still open on GitHub — nothing to clear yet.",
+      );
+      router.refresh();
+    });
+  }
+
+  /** Ops abandons a proposal: the record is cleared and the PR is closed (best-effort). */
+  function cancel(prNumber: number) {
+    setProposalNote(null);
+    setProposalBusy(true);
+    start(async () => {
+      const res = await props.cancelProposal(props.agentSlug, prNumber);
+      setProposalBusy(false);
+      if (!res.ok) {
+        setProposalNote(res.error);
+        return;
+      }
+      setProposals((cur) => cur.filter((p) => p.pr_number !== prNumber));
+      setProposalNote(
+        res.prClosed
+          ? `Proposal cancelled and PR #${prNumber} closed.`
+          : `Proposal cancelled. PR #${prNumber} could not be closed automatically — close it on GitHub.`,
+      );
+      router.refresh();
+    });
+  }
+
   return (
     <div className="page view-fade" style={{ maxWidth: 820, paddingTop: 0 }}>
       <div style={CARD}>
@@ -232,21 +291,54 @@ export default function ProposeCapabilityPanel(props: Props) {
         <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
           A new capability needs code (a new tool, a new data table, or a whole new agent), so it
           cannot go live from the dashboard. Describe it below and the app will <strong>draft the
-          code and open a pull request</strong>. An ops engineer must review and merge that PR; only
-          then does the capability go live. The app never merges.
+          code and open a pull request</strong>. An ops engineer must review and merge that PR —
+          which deploys <strong>staging</strong>; production is a separate manual promotion. The app
+          never merges.
         </div>
 
-        {/* Current proposed state / pending PR */}
-        {props.lifecycle === "proposed" && props.pendingPrUrl && (
+        {/* Pending proposals — a badge on the agent page, never a change to the agent's
+            visibility. The agent stays live for every end user while a proposal is open. */}
+        {proposals.length > 0 && (
           <div style={{ ...CARD, marginTop: 12, marginBottom: 0, background: "var(--bg-2)", borderColor: "var(--line)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-1)" }}>
-              <AlertTriangle size={16} style={{ color: "var(--warn, #b7791f)" }} />
-              This agent is <strong>&nbsp;proposed</strong>&nbsp;— a capability PR is open and awaiting an ops review + merge.
+              <GitPullRequest size={16} style={{ color: "var(--warn, #b7791f)" }} />
+              <strong>
+                {proposals.length} proposal{proposals.length === 1 ? "" : "s"} pending
+              </strong>
+              <span style={{ color: "var(--ink-3)" }}>
+                — awaiting an ops review + merge. This agent stays live for end users.
+              </span>
             </div>
-            <a href={props.pendingPrUrl} target="_blank" rel="noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 13, color: "var(--accent, #2563eb)" }}>
-              <ExternalLink size={14} /> Review PR #{props.pendingPrNumber}
-            </a>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+              {proposals.map((p) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
+                  <span style={{ fontFamily: "var(--mono)", color: "var(--ink-2)" }}>
+                    {p.kind}: {p.target ?? "—"}
+                  </span>
+                  <a href={p.pr_url} target="_blank" rel="noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--accent, #2563eb)" }}>
+                    <ExternalLink size={14} /> Review PR #{p.pr_number}
+                  </a>
+                  <button type="button" className="btn" disabled={proposalBusy || pending}
+                    onClick={() => cancel(p.pr_number)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 8px" }}>
+                    <XCircle size={13} /> Cancel proposal
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button type="button" className="btn" disabled={proposalBusy || pending} onClick={checkPrStatus}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 13 }}>
+              {proposalBusy ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />} Check PR status
+            </button>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>
+              Merged or closed PRs clear themselves when checked; there is no webhook.
+            </div>
+            {proposalNote && (
+              <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 8 }}>{proposalNote}</div>
+            )}
           </div>
         )}
 
@@ -412,7 +504,7 @@ export default function ProposeCapabilityPanel(props: Props) {
           )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-3)", marginTop: 4, marginBottom: 12 }}>
-            <ShieldCheck size={14} /> Machine-drafted code is never run before merge. An ops engineer reviews every line, then merges. The app cannot merge.
+            <ShieldCheck size={14} /> Machine-drafted code is never run before merge. An ops engineer reviews every line, then merges — no code path here calls GitHub&apos;s merge API. Merging deploys staging; production is a separate manual promotion.
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
@@ -433,8 +525,9 @@ export default function ProposeCapabilityPanel(props: Props) {
             <strong>Proposed. PR #{result.prNumber} is open.</strong>
           </div>
           <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
-            An ops engineer must review and merge this PR. After it merges, the capability is
-            registered and goes live. Nothing has shipped yet.
+            An ops engineer must review and merge this PR. Merging deploys <strong>staging</strong>;
+            reaching production takes a second, manual promotion from the Actions tab. Nothing has
+            shipped yet, and this agent stays live for end users in the meantime.
           </div>
           <a href={result.prUrl} target="_blank" rel="noreferrer" className="btn"
             style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>

@@ -11,11 +11,8 @@
 
 import type { Env } from "../../types";
 import type { PrFile } from "./pr";
-import {
-  defaultTimestamp,
-  registryValidationContext,
-  Tier2ValidationError,
-} from "./generate";
+import { defaultTimestamp, registryValidationContext } from "./generate";
+import { Tier2ValidationError } from "./errors";
 import { ghAppFetch as realGhAppFetch, type GhAppFetch } from "../../integrations/github/app-auth";
 import { assertNoDestructiveSql, assertNoInlineSecrets } from "./guards";
 
@@ -184,13 +181,22 @@ export function renderWorkerEntry(spec: AgentSpec): PrFile {
   };
 }
 
-/** Render runtime/workers/<slug>/wrangler.toml — the per-Worker deploy config (a scaffold). */
+/**
+ * Render runtime/workers/<slug>/wrangler.toml — the per-Worker deploy config (a scaffold).
+ *
+ * Emits BOTH the production config and the `[env.staging]` twin, mirroring the six hand-built
+ * agent Workers. Since #121 a merge deploys staging first, and both deploy workflows now discover
+ * agent Worker configs by globbing `runtime/workers/*​/wrangler.toml` — so this file alone is what
+ * makes the new agent deployable in both environments with no hand-editing of any workflow.
+ */
 export function renderWorkerWrangler(spec: AgentSpec): PrFile {
   const secretsComment = (spec.secrets ?? []).map((s) => `# ${s}`).join("\n");
   return {
     path: `runtime/workers/${spec.slug}/wrangler.toml`,
     content:
       `# MACHINE-DRAFTED (#67, Build 2) — REVIEW BEFORE MERGE. Scaffold per-Worker config.\n` +
+      `# Both deploy workflows glob runtime/workers/*/wrangler.toml, so this Worker is picked up\n` +
+      `# automatically (staging on merge, production on the manual promotion). No workflow edit needed.\n` +
       `name = "lumiagents-${spec.slug}"\n` +
       `main = "../../src/workers/${spec.slug}.ts"\n` +
       `compatibility_date = "2025-04-01"\n` +
@@ -206,7 +212,21 @@ export function renderWorkerWrangler(spec: AgentSpec): PrFile {
       `service = "lumiagents-runtime"\n\n` +
       `[dev]\n` +
       `# TODO(review): pick a port that does not collide with the other agent Workers.\n` +
-      `port = 8800\n`,
+      `port = 8800\n\n` +
+      `# ---------------------------------------------------------------------------\n` +
+      `# STAGING environment (#121). Purely additive; production config above is unchanged.\n` +
+      `# SUPABASE_URL is a placeholder overridden by CI with\n` +
+      `#   wrangler deploy --env staging --var SUPABASE_URL:$STAGING_SUPABASE_URL\n` +
+      `# Secrets: wrangler secret put ANTHROPIC_API_KEY --config workers/${spec.slug}/wrangler.toml --env staging\n` +
+      `# ---------------------------------------------------------------------------\n` +
+      `[env.staging]\n` +
+      `name = "lumiagents-${spec.slug}-staging"\n\n` +
+      `[env.staging.vars]\n` +
+      `SUPABASE_URL = "https://STAGING-PROJECT-REF.supabase.co"  # overridden by CI (--var)\n` +
+      `ENVIRONMENT = "staging"\n\n` +
+      `[[env.staging.services]]\n` +
+      `binding = "RUNTIME_WORKER"\n` +
+      `service = "lumiagents-runtime-staging"\n`,
   };
 }
 
@@ -227,8 +247,9 @@ export function renderAgentSeedMigration(spec: AgentSpec, timestamp: string): Pr
     content:
       `-- ⚠️  MACHINE-DRAFTED by the LumiAgents Tier 2 agent builder (#67, Build 2) — REVIEW BEFORE MERGE.\n` +
       `-- Registers the new dedicated-Worker agent "${spec.slug}" in the agents catalog (source='code').\n` +
-      `-- Forward-only INSERT ... ON CONFLICT DO NOTHING (never DDL, never destructive). Applies on\n` +
-      `-- merge via deploy-worker.yml; the human merge is the entire gate.\n` +
+      `-- Forward-only INSERT ... ON CONFLICT DO NOTHING (never DDL, never destructive). Since #121,\n` +
+      `-- merging applies this to STAGING only (deploy-staging.yml). PRODUCTION is a separate MANUAL\n` +
+      `-- promotion a human runs from the Actions tab. See docs/environments.md.\n` +
       `--\n` +
       `-- Rollback (manual, do not run automatically):\n` +
       `--   DELETE FROM orchestration.agents WHERE slug = '${spec.slug}';\n\n` +
@@ -331,18 +352,49 @@ export function applyWorkerBindingTypeEdit(current: string, spec: AgentSpec): st
   return current.replace(anchor, `${anchor}\n${field}`);
 }
 
-/** Append the agent's `[[services]]` stanza to the runtime wrangler.toml (before [triggers]). */
+/**
+ * Add the agent's Service Binding to the runtime wrangler.toml — for BOTH environments.
+ *
+ * wrangler does NOT inherit `services` into a named environment (docs/environments.md), so a
+ * production-only `[[services]]` stanza leaves `lumiagents-runtime-staging` without the binding
+ * and the staging runtime silently cannot reach the new agent Worker. The original edit inserted
+ * only before the first `[triggers]` (production) — this adds the `[[env.staging.services]]`
+ * twin too, anchored on `[env.staging.triggers]` (note: `"[triggers]"` as a substring does NOT
+ * match `[env.staging.triggers]`, which is why the production anchor stays unambiguous).
+ * Idempotent: a re-draft that finds both bindings already present is a no-op.
+ */
 export function applyWranglerServiceEdit(current: string, spec: AgentSpec): string {
   const binding = workerBindingConst(spec.slug);
-  if (current.includes(`binding = "${binding}"`)) return current; // idempotent
-  const stanza =
+  let out = current;
+
+  // ── production ──
+  const prodStanza =
     `[[services]]\n` +
     `binding = "${binding}"\n` +
     `service = "lumiagents-${spec.slug}"\n\n`;
-  if (current.includes("[triggers]")) {
-    return current.replace("[triggers]", `${stanza}[triggers]`);
+  if (!new RegExp(`\\[\\[services\\]\\]\\s*\\nbinding = "${binding}"`).test(out)) {
+    if (out.includes("[triggers]")) {
+      out = out.replace("[triggers]", `${prodStanza}[triggers]`);
+    } else {
+      out = `${out.replace(/\n?$/, "\n")}\n${prodStanza}`;
+    }
   }
-  return `${current.replace(/\n?$/, "\n")}\n${stanza}`;
+
+  // ── staging twin ──
+  const stagingStanza =
+    `[[env.staging.services]]\n` +
+    `binding = "${binding}"\n` +
+    `service = "lumiagents-${spec.slug}-staging"\n\n`;
+  if (!new RegExp(`\\[\\[env\\.staging\\.services\\]\\]\\s*\\nbinding = "${binding}"`).test(out)) {
+    if (out.includes("[env.staging.triggers]")) {
+      out = out.replace("[env.staging.triggers]", `${stagingStanza}[env.staging.triggers]`);
+    } else if (out.includes("[env.staging]")) {
+      out = `${out.replace(/\n?$/, "\n")}\n${stagingStanza}`;
+    }
+    // No [env.staging] at all → nothing to wire; production-only repo layout.
+  }
+
+  return out;
 }
 
 // ─── repo read + the generator ─────────────────────────────────────────────────────
