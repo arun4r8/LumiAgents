@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Send, Loader2, Paperclip, X, ArrowRight } from "lucide-react";
+import { Send, Loader2, Paperclip, X } from "lucide-react";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
 import { AgentMark } from "@/components/agent-mark";
+import { RunCard } from "@/components/run-card";
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -20,16 +20,40 @@ interface AttachedFile {
   content: string; // text or base64
 }
 
+/** A run this turn dispatched. `orchestration` names the card before any DB read. */
+interface RunRef {
+  runId: string;
+  orchestration?: string;
+}
+
 interface Message {
   role: "user" | "assistant";
   text: string;
   files?: AttachedFile[];
-  runIds?: string[];
+  runs?: RunRef[];
 }
 
 interface ChatResponse {
   reply: string;
+  /** @deprecated The runtime still populates this; `runs` supersedes it. */
   runIds?: string[];
+  runs?: RunRef[];
+}
+
+/**
+ * Normalise the runtime's two run shapes into one.
+ *
+ * The runtime now returns `runs: [{ runId, orchestration }]` so the embedded run
+ * card can name itself immediately (an enduser can always read their own run row
+ * under RLS, but the joined orchestration row is only readable while that
+ * orchestration is active). `runIds` is still populated as a deprecated alias —
+ * the Teams path in runtime/src/routes/agents.ts reads it — and is accepted here
+ * as the fallback so a mid-deploy dashboard talking to an older runtime, or vice
+ * versa, still renders cards.
+ */
+function runsFrom(data: ChatResponse): RunRef[] {
+  if (data.runs?.length) return data.runs;
+  return (data.runIds ?? []).map((runId) => ({ runId }));
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -203,7 +227,7 @@ export default function AgentChatClient({
       }
 
       let history = updatedHistory;
-      let allRunIds: string[] = [];
+      let allRuns: RunRef[] = [];
       let firstReply = "";
       let missedBatches = 0;
 
@@ -225,8 +249,8 @@ export default function AgentChatClient({
         try {
           const data = await callAgentChat(batchHistory, chunks[i]!);
           if (isFirst) firstReply = data.reply;
-          const batchRunIds = data.runIds ?? [];
-          if (!isFirst && batchRunIds.length === 0) {
+          const batchRuns = runsFrom(data);
+          if (!isFirst && batchRuns.length === 0) {
             // LLM responded but didn't call the tool; retry once with a stronger prompt.
             const retryHistory = [
               ...batchHistory,
@@ -237,13 +261,13 @@ export default function AgentChatClient({
               },
             ];
             const retry = await callAgentChat(retryHistory, chunks[i]!);
-            const retryRunIds = retry.runIds ?? [];
-            if (retryRunIds.length === 0) missedBatches++;
-            allRunIds = [...allRunIds, ...retryRunIds];
-            history = [...retryHistory, { role: "assistant" as const, text: retry.reply, runIds: retryRunIds }];
+            const retryRuns = runsFrom(retry);
+            if (retryRuns.length === 0) missedBatches++;
+            allRuns = [...allRuns, ...retryRuns];
+            history = [...retryHistory, { role: "assistant" as const, text: retry.reply, runs: retryRuns }];
           } else {
-            allRunIds = [...allRunIds, ...batchRunIds];
-            history = [...batchHistory, { role: "assistant" as const, text: data.reply, runIds: batchRunIds }];
+            allRuns = [...allRuns, ...batchRuns];
+            history = [...batchHistory, { role: "assistant" as const, text: data.reply, runs: batchRuns }];
           }
         } catch (err) {
           setError(`Batch ${i + 1}/${chunks.length} failed. ${friendlyRuntimeError(err)}`);
@@ -263,7 +287,7 @@ export default function AgentChatClient({
         {
           role: "assistant",
           text: firstReply + (chunks.length > 1 ? `\n\n*All ${allFiles.length} files submitted across ${chunks.length} batches.*` : "") + missedNote,
-          runIds: allRunIds,
+          runs: allRuns,
         },
       ]);
       return;
@@ -274,7 +298,7 @@ export default function AgentChatClient({
       const data = await callAgentChat(updatedHistory, allFiles);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: data.reply, runIds: data.runIds ?? [] },
+        { role: "assistant", text: data.reply, runs: runsFrom(data) },
       ]);
     } catch (err) {
       setError(friendlyRuntimeError(err));
@@ -569,26 +593,17 @@ export default function AgentChatClient({
           max-width: 180px;
         }
 
-        /* run link chip on assistant message */
+        /* embedded run cards on an assistant message */
+        .msg-col {
+          display: flex; flex-direction: column; gap: 10px;
+          flex: 1; min-width: 0;
+        }
+        .msg-row.user .msg-col      { align-items: flex-end; }
+        .msg-row.assistant .msg-col { align-items: flex-start; }
         .msg-runs {
-          display: flex; flex-wrap: wrap; gap: 6px;
-          margin-top: 8px;
-          padding-top: 8px;
-          border-top: 1px solid var(--line);
+          display: flex; flex-direction: column; gap: 10px;
+          width: 100%; max-width: 560px;
         }
-        .run-chip {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 3px 8px;
-          background: var(--accent-soft);
-          color: var(--accent-ink);
-          border: 1px solid var(--accent-line);
-          border-radius: 0;
-          font-size: 11.5px;
-          font-weight: 500;
-          text-decoration: none;
-          transition: background .1s;
-        }
-        .run-chip:hover { background: var(--accent-line); }
 
         /* pending file chips above input */
         .agent-file-chips {
@@ -659,36 +674,46 @@ export default function AgentChatClient({
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({ message }: { message: Message }) {
+  const runs = message.role === "assistant" ? message.runs ?? [] : [];
+
   return (
     <div className={`msg-row ${message.role}`}>
-      <div className="msg-bubble">
-        {message.role === "assistant" ? (
-          <div className="msg-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
-          </div>
-        ) : (
-          <div>{message.text}</div>
-        )}
+      <div className="msg-col">
+        <div className="msg-bubble">
+          {message.role === "assistant" ? (
+            <div className="msg-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+            </div>
+          ) : (
+            <div>{message.text}</div>
+          )}
 
-        {/* File chips on user messages */}
-        {message.role === "user" && message.files && message.files.length > 0 && (
-          <div className="msg-files">
-            {message.files.map((f) => (
-              <div key={f.name} className="msg-file-chip">
-                <Paperclip style={{ width: 10, height: 10, flexShrink: 0 }} />
-                <span className="truncate">{f.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+          {/* File chips on user messages */}
+          {message.role === "user" && message.files && message.files.length > 0 && (
+            <div className="msg-files">
+              {message.files.map((f) => (
+                <div key={f.name} className="msg-file-chip">
+                  <Paperclip style={{ width: 10, height: 10, flexShrink: 0 }} />
+                  <span className="truncate">{f.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Run links on assistant messages */}
-        {message.role === "assistant" && message.runIds && message.runIds.length > 0 && (
+        {/*
+          The runs this turn started, as live run cards — the redesign's signature
+          component, in place of the old static "View run →" chip. Each card follows
+          its own run to completion through the RLS-scoped /api/runs/:id poll, so an
+          enduser watching a run their chat triggered sees exactly the same thing ops
+          does. The cards sit OUTSIDE the message bubble: the card's fill is
+          --color-neutral-800, which is also the assistant bubble's fill, so on the
+          page ground it reads as the tonal card the design intends.
+        */}
+        {runs.length > 0 && (
           <div className="msg-runs">
-            {message.runIds.map((id) => (
-              <Link key={id} href={`/runs/${id}`} className="run-chip">
-                View run <ArrowRight style={{ width: 11, height: 11 }} />
-              </Link>
+            {runs.map((r) => (
+              <RunCard key={r.runId} runId={r.runId} orchestration={r.orchestration} />
             ))}
           </div>
         )}

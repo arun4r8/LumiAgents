@@ -109,9 +109,28 @@ export function resolveEnabledTools(tools: AgentTool[], enabled?: string[] | nul
   return filtered.length > 0 ? filtered : tools;
 }
 
+/**
+ * A run this chat turn dispatched, with the orchestration that produced it.
+ *
+ * The dashboard's embedded run card needs the orchestration name to render its
+ * header before (and independently of) any database read — an enduser can always
+ * see their own run row under RLS, but the joined orchestration row is only
+ * readable while that orchestration is active, so the name has to travel with
+ * the response rather than being looked up.
+ */
+export interface AgentRunRef {
+  runId: string;
+  orchestration: string;
+}
+
 export interface AgentChatResponse {
   reply: string;
+  /**
+   * @deprecated Use `runs`. Kept populated (same ids, same order) because the
+   * Teams path in routes/agents.ts and the e2e suite still read it.
+   */
   runIds: string[];
+  runs: AgentRunRef[];
 }
 
 // ─── Tool dispatch ────────────────────────────────────────────────────────────
@@ -158,7 +177,7 @@ async function dispatchTool(
   dispatchToken: string | undefined,
   files?: FileAttachment[],
   runtimeWorker?: AgentEnv["RUNTIME_WORKER"],
-): Promise<{ result: unknown; runId?: string }> {
+): Promise<{ result: unknown; runId?: string; orchestration?: string }> {
   const authHeaders: Record<string, string> = dispatchToken ? { Authorization: `Bearer ${dispatchToken}` } : {};
 
   if (toolName === "list_recent_runs") {
@@ -227,12 +246,12 @@ async function dispatchTool(
     if (!resp.ok) return { result: { error: data.error ?? `HTTP ${resp.status}` } };
     if (data.status === "failed") {
       return {
-        ...(data.runId !== undefined && { runId: data.runId }),
+        ...(data.runId !== undefined && { runId: data.runId, orchestration: mapping.orchestration }),
         result: { error: data.error ?? "Orchestration failed" },
       };
     }
     return {
-      ...(data.runId !== undefined && { runId: data.runId }),
+      ...(data.runId !== undefined && { runId: data.runId, orchestration: mapping.orchestration }),
       result: data.output,
     };
   }
@@ -249,7 +268,7 @@ async function dispatchTool(
   }
 
   return {
-    ...(data.runId !== undefined && { runId: data.runId }),
+    ...(data.runId !== undefined && { runId: data.runId, orchestration: mapping.orchestration }),
     result: {
       runId: data.runId ?? null,
       status: "started",
@@ -273,6 +292,9 @@ export async function runAgentChat(
   if (!agent) throw new Error(`Unknown agent slug: ${request.agentSlug}`);
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  // `runs` is the real accumulator; `runIds` is its deprecated projection, kept
+  // in lockstep so existing callers (Teams, e2e) keep working unchanged.
+  const runs: AgentRunRef[] = [];
   const runIds: string[] = [];
 
   // Tier 0 (#67): resolve model, max_tokens, persona, and enabled tools from config.
@@ -327,7 +349,7 @@ export async function runAgentChat(
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("\n");
-      return { reply: text, runIds };
+      return { reply: text, runIds, runs };
     }
 
     const toolUseBlocks = response.content.filter(
@@ -339,14 +361,14 @@ export async function runAgentChat(
         .filter((b): b is Anthropic.TextBlock => b.type === "text")
         .map((b) => b.text)
         .join("\n");
-      return { reply: text || "Done.", runIds };
+      return { reply: text || "Done.", runIds, runs };
     }
 
     messages.push({ role: "assistant", content: response.content });
 
     const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
       toolUseBlocks.map(async (block) => {
-        const { result, runId } = await dispatchTool(
+        const { result, runId, orchestration } = await dispatchTool(
           block.name,
           block.input as ToolInput,
           request.agentSlug,
@@ -356,7 +378,10 @@ export async function runAgentChat(
           request.files,
           env.RUNTIME_WORKER,
         );
-        if (runId) runIds.push(runId);
+        if (runId) {
+          runIds.push(runId);
+          runs.push({ runId, orchestration: orchestration ?? block.name });
+        }
         return {
           type: "tool_result" as const,
           tool_use_id: block.id,
@@ -371,5 +396,6 @@ export async function runAgentChat(
   return {
     reply: "I've completed the requested actions. Check the run links above for details.",
     runIds,
+    runs,
   };
 }
