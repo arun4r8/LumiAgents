@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Archivo } from "next/font/google";
 import "./globals.css";
 import "./lumi.css";
 import { ThemeProvider } from "@/components/theme-provider";
 
-// Nocturne design language: Inter for headings and body, weights 400/500/600
+// Archivo for headings and body. The redesign handoff specifies Inter; the product
+// owner preferred Archivo, so the typeface stays Archivo while the rest of the
+// Nocturne system (colour, spacing, radii, marks) follows the handoff. Weights
+// 400/500/600
 // only (headings never go past 500). The monospace is a system stack — see
 // --font-mono in app/lumi.css — so there is no second webfont to download.
 // Self-hosted through next/font because this app ships on Cloudflare Workers;
 // the Nocturne sheet's @import from fonts.googleapis.com is deliberately unused.
-const inter = Inter({
-  variable: "--font-inter",
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   display: "swap",
@@ -41,7 +44,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} h-full antialiased`}
+      className={`${archivo.variable} h-full antialiased`}
     >
       {/* eslint-disable-next-line react/no-danger */}
       <head>

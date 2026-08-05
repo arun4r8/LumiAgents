@@ -105,17 +105,34 @@ export async function resendInvite(formData: FormData): Promise<{ link: string }
   const origin = await siteOrigin();
   const admin = createAdminClient();
 
-  const { data, error } = await admin.auth.admin.generateLink({
+  // The user already exists (that is the point of a resend), so type:"invite"
+  // is rejected with "email address already registered". Fall back to a magiclink,
+  // which is valid for an existing account and lands on the same /accept screen
+  // where they set a password. Both are single-use and expire the same way.
+  let hashed: string | undefined;
+  let linkType: "invite" | "magiclink" = "invite";
+
+  const invite = await admin.auth.admin.generateLink({
     type: "invite",
     email,
     options: { redirectTo: `${origin}/auth/confirm?next=/accept` },
   });
-
-  if (error || !data?.properties?.hashed_token) {
-    throw new Error(error?.message ?? "Could not regenerate the invite link.");
+  if (invite.data?.properties?.hashed_token) {
+    hashed = invite.data.properties.hashed_token;
+  } else {
+    const magic = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: { redirectTo: `${origin}/auth/confirm?next=/accept` },
+    });
+    if (magic.error || !magic.data?.properties?.hashed_token) {
+      throw new Error(magic.error?.message ?? invite.error?.message ?? "Could not regenerate the invite link.");
+    }
+    hashed = magic.data.properties.hashed_token;
+    linkType = "magiclink";
   }
 
-  const link = `${origin}/auth/confirm?token_hash=${data.properties.hashed_token}&type=invite&next=/accept`;
+  const link = `${origin}/auth/confirm?token_hash=${hashed}&type=${linkType}&next=/accept`;
 
   revalidatePath("/settings");
   return { link };

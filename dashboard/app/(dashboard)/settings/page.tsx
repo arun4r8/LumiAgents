@@ -60,7 +60,11 @@ export default async function SettingsPage({
         id: u.id,
         email: u.email ?? "—",
         role: (u.app_metadata?.role as string) ?? "—",
-        status: u.email_confirmed_at ? "active" : "invited",
+        // "active" means the person has actually signed in. Do NOT use
+        // email_confirmed_at: generateLink({type:"invite"}) stamps that the moment
+        // the link is CREATED, so an invitee who has never opened it still looked
+        // "active" — which also meant the Resend button never appeared for anyone.
+        status: u.last_sign_in_at ? "active" : "invited",
         created_at: u.created_at,
       }));
     } catch (err) {

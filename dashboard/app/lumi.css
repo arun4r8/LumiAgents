@@ -81,11 +81,11 @@
   --agent-default-soft: oklch(var(--mark-l) 0.03 var(--hue-agent-default));
 
   /* type — Inter is loaded through next/font/google in app/layout.tsx, which
-     exposes it as --font-inter. Deliberately NOT the @import url(fonts.
+     exposes it as --font-archivo. Deliberately NOT the @import url(fonts.
      googleapis.com) line from the Nocturne sheet: this app ships on Cloudflare
      Workers and self-hosts its fonts through next/font. */
-  --font-heading: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-  --font-body:    var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-archivo), "Archivo", system-ui, -apple-system, sans-serif;
+  --font-body:    var(--font-archivo), "Archivo", system-ui, -apple-system, sans-serif;
   --font-heading-weight: 500;
   /* A REAL monospace, for every run id, orchestration name, cron string,
      timestamp and tabular number. --font-mono-stack is the literal so that the
