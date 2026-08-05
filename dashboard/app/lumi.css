@@ -1957,3 +1957,27 @@ a.run-card-id:hover { color: var(--color-accent-300); }
 @media (prefers-reduced-motion: reduce) {
   .rd-status.is-running .run-dot { animation: none; }
 }
+
+/* run-detail header actions (Re-run / Cancel) + their honest result note.
+   Lives in the right-hand slot of the flex .rd-head: the buttons sit top-right per
+   the handoff spec, and any feedback stacks beneath them rather than shifting the
+   title. The note text stays left-aligned and width-capped so a long, precise
+   sentence about what cancelling did and did not do stays readable. */
+.rd-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; max-width: 460px; }
+.run-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.run-actions-q { font-size: 12.5px; color: var(--color-neutral-300); }
+.run-note {
+  align-self: stretch;
+  text-align: left;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--color-neutral-200);
+  background: var(--color-neutral-900);
+  border: 1px solid var(--color-neutral-800);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+}
+.run-note strong { font-weight: 500; color: var(--color-text); }
+.run-note.is-warn { border-color: var(--warn-line); }
+.run-note.is-err  { border-color: var(--err-line); }
+.run-note ul { margin: 7px 0 0; padding-left: 18px; }
+.run-note li { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-neutral-300); }

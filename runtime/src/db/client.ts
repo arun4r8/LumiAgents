@@ -1,7 +1,37 @@
-import type { Env, Run, RunFailureAlert, RunStep, Schedule } from "../types";
+import type { Env, Run, RunFailureAlert, RunStatus, RunStep, Schedule } from "../types";
 import type { CatalogAgentRow, CatalogAgentToolRow } from "../agents/catalog-agent";
 
 // Minimal typed Supabase REST client: no Node deps, pure fetch.
+
+/** The orchestration row embedded alongside a run by `getRunForAction`. */
+export interface OrchEmbed {
+  id: string;
+  name: string;
+  version: number;
+  is_active: boolean;
+}
+
+/**
+ * A run, resolved for the re-run / cancel endpoints.
+ *
+ * `approverUserIds` and `triggeredByUserId` exist purely so the route can decide
+ * visibility; nothing else in the runtime needs them.
+ */
+export interface RunForAction {
+  id: string;
+  status: RunStatus;
+  input: unknown;
+  orchestrationId: string;
+  orchestrationVersion: number;
+  triggeredByUserId: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  rerunOf: string | null;
+  /** Null when the run points at an orchestration row that no longer exists. */
+  orchestration: OrchEmbed | null;
+  /** Users an approval on this run was requested from (RLS's second visibility arm). */
+  approverUserIds: string[];
+}
 
 export class SupabaseClient {
   private url: string;
@@ -121,6 +151,135 @@ export class SupabaseClient {
       startedAt: r.started_at,
       endedAt: r.ended_at,
     }));
+  }
+
+  // ─── Run actions: re-run + cancel ─────────────────────────────────────────
+  //
+  // Everything below is used by routes/runs.ts for POST /api/runs/:id/rerun and
+  // POST /api/runs/:id/cancel. It reads through the SERVICE ROLE like the rest of
+  // this client, so the route — not the database — is responsible for authorizing
+  // the caller. `getRunForAction` therefore returns the two facts the enduser RLS
+  // policy on orchestration.runs is made of (`triggered_by_user_id`, and the set
+  // of users an approval on this run was requested from) so `routes/runs.ts` can
+  // reproduce that policy in code. See the comment on `canSeeRun` there.
+
+  /**
+   * One run plus everything a run action needs to decide: its stored input, its
+   * orchestration (name/version/active) and the two RLS-visibility facts above.
+   * Returns null when there is no such run — callers must not distinguish
+   * "missing" from "not yours" in their response.
+   */
+  async getRunForAction(id: string): Promise<RunForAction | null> {
+    const select = [
+      "id", "status", "input", "orchestration_id", "orchestration_version",
+      "triggered_by_user_id", "started_at", "ended_at", "rerun_of",
+      "orchestrations(id,name,version,is_active)",
+      "approvals(requested_from_user_id)",
+    ].join(",");
+
+    const rows = await this.request<Array<{
+      id: string;
+      status: RunStatus;
+      input: unknown;
+      orchestration_id: string;
+      orchestration_version: number;
+      triggered_by_user_id: string | null;
+      started_at: string | null;
+      ended_at: string | null;
+      rerun_of: string | null;
+      // PostgREST returns a to-one embed as an object, but older/looser planners
+      // can hand back a single-element array. Accept both rather than crash.
+      orchestrations: OrchEmbed | OrchEmbed[] | null;
+      approvals: Array<{ requested_from_user_id: string | null }> | null;
+    }>>(`/rest/v1/runs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(select)}&limit=1`, "GET");
+
+    const row = rows[0];
+    if (!row) return null;
+
+    const orch = Array.isArray(row.orchestrations) ? (row.orchestrations[0] ?? null) : row.orchestrations;
+
+    return {
+      id: row.id,
+      status: row.status,
+      input: row.input,
+      orchestrationId: row.orchestration_id,
+      orchestrationVersion: row.orchestration_version,
+      triggeredByUserId: row.triggered_by_user_id,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      rerunOf: row.rerun_of,
+      orchestration: orch,
+      approverUserIds: (row.approvals ?? [])
+        .map((a) => a.requested_from_user_id)
+        .filter((v): v is string => typeof v === "string"),
+    };
+  }
+
+  /**
+   * Create the run row for a re-run. Identical to `createRun` except that it also
+   * writes `rerun_of` — a column the shared `Run` row type deliberately does not
+   * carry, because only this one path ever sets it.
+   */
+  async createRerun(
+    data: Omit<Run, "id" | "created_at"> & { rerun_of: string },
+  ): Promise<Run> {
+    const rows = await this.request<Run[]>("/rest/v1/runs", "POST", data);
+    const row = rows[0];
+    if (!row) throw new Error("createRerun returned no row");
+    return row;
+  }
+
+  /**
+   * Atomically move a run to `cancelled`, but ONLY from a live status.
+   *
+   * The status filter is the concurrency gate for the whole cancel endpoint: the
+   * database, not the route, decides who wins when a cancel races the run's own
+   * completion or a second cancel. `null` back means the row was already terminal
+   * (or gone) and the caller must answer 409 — it never means "wrote nothing by
+   * accident".
+   */
+  async cancelRunIfLive(id: string): Promise<Run | null> {
+    const rows = await this.request<Run[]>(
+      `/rest/v1/runs?id=eq.${encodeURIComponent(id)}&status=in.(pending,running,paused)`,
+      "PATCH",
+      { status: "cancelled", ended_at: new Date().toISOString() },
+    );
+    return rows[0] ?? null;
+  }
+
+  /**
+   * Close out any step still marked `running` on a cancelled run.
+   *
+   * Without this the timeline would draw a perpetually-pulsing step underneath a
+   * settled run. `skipped` (an existing orchestration.step_status value) is the
+   * honest label: the step did not finish, and it did not fail either. If the
+   * underlying instance was NOT terminated and the step later completes on its
+   * own, it will overwrite this with `completed` — which is then the truth.
+   */
+  async skipRunningSteps(runId: string): Promise<void> {
+    await this.request(
+      `/rest/v1/run_steps?run_id=eq.${encodeURIComponent(runId)}&status=eq.running`,
+      "PATCH",
+      { status: "skipped", ended_at: new Date().toISOString() },
+      { Prefer: "return=minimal" },
+    );
+  }
+
+  /**
+   * `updateRun`, but it refuses to overwrite a cancelled run.
+   *
+   * Used by the Workflow's success write. If a cancel could not terminate the
+   * durable instance, that instance keeps executing and would otherwise finish by
+   * flipping `cancelled` → `completed`, silently undoing the cancel the operator
+   * was told had been recorded. Returns true when a row was actually updated.
+   */
+  async updateRunUnlessCancelled(id: string, data: Partial<Run>): Promise<boolean> {
+    const rows = await this.request<Run[]>(
+      `/rest/v1/runs?id=eq.${encodeURIComponent(id)}&status=neq.cancelled`,
+      "PATCH",
+      data,
+    );
+    return rows.length > 0;
   }
 
   // ─── Run steps ────────────────────────────────────────────────────────────

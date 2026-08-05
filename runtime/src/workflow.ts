@@ -68,11 +68,21 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
 
     try {
       const output = await orch.run(ctx, inputParsed.data);
-      await db.updateRun(runId, {
+      // `updateRunUnlessCancelled`, not `updateRun`: POST /api/runs/:id/cancel marks
+      // the run cancelled and then asks Workflows to terminate this instance. When
+      // termination succeeds we never get here at all. When it does NOT (the binding
+      // is unavailable, or the instance had already moved past the point where it can
+      // be terminated), the instance runs on to this line — and an unconditional write
+      // would flip `cancelled` back to `completed`, silently undoing a cancel the
+      // operator was told had been recorded. A cancelled run stays cancelled.
+      const settled = await db.updateRunUnlessCancelled(runId, {
         status: "completed",
         output,
         ended_at: new Date().toISOString(),
       });
+      if (!settled) {
+        console.log(`[workflow] run ${runId} finished after being cancelled; leaving it cancelled`);
+      }
     } catch (err) {
       await failRun(db, this.env, {
         runId,

@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { RunTimeline } from "@/components/run-timeline";
 import { RunErrorNote } from "@/components/run-error-note";
+import { runtimeAuthHeader } from "@/lib/runtime-auth";
 import { useNow, useRunLive } from "@/lib/use-run-live";
 import {
   elapsedMs,
@@ -10,6 +13,7 @@ import {
   isTerminal,
   shortRunId,
   type RunSnapshot,
+  type RunStatus,
   type RunStepView,
 } from "@/lib/run-view";
 
@@ -31,9 +35,11 @@ import {
  * "Show technical detail" disclosure. `tech` is built by the server page for ops
  * users only, so a non-ops reader is never sent it.
  *
- * Not built here: the design's "Re-run" and "Cancel" buttons. There is no
- * corresponding action in the codebase yet, and a button that does nothing is
- * worse than no button — see the PR description.
+ * The header's "Re-run" and "Cancel" (handoff README, "Run detail": secondary
+ * Re-run + ghost Cancel) are now real: they call POST /api/runs/:id/rerun and
+ * POST /api/runs/:id/cancel on the runtime Worker. Both are HIDDEN, not disabled,
+ * when unavailable — see `RunActions` for the two rules and for why the cancel
+ * feedback is deliberately worded as "stopping" rather than "stopped".
  */
 
 // ─── Ops-only technical payloads (pre-serialised on the server) ──────────────
@@ -146,6 +152,204 @@ function statusWordOf(status: string): string {
   return status === "pending" ? "queued" : status;
 }
 
+// ─── Header actions: Re-run / Cancel ─────────────────────────────────────────
+
+const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
+
+/** Mirrors runtime `CANCELLABLE` (routes/runs.ts): the statuses a run can be stopped from. */
+const CANCELLABLE: ReadonlySet<RunStatus> = new Set<RunStatus>(["pending", "running", "paused"]);
+
+interface Notice {
+  tone: "ok" | "warn" | "err";
+  title: string;
+  text: string;
+  /** Field paths from a 422 schema rejection. */
+  issues?: string[];
+}
+
+interface CancelResult {
+  status: string;
+  terminated: boolean;
+  message: string;
+}
+
+interface RerunResult {
+  runId: string;
+}
+
+interface ErrorBody {
+  error?: string;
+  issues?: { path?: (string | number)[]; message?: string }[];
+}
+
+function issueLines(issues: ErrorBody["issues"]): string[] {
+  return (issues ?? []).slice(0, 8).map((i) => {
+    const path = (i.path ?? []).join(".") || "(root)";
+    return `${path} — ${i.message ?? "invalid"}`;
+  });
+}
+
+/**
+ * The two buttons the redesign asks for, and the two rules that decide whether
+ * they exist at all. They are hidden rather than disabled, because a disabled
+ * button still advertises an action the reader will never be allowed to take.
+ *
+ *   Re-run — shown only when `snapshot.orchestration` is non-null. That field is
+ *     the joined orchestration name read under the caller's OWN RLS session, so it
+ *     is null exactly when the caller may not see the orchestration (for an
+ *     enduser: it is not active). That is the same predicate the runtime applies
+ *     server-side in `canRerunRun`, so the button is present precisely when the
+ *     endpoint would say yes.
+ *
+ *   Cancel — shown only while the run is pending/running/paused, mirroring the
+ *     runtime's CANCELLABLE set. Everyone who can open this page can already see
+ *     the run, and seeing the run is the whole authorization rule for cancelling
+ *     it, so there is no per-user gate on top.
+ *
+ * Cancel confirms first, inline: it stops work that is genuinely in progress, and
+ * that is not something to do on a stray click.
+ *
+ * Honesty about the result matters more here than brevity. The runtime tells us
+ * whether it actually terminated the durable Workflow instance; when it did not,
+ * this says the run is *stopping* and that it may keep executing — it never claims
+ * the work halted. Even on success it repeats that side effects already sent
+ * cannot be recalled, because they cannot.
+ */
+function RunActions({
+  runId,
+  status,
+  canRerun,
+}: {
+  runId: string;
+  status: RunStatus;
+  canRerun: boolean;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"rerun" | "cancel" | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const canCancel = CANCELLABLE.has(status);
+  if (!canRerun && !canCancel) return null;
+
+  async function post(path: string): Promise<{ res: Response; body: unknown }> {
+    const res = await fetch(`${RUNTIME}/api/runs/${runId}/${path}`, {
+      method: "POST",
+      headers: { ...(await runtimeAuthHeader()), "Content-Type": "application/json" },
+    });
+    let body: unknown = null;
+    try { body = await res.json(); } catch { /* keep null; handled by status */ }
+    return { res, body };
+  }
+
+  async function onRerun() {
+    setBusy("rerun");
+    setNotice(null);
+    try {
+      const { res, body } = await post("rerun");
+      if (res.status === 422) {
+        const err = body as ErrorBody;
+        setNotice({
+          tone: "err",
+          title: "Not re-run.",
+          text: err.error ?? "This run's saved input no longer matches the orchestration's input schema.",
+          issues: issueLines(err.issues),
+        });
+        return;
+      }
+      if (!res.ok) {
+        setNotice({
+          tone: "err",
+          title: "Not re-run.",
+          text: (body as ErrorBody)?.error ?? `The runtime answered ${res.status}.`,
+        });
+        return;
+      }
+      router.push(`/runs/${(body as RerunResult).runId}`);
+    } catch {
+      setNotice({ tone: "err", title: "Not re-run.", text: "Could not reach the runtime." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onCancel() {
+    setBusy("cancel");
+    setConfirming(false);
+    setNotice(null);
+    try {
+      const { res, body } = await post("cancel");
+      if (res.status === 409) {
+        setNotice({
+          tone: "warn",
+          title: "Already finished.",
+          text: (body as ErrorBody)?.error ?? "This run had already settled, so there was nothing to cancel.",
+        });
+        return;
+      }
+      if (!res.ok) {
+        setNotice({
+          tone: "err",
+          title: "Not cancelled.",
+          text: (body as ErrorBody)?.error ?? `The runtime answered ${res.status}.`,
+        });
+        return;
+      }
+      const result = body as CancelResult;
+      setNotice({
+        tone: result.terminated ? "ok" : "warn",
+        title: result.terminated ? "Cancelled." : "Stopping.",
+        text: result.message,
+      });
+      router.refresh();
+    } catch {
+      setNotice({ tone: "err", title: "Not cancelled.", text: "Could not reach the runtime." });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="rd-actions">
+      <div className="run-actions">
+        {canRerun && !confirming && (
+          <button className="btn" onClick={onRerun} disabled={busy !== null}>
+            {busy === "rerun" ? "Re-running…" : "Re-run"}
+          </button>
+        )}
+        {canCancel && !confirming && (
+          <button className="btn ghost" onClick={() => setConfirming(true)} disabled={busy !== null}>
+            {busy === "cancel" ? "Cancelling…" : "Cancel"}
+          </button>
+        )}
+        {confirming && (
+          <>
+            <span className="run-actions-q">Stop this run? Work already in progress may not be undoable.</span>
+            <button className="btn danger-out" onClick={onCancel} disabled={busy !== null}>
+              Cancel the run
+            </button>
+            <button className="btn ghost" onClick={() => setConfirming(false)} disabled={busy !== null}>
+              Keep running
+            </button>
+          </>
+        )}
+      </div>
+      {notice && (
+        <div className={`run-note is-${notice.tone}`} role="status">
+          <strong>{notice.title}</strong> {notice.text}
+          {notice.issues && notice.issues.length > 0 && (
+            <ul>
+              {notice.issues.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export function RunDetailClient({ snapshot: seed, tech, resultNote, outputDetail }: RunDetailProps) {
@@ -181,6 +385,14 @@ export function RunDetailClient({ snapshot: seed, tech, resultNote, outputDetail
           {bareName(run.orchestration)}
           {run.version != null && <span className="v"> v{run.version}</span>}
         </h1>
+        <RunActions
+          runId={run.runId}
+          status={run.status}
+          // Non-null exactly when the caller can read the orchestration under RLS —
+          // the same condition the runtime enforces before re-dispatching. See
+          // RunActions' doc comment.
+          canRerun={run.orchestration != null}
+        />
       </div>
 
       <div className="rd-meta">
