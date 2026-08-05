@@ -135,7 +135,7 @@ The existing `GITHUB_API_TOKEN` is **wrong for Tier 2 on every axis**: it is sco
 >    agent into `proposed`, but the agents list shows non-ops callers only `lifecycle='active'`
 >    — so proposing a new tool for Cleo removed **Cleo** from every end user's Agents page.
 >    A pending proposal is now recorded in its own table, `orchestration.agent_proposals`
->    (`20260805000001_agent_proposals.sql`), and touches nothing an end user can see. Only a
+>    (`20260805000002_agent_proposals.sql`), and touches nothing an end user can see. Only a
 >    genuinely new (agent-kind) agent should ever sit in a non-active lifecycle.
 > 2. **There is no merge webhook, and none is wanted.** The way out of `open` is *pull-based*:
 >    `GET /api/agent-builder/tier2/proposals` asks GitHub about each recorded PR and clears the
