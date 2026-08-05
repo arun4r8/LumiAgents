@@ -4,6 +4,7 @@ import { useState, useEffect, useOptimistic, useTransition } from "react";
 import Link from "next/link";
 import { Clock, ArrowRight, Play, X, Loader2, Check, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { agentColor, agentSoft } from "@/lib/agent-style";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -81,32 +82,32 @@ const AGENTS = [
     label: "Angie",
     role: "HR & Recruiting",
     description: "Sources candidates via Apollo, scores them against job requirements, manages resume formatting, and drafts outreach, with a human approval gate before any message is sent.",
-    color: "oklch(62% 0.18 280)",
-    bg: "oklch(97% 0.03 280)",
+    color: agentColor("angie"),
+    bg: agentSoft("angie"),
   },
   {
     id: "beady",
     label: "Beady",
     role: "GovCon Business Development",
     description: "Monitors SAM.gov for federal opportunities, runs a 5-dimension go/no-go assessment against Lumiture's capabilities, and seeds past performance records into the RAG knowledge base.",
-    color: "oklch(58% 0.17 145)",
-    bg: "oklch(97% 0.03 145)",
+    color: agentColor("beady"),
+    bg: agentSoft("beady"),
   },
   {
     id: "money",
     label: "Money",
     role: "Finance & Analytics",
     description: "Answers natural language questions against financial data by generating and executing SQL, and produces multi-section executive reports.",
-    color: "oklch(62% 0.16 85)",
-    bg: "oklch(97% 0.03 85)",
+    color: agentColor("money"),
+    bg: agentSoft("money"),
   },
   {
     id: "patch",
     label: "Patch",
     role: "IT Operations & Knowledge",
     description: "Handles inbound triage, Jira ticket management, staff requests, vault sync from Obsidian, and document ingestion/retrieval from the RAG knowledge base.",
-    color: "oklch(60% 0.16 30)",
-    bg: "oklch(97% 0.03 30)",
+    color: agentColor("patch"),
+    bg: agentSoft("patch"),
   },
 ] as const;
 
@@ -202,15 +203,15 @@ function AgentSection({
         marginBottom: 14,
       }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 0, flexShrink: 0,
+          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
           background: agent.color, display: "flex", alignItems: "center",
-          justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 16,
+          justifyContent: "center", color: "var(--color-bg)", fontWeight: 500, fontSize: 18,
         }}>
           {agent.label[0]}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: agent.color }}>{agent.label}</span>
+            <span style={{ fontWeight: 500, fontSize: 15, color: agent.color }}>{agent.label}</span>
             <span style={{ fontSize: 12, color: "var(--ink-3)" }}>·</span>
             <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{agent.role}</span>
             {scheduledCount > 0 && (

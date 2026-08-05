@@ -1,26 +1,23 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * TODO(redesign): remove Tailwind entirely — the owner has signed off on one
+ * styling system (app/lumi.css). It is NOT removed here on purpose: redesign
+ * phases 4–6 rewrite every screen, so the utility classes come out screen by
+ * screen as each one is rebuilt, and the `@import "tailwindcss"` + the
+ * tailwindcss/@tailwindcss-postcss dependencies get dropped in a final sweep.
+ * Ripping them out now would mean rewriting the same components twice.
+ *
+ * What IS fixed here is the conflict the front-end audit called out: this file
+ * used to set `body { font-family: Arial }` (losing to lumi.css only by import
+ * order) and to map Tailwind's `--font-mono` onto the Archivo variable, so the
+ * app had no real monospace. Both are gone. The theme below now points at the
+ * Nocturne tokens in app/lumi.css, which is the single source of truth for
+ * colour and type; there are no colour or font declarations left in this file.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-archivo);
-  --font-mono: var(--font-archivo);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono-stack);
 }
