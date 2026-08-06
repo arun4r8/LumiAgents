@@ -34,11 +34,22 @@ export interface ApprovalItem {
   orchestrationName: string | null;
 }
 
+/** Rolling-window counts computed server-side from the single approvals fetch. */
+export interface ApprovalStats {
+  total30: number;
+  decided30: number;
+  approved30: number;
+}
+
 interface Props {
   pending: ApprovalItem[];
   decided: ApprovalItem[];
   /** Current user's label, used for the optimistic "approved by …" line. */
   me: string;
+  stats: ApprovalStats;
+  /** ISO cutoff for the stat window; a pending item older than this is outside it. */
+  cutoffIso: string;
+  windowDays: number;
   decide: (formData: FormData) => Promise<void>;
 }
 
@@ -70,7 +81,15 @@ function oldestExpiryLabel(items: ApprovalItem[]): string | null {
   return withExp.length ? fmtExpiry(withExp[0].expires_at) : null;
 }
 
-export function ApprovalsClient({ pending, decided, me, decide }: Props) {
+export function ApprovalsClient({
+  pending,
+  decided,
+  me,
+  stats,
+  cutoffIso,
+  windowDays,
+  decide,
+}: Props) {
   const [optimistic, addDecision] = useOptimistic<Decision[], Decision>(
     [],
     (state, d) => [...state.filter((x) => x.id !== d.id), d],
@@ -115,6 +134,24 @@ export function ApprovalsClient({ pending, decided, me, decide }: Props) {
       ? "Nothing waiting on you — all caught up"
       : `${pendingCount} waiting on you${oldest ? ` · oldest ${oldest.toLowerCase()}` : ""}`;
 
+  // 30-day stats, recomputed with this session's optimistic decisions folded in.
+  // Deciding a pending item created inside the window bumps decided (and approved,
+  // if it was approved); total is unchanged — the item was already counted in it.
+  const cutoffMs = Date.parse(cutoffIso);
+  let decided30 = stats.decided30;
+  let approved30 = stats.approved30;
+  for (const d of optimistic) {
+    const src = pending.find((p) => p.id === d.id);
+    if (src && Date.parse(src.created_at) >= cutoffMs) {
+      decided30 += 1;
+      if (d.approved) approved30 += 1;
+    }
+  }
+  // approved ÷ decided, never ÷ total. Zero decided → null → an em-dash, never
+  // "0%" (which would read as "everything was declined").
+  const rate = decided30 === 0 ? null : Math.round((approved30 / decided30) * 100);
+  const showStats = stats.total30 > 0 || livePending.length > 0;
+
   async function runDecision(formData: FormData) {
     const id = formData.get("approvalId") as string;
     const approved = formData.get("status") === "approved";
@@ -130,6 +167,19 @@ export function ApprovalsClient({ pending, decided, me, decide }: Props) {
           <div className="sub">{sub}</div>
         </div>
       </div>
+
+      {showStats && (
+        <div className="ov-stats apv-stats">
+          <Stat
+            value={rate == null ? "—" : String(rate)}
+            unit={rate == null ? undefined : "%"}
+            label={`approval rate · last ${windowDays} days`}
+            accent
+          />
+          <Stat value={String(decided30)} label={`decided · last ${windowDays} days`} />
+          <Stat value={String(stats.total30)} label={`requests · last ${windowDays} days`} />
+        </div>
+      )}
 
       <div className="apv-list">
         {livePending.map((a) => (
@@ -183,6 +233,30 @@ function PendingCard({
         </button>
         <input type="text" name="notes" className="apv-note" placeholder="Add a note…" />
       </form>
+    </div>
+  );
+}
+
+// Same stat treatment as the redesigned Overview (`.ov-stat-*`), so the band
+// reads as native to the system rather than imported from the old SLA board.
+function Stat({
+  value,
+  unit,
+  label,
+  accent,
+}: {
+  value: string;
+  unit?: string;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <div>
+      <div className={accent ? "ov-stat-v is-accent" : "ov-stat-v"}>
+        {value}
+        {unit && <span className="unit">{unit}</span>}
+      </div>
+      <div className="ov-stat-l">{label}</div>
     </div>
   );
 }

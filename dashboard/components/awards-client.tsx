@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Trophy, Trash2, Loader2, ExternalLink } from "lucide-react";
-import type { Award } from "@/app/(dashboard)/records/bd/opportunities";
+import type { Award } from "@/app/(dashboard)/records/bd/awards";
 import { ScoreCell } from "@/components/records-score";
 
 interface Props {
