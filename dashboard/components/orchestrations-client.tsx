@@ -4,6 +4,7 @@ import { useState, useEffect, useOptimistic, useTransition } from "react";
 import Link from "next/link";
 import { Clock, ArrowRight, Play, X, Loader2, Check, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { AgentMark } from "@/components/agent-mark";
 import { agentColor, agentSoft } from "@/lib/agent-style";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
@@ -308,12 +309,8 @@ export function OrchestrationsClient({
 
   return (
     <div className="page view-fade">
-      <div className="page-h">
-        <div>
-          <h1>Orchestrations</h1>
-          <div className="sub">{orchestrations.length} capabilities · {scheduled.length} scheduled</div>
-        </div>
-      </div>
+      <h1 className="p6-h1">Orchestrations</h1>
+      <div className="p6-sub">{orchestrations.length} registered · trigger ad-hoc runs or wire a schedule · {scheduled.length} scheduled</div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
           {agentIds.map((agentId) => {
@@ -357,43 +354,29 @@ function AgentSection({
 }) {
   return (
     <div>
-      {/* Agent header */}
-      <div style={{
-        display: "flex", alignItems: "flex-start", gap: 14,
-        padding: "14px 18px", borderRadius: 0,
-        background: agent.bg,
-        border: `1px solid color-mix(in oklch, ${agent.color} 20%, transparent)`,
-        marginBottom: 14,
-      }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-          background: agent.color, display: "flex", alignItems: "center",
-          justifyContent: "center", color: "var(--color-bg)", fontWeight: 500, fontSize: 18,
-        }}>
-          {agent.label[0]}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
+      {/* Agent header — tonal surface + letter-mark identity */}
+      <div className="p6-agent-head">
+        <AgentMark slug={agent.id} name={agent.label} size={44} />
+        <div className="p6-agent-head-main">
+          <div className="p6-agent-head-top">
             {/* weight 500: the redesign loads Inter at 400/500/600 only, so 700
                 would render as synthesized faux-bold. role is optional because
                 agents discovered from the data (cleo/dewey/system) may have none. */}
-            <span style={{ fontWeight: 500, fontSize: 15, color: agent.color }}>{agent.label}</span>
+            <span className="p6-agent-name">{agent.label}</span>
             {agent.role && (
               <>
-                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>·</span>
-                <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{agent.role}</span>
+                <span style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>·</span>
+                <span className="p6-agent-role">{agent.role}</span>
               </>
             )}
             {scheduledCount > 0 && (
-              <span className="chip muted" style={{ fontSize: 10.5, marginLeft: "auto" }}>
+              <span className="tag tag-neutral" style={{ marginLeft: "auto" }}>
                 {scheduledCount} scheduled
               </span>
             )}
           </div>
           {agent.description && (
-            <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
-              {agent.description}
-            </div>
+            <div className="p6-agent-desc">{agent.description}</div>
           )}
         </div>
       </div>
@@ -769,15 +752,15 @@ function OrchCard({
               type="submit"
               title={orch.is_active ? "Pause schedule" : "Resume schedule"}
               style={{
-                width: 34, height: 20, borderRadius: 0, border: "none",
+                width: 34, height: 20, borderRadius: 10, border: "none",
                 cursor: "pointer", padding: 0, flexShrink: 0,
-                background: orch.is_active ? agentColor : "var(--ink-4, #ccc)",
+                background: orch.is_active ? agentColor : "var(--color-neutral-600)",
                 position: "relative", transition: "background 0.2s",
               }}
             >
               <span style={{
                 position: "absolute", top: 2, left: orch.is_active ? 16 : 2,
-                width: 16, height: 16, borderRadius: 0, background: "#fff",
+                width: 16, height: 16, borderRadius: "50%", background: "var(--color-neutral-100)",
                 transition: "left 0.2s",
               }} />
             </button>
@@ -819,7 +802,7 @@ function OrchCard({
           </Link>
         ) : (
           <button
-            className={`btn sm${formOpen ? "" : " accent"}`}
+            className={`btn sm${formOpen ? "" : " primary"}`}
             onClick={formOpen && phase !== "idle" ? reset : onToggleForm}
           >
             {formOpen ? (
@@ -906,7 +889,7 @@ function OrchCard({
 
               <button
                 type="submit"
-                className="btn accent sm"
+                className="btn primary sm"
                 disabled={phase === "running"}
                 style={{ width: "100%", justifyContent: "center" }}
               >
@@ -947,7 +930,8 @@ function OrchCard({
         .run-form .tag-input {
           display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
           min-height: 30px; padding: 3px 6px;
-          border: 1px solid var(--line); background: var(--bg);
+          border: 1px solid var(--line-2); background: var(--bg);
+          border-radius: var(--radius-md);
         }
         .run-form .tag-input input {
           flex: 1; min-width: 90px; border: none; outline: none;
@@ -956,7 +940,8 @@ function OrchCard({
         .run-form .tag {
           display: inline-flex; align-items: center; gap: 4px;
           padding: 1px 5px; font-size: 11.5px;
-          background: var(--bg-2); border: 1px solid var(--line);
+          background: var(--bg-2); border: 1px solid var(--line-2);
+          border-radius: var(--radius-sm);
         }
         .run-form .tag button {
           border: none; background: none; padding: 0; cursor: pointer;
@@ -964,10 +949,10 @@ function OrchCard({
         }
         .run-result {
           display: flex; align-items: flex-start; gap: 8px;
-          padding: 10px 12px; border-radius: 0;
+          padding: 10px 12px; border-radius: var(--radius-md);
           font-size: 12.5px; margin-bottom: 12px;
         }
-        .run-result.ok { background: var(--ok-soft, oklch(97% 0.02 145)); color: var(--ok); border: 1px solid oklch(88% 0.06 145); }
+        .run-result.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok-line); }
         .run-result.err { background: var(--err-soft); color: var(--err); border: 1px solid var(--err-line); }
       `}</style>
     </div>
