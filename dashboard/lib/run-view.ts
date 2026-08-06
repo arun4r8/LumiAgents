@@ -264,7 +264,7 @@ export function toStepView(step: RawStep, total: number): RunStepView {
     body: summary ?? outputBody(step.output),
     progressLabel:
       state === "running" && isLlm(step.step_type)
-        ? `Working — step ${step.step_index + 1} of ${total}`
+        ? `Working: step ${step.step_index + 1} of ${total}`
         : null,
     errorSummary: summary,
     errorDetail: errorDetail(step.error),

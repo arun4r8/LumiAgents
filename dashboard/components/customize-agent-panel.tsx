@@ -174,7 +174,7 @@ export default function CustomizeAgentPanel(props: Props) {
           {strategy === "append" && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginBottom: 4 }}>
-                Base prompt (read-only) — your text below is appended after it.
+                Base prompt (read-only). Your text below is appended after it.
               </div>
               <pre style={{
                 margin: 0, maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap",
@@ -195,7 +195,7 @@ export default function CustomizeAgentPanel(props: Props) {
           />
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
             <span style={{ fontSize: 11.5, color: (errors.system_prompt || liveErrors.system_prompt) ? "var(--err, oklch(60% 0.2 25))" : "var(--ink-4)" }}>
-              {errors.system_prompt || liveErrors.system_prompt || (strategy === "replace" ? "Replaces the base prompt entirely." : "Optional — leave blank to keep the base persona.")}
+              {errors.system_prompt || liveErrors.system_prompt || (strategy === "replace" ? "Replaces the base prompt entirely." : "Optional. Leave blank to keep the base persona.")}
             </span>
             <span style={{ fontSize: 11.5, color: prompt.trim().length > SYSTEM_PROMPT_MAX ? "var(--err, oklch(60% 0.2 25))" : "var(--ink-4)" }}>
               {prompt.trim().length}/{SYSTEM_PROMPT_MAX}
@@ -271,7 +271,7 @@ export default function CustomizeAgentPanel(props: Props) {
           </button>
         </div>
         <p style={{ fontSize: 11.5, color: "var(--ink-4)", margin: 0 }}>
-          Preview: the customization takes effect on your next chat message — scroll up and message {displayName} to try it.
+          Preview: the customization takes effect on your next chat message. Scroll up and message {displayName} to try it.
           A separate sandboxed dry-run runner is a later phase.
         </p>
 

@@ -254,7 +254,7 @@ export default function ProposeCapabilityPanel(props: Props) {
           ? "The GitHub App is not configured here, so PR status could not be checked."
           : cleared > 0
             ? `${cleared} proposal${cleared === 1 ? "" : "s"} resolved (merged or closed) and cleared.`
-            : "Still open on GitHub — nothing to clear yet.",
+            : "Still open on GitHub. Nothing to clear yet.",
       );
       router.refresh();
     });
@@ -275,7 +275,7 @@ export default function ProposeCapabilityPanel(props: Props) {
       setProposalNote(
         res.prClosed
           ? `Proposal cancelled and PR #${prNumber} closed.`
-          : `Proposal cancelled. PR #${prNumber} could not be closed automatically — close it on GitHub.`,
+          : `Proposal cancelled. PR #${prNumber} could not be closed automatically. Close it on GitHub.`,
       );
       router.refresh();
     });
@@ -291,7 +291,7 @@ export default function ProposeCapabilityPanel(props: Props) {
         <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
           A new capability needs code (a new tool, a new data table, or a whole new agent), so it
           cannot go live from the dashboard. Describe it below and the app will <strong>draft the
-          code and open a pull request</strong>. An ops engineer must review and merge that PR —
+          code and open a pull request</strong>. An ops engineer must review and merge that PR,
           which deploys <strong>staging</strong>; production is a separate manual promotion. The app
           never merges.
         </div>
@@ -306,7 +306,7 @@ export default function ProposeCapabilityPanel(props: Props) {
                 {proposals.length} proposal{proposals.length === 1 ? "" : "s"} pending
               </strong>
               <span style={{ color: "var(--ink-3)" }}>
-                — awaiting an ops review + merge. This agent stays live for end users.
+                · awaiting an ops review + merge. This agent stays live for end users.
               </span>
             </div>
 
@@ -314,7 +314,7 @@ export default function ProposeCapabilityPanel(props: Props) {
               {proposals.map((p) => (
                 <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13 }}>
                   <span style={{ fontFamily: "var(--mono)", color: "var(--ink-2)" }}>
-                    {p.kind}: {p.target ?? "—"}
+                    {p.kind}: {p.target ?? "-"}
                   </span>
                   <a href={p.pr_url} target="_blank" rel="noreferrer"
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--accent, #2563eb)" }}>
@@ -504,7 +504,7 @@ export default function ProposeCapabilityPanel(props: Props) {
           )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-3)", marginTop: 4, marginBottom: 12 }}>
-            <ShieldCheck size={14} /> Machine-drafted code is never run before merge. An ops engineer reviews every line, then merges — no code path here calls GitHub&apos;s merge API. Merging deploys staging; production is a separate manual promotion.
+            <ShieldCheck size={14} /> Machine-drafted code is never run before merge. An ops engineer reviews every line, then merges. No code path here calls GitHub&apos;s merge API. Merging deploys staging; production is a separate manual promotion.
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>

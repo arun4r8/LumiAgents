@@ -65,7 +65,7 @@ export function RunCardView({
   const elapsed = fmtElapsed(elapsedMs(snapshot, now));
 
   const name = snapshot.orchestration ?? fallbackName ?? "orchestration";
-  const stepCount = snapshot.total > 0 ? `${snapshot.doneCount}/${snapshot.total}` : "—";
+  const stepCount = snapshot.total > 0 ? `${snapshot.doneCount}/${snapshot.total}` : "-";
   const idLabel = shortRunId(snapshot.runId);
 
   const statusWord =
@@ -94,7 +94,7 @@ export function RunCardView({
 
       {snapshot.steps.length === 0 ? (
         <div className="run-card-empty">
-          {inFlight ? "waiting for the first step…" : `run ${statusWord} — no steps recorded`}
+          {inFlight ? "waiting for the first step…" : `run ${statusWord}, no steps recorded`}
         </div>
       ) : (
         <div className="run-card-steps">

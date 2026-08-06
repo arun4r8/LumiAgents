@@ -31,7 +31,7 @@ export function MemoryClient({ conversations, loadDetail, forgetConversation, fo
       <div className="p6-sub" style={{ marginBottom: 20 }}>
         {conversations.length === 0
           ? "No agent conversations yet."
-          : `What the agents have learned across ${conversations.length} conversation${conversations.length !== 1 ? "s" : ""} — editable, deletable`}
+          : `What the agents have learned across ${conversations.length} conversation${conversations.length !== 1 ? "s" : ""}. Editable and deletable.`}
       </div>
 
       <p className="p6-sub" style={{ maxWidth: 760 }}>
@@ -109,8 +109,8 @@ function ConversationCard({
           <span className="p6-mem-title" style={{ textTransform: "capitalize" }}>
             {conv.agent_slug}
             {conv.title
-              ? <span className="dim" style={{ textTransform: "none" }}> — {conv.title}</span>
-              : <span className="dim" style={{ textTransform: "none" }}> — untitled conversation</span>}
+              ? <span className="dim" style={{ textTransform: "none" }}> · {conv.title}</span>
+              : <span className="dim" style={{ textTransform: "none" }}> · untitled conversation</span>}
           </span>
           <span className="p6-mem-meta">
             <span><span className="mono">{conv.messageCount}</span> messages</span>

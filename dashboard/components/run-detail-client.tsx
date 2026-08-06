@@ -179,7 +179,7 @@ interface ErrorBody {
 function issueLines(issues: ErrorBody["issues"]): string[] {
   return (issues ?? []).slice(0, 8).map((i) => {
     const path = (i.path ?? []).join(".") || "(root)";
-    return `${path} — ${i.message ?? "invalid"}`;
+    return `${path}: ${i.message ?? "invalid"}`;
   });
 }
 

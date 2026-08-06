@@ -107,7 +107,7 @@ export function ApprovalsClient({
       if (!src) return null;
       return {
         id: d.id,
-        orch: bareOrchestration(src.orchestrationName) || "—",
+        orch: bareOrchestration(src.orchestrationName) || "-",
         approved: d.approved,
         by: d.by,
         at: d.at,
@@ -123,9 +123,9 @@ export function ApprovalsClient({
   const shownServer = showAllDecided ? decided : decided.slice(0, DECIDED_CAP);
   const serverRows: DecidedRow[] = shownServer.map((a) => ({
     id: a.id,
-    orch: bareOrchestration(a.orchestrationName) || "—",
+    orch: bareOrchestration(a.orchestrationName) || "-",
     approved: a.status === "approved",
-    by: a.decided_by ?? "—",
+    by: a.decided_by ?? "-",
     at: a.decided_at ?? a.created_at,
   }));
 
@@ -140,7 +140,7 @@ export function ApprovalsClient({
   const oldest = mounted ? oldestExpiryLabel(livePending) : null;
   const sub =
     pendingCount === 0
-      ? "Nothing waiting on you — all caught up"
+      ? "Nothing waiting on you, all caught up"
       : `${pendingCount} waiting on you${oldest ? ` · oldest ${oldest.toLowerCase()}` : ""}`;
 
   // 30-day stats, recomputed with this session's optimistic decisions folded in.
@@ -180,7 +180,7 @@ export function ApprovalsClient({
       {showStats && (
         <div className="ov-stats apv-stats">
           <Stat
-            value={rate == null ? "—" : String(rate)}
+            value={rate == null ? "-" : String(rate)}
             unit={rate == null ? undefined : "%"}
             label={`approval rate · last ${windowDays} days`}
             accent
@@ -224,7 +224,7 @@ function PendingCard({
   runDecision: (formData: FormData) => Promise<void>;
 }) {
   const slug = agentOfOrchestration(approval.orchestrationName);
-  const orch = bareOrchestration(approval.orchestrationName) || "—";
+  const orch = bareOrchestration(approval.orchestrationName) || "-";
   const agentName = slug ? slug[0].toUpperCase() + slug.slice(1) : "System";
 
   return (
@@ -234,7 +234,7 @@ function PendingCard({
         <div className="apv-id">
           <span className="apv-orch mono">{orch}</span>
           <span className="apv-sub">
-            {agentName} · requested <LocalTime iso={approval.created_at} format="ago" placeholder="—" />
+            {agentName} · requested <LocalTime iso={approval.created_at} format="ago" placeholder="-" />
           </span>
         </div>
         <UrgencyTag expiresAt={approval.expires_at} />

@@ -15,9 +15,9 @@ function friendlyRuntimeError(status: number | null, rawError: unknown): string 
   console.error("[orchestrations] run failed:", status, rawError);
   const msg = rawError instanceof Error ? rawError.message : String(rawError ?? "");
   if (status === 403 || /\b403\b|forbidden/i.test(msg)) {
-    return "You don't have access to this yet — ask an ops admin.";
+    return "You don't have access to this yet. Ask an ops admin.";
   }
-  return "Something went wrong — try again.";
+  return "Something went wrong. Try again.";
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────

@@ -536,7 +536,7 @@ function TeamTab({ currentUserId, members, inviteMember, revokeMember, resendInv
       <Section heading="Invite a member">
         <div className="card" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--ink-2)", margin: 0 }}>
-            Create a single-use invite link and send it to the person yourself. No email is sent — self-signup is disabled.
+            Create a single-use invite link and send it to the person yourself. No email is sent. Self-signup is disabled.
           </p>
           <form onSubmit={submitInvite} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div className="field" style={{ margin: 0, flex: "1 1 240px" }}>
@@ -591,7 +591,7 @@ function TeamTab({ currentUserId, members, inviteMember, revokeMember, resendInv
                 </button>
               </div>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                Send this link to {invite.email} — it&apos;s single-use and tied to their email.
+                Send this link to {invite.email}. It&apos;s single-use and tied to their email.
               </div>
             </div>
           )}
@@ -645,7 +645,7 @@ function MemberRow({ member, isSelf, revokeMember, resendInvite }: {
 
   const created = member.created_at
     ? new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "—";
+    : "-";
 
   function revoke() {
     if (!confirm(`Remove ${member.email}? This deletes their account.`)) return;
@@ -818,7 +818,7 @@ function AppearanceTab() {
         <div className="p6-set-label">Appearance</div>
         <div className="p6-set-body">
           <div>
-            <div className="p6-field-note">Theme — applies immediately, saved per person</div>
+            <div className="p6-field-note">Theme: applies immediately, saved per person</div>
             <div className="seg-ctrl">
               <SegBtn active={theme === "light"} onClick={() => setTheme("light")} icon={<Sun />} label="Light" />
               <SegBtn active={theme === "dark"} onClick={() => setTheme("dark")} icon={<Moon />} label="Dark" />
@@ -826,7 +826,7 @@ function AppearanceTab() {
             </div>
           </div>
           <div>
-            <div className="p6-field-note">Density — compact reduces spacing for information-dense views</div>
+            <div className="p6-field-note">Density: compact reduces spacing for information-dense views</div>
             <div className="seg-ctrl">
               <SegBtn active={density === "default"} onClick={() => setDensity("default")} icon={<AlignJustify />} label="Default" />
               <SegBtn active={density === "compact"} onClick={() => setDensity("compact")} icon={<Rows3 />} label="Compact" />

@@ -280,7 +280,7 @@ export function LiveDuration({
 }) {
   const mounted = useMounted();
   if (!startedAt || endedAt) return <>{fmtDuration(startedAt, endedAt)}</>;
-  return <>{mounted ? fmtDuration(startedAt, endedAt) : "—"}</>;
+  return <>{mounted ? fmtDuration(startedAt, endedAt) : "-"}</>;
 }
 
 /** Urgent = under two hours left; the tag flips to accent per the spec.

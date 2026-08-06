@@ -101,9 +101,9 @@ function friendlyRuntimeError(err: unknown): string {
   console.error("[agent-chat] runtime call failed:", err);
   const msg = err instanceof Error ? err.message : String(err);
   if (/\b403\b|forbidden/i.test(msg)) {
-    return "You don't have access to this yet — ask an ops admin.";
+    return "You don't have access to this yet. Ask an ops admin.";
   }
-  return "Something went wrong — try again.";
+  return "Something went wrong. Try again.";
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {
@@ -140,7 +140,7 @@ async function docxToPdf(file: File): Promise<AttachedFile> {
 async function readFile(file: File): Promise<AttachedFile> {
   if (/\.docx$/i.test(file.name)) return docxToPdf(file);
   if (/\.doc$/i.test(file.name)) {
-    throw new Error(`"${file.name}" is a Word 97 file — save it as .docx or PDF and try again`);
+    throw new Error(`"${file.name}" is a Word 97 file. Save it as .docx or PDF and try again`);
   }
   const isText = TEXT_TYPES.has(file.type) || TEXT_EXTS.test(file.name);
   if (isText) {
@@ -199,7 +199,7 @@ export default function AgentChatClient({
         return [...prev, ...read.filter((f) => !existing.has(f.name))];
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "That file couldn't be read — try another format");
+      setError(err instanceof Error ? err.message : "That file couldn't be read. Try another format");
     }
   }, []);
 
@@ -472,7 +472,7 @@ export default function AgentChatClient({
             placeholder={
               dragging
                 ? "Drop the files here"
-                : `Message ${agentName} — attach files, trigger orchestrations…`
+                : `Message ${agentName} · attach files, trigger orchestrations…`
             }
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -484,7 +484,7 @@ export default function AgentChatClient({
           <label
             className="btn ghost sm"
             style={{ cursor: "pointer" }}
-            title="Attach a file — .txt, .csv, .md, .json, .pdf or .docx. Word files are converted to PDF for you, and you can drop files straight onto the box."
+            title="Attach a file: .txt, .csv, .md, .json, .pdf or .docx. Word files are converted to PDF for you, and you can drop files straight onto the box."
           >
             <Paperclip style={{ width: 12, height: 12 }} />
             Attach

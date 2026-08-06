@@ -317,11 +317,11 @@ function MetricsTab() {
                   </div>
                   <div className="p6-worker-stats">
                     <span>
-                      <span className="p6-stat-v">{w.hasData ? fmtCompact(w.requests) : "—"}</span>
+                      <span className="p6-stat-v">{w.hasData ? fmtCompact(w.requests) : "-"}</span>
                       <span className="p6-stat-l">{w.hasData ? "requests" : "no data"}</span>
                     </span>
                     <span>
-                      <span className="p6-stat-v">{w.hasData ? w.p50 : "—"}</span>
+                      <span className="p6-stat-v">{w.hasData ? w.p50 : "-"}</span>
                       <span className="p6-stat-l">p50 µs</span>
                     </span>
                   </div>
@@ -394,7 +394,7 @@ function MetricsTab() {
               ))}
             </div>
             <div className="spend-note muted">
-              Estimated — prices are approximate model list rates and may not reflect billing.
+              Estimated. Prices are approximate model list rates and may not reflect billing.
             </div>
           </div>
         )}

@@ -21,7 +21,7 @@ export function ScoreCell({
   suffix?: string;
 }) {
   if (score == null || Number.isNaN(score)) {
-    return <span className="rec-score rec-score-null">—</span>;
+    return <span className="rec-score rec-score-null">-</span>;
   }
   const ok = score / max >= 0.7;
   return (

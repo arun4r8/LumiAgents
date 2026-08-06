@@ -182,7 +182,7 @@ export default function AgentComposer(props: Props) {
           </Link>
           <h1 style={{ marginTop: 6 }}>{mode === "create" ? "New agent" : `Edit ${displayName || slug}`}</h1>
           <div className="sub">
-            Assemble a new agent from existing orchestrations — no code, no deploy. It runs
+            Assemble a new agent from existing orchestrations. No code, no deploy. It runs
             immediately through the shared chat runtime.
           </div>
         </div>
@@ -195,7 +195,7 @@ export default function AgentComposer(props: Props) {
             An agent is a <strong>persona</strong> (system prompt), a <strong>model</strong>, a
             set of <strong>tools</strong> (each an existing orchestration), and a bounded
             <strong> knowledge scope</strong>. Pick tools from the catalogue below; a human
-            reviews nothing — it goes live on save.
+            reviews nothing. It goes live on save.
           </div>
         </div>
       )}
@@ -296,7 +296,7 @@ export default function AgentComposer(props: Props) {
                     <label style={{ fontSize: 12, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 6 }}>
                       <input type="checkbox" checked={sel.mode === "sync"} disabled={!o.syncEligible}
                         onChange={(e) => setToolMode(o.name, e.target.checked ? "sync" : "async")} />
-                      Await result (sync){!o.syncEligible && <span style={{ color: "var(--ink-3)" }}> — not read-only, async only</span>}
+                      Await result (sync){!o.syncEligible && <span style={{ color: "var(--ink-3)" }}> (not read-only, async only)</span>}
                     </label>
                     <input style={{ ...INPUT, fontSize: 12 }} value={sel.paramsText}
                       onChange={(e) => setToolParams(o.name, e.target.value)}
@@ -315,7 +315,7 @@ export default function AgentComposer(props: Props) {
         <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>
           What this agent may be recorded as reading: shared, its own corpus, and the enduser
           corpus. <strong>This is a record, not an enforced limit.</strong> At retrieval time a
-          config agent inherits the knowledge scope of the orchestrations it wires — e.g. wiring{" "}
+          config agent inherits the knowledge scope of the orchestrations it wires, e.g. wiring{" "}
           <span style={{ fontFamily: "var(--mono)" }}>dewey/knowledge-search</span> reads Dewey&apos;s
           corpus whatever is ticked here. Choose tools with that in mind.
         </div>

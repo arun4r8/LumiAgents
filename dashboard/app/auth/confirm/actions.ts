@@ -43,7 +43,7 @@ export async function confirmOtp(formData: FormData): Promise<{ error: string }>
     // them. Say what to do rather than guessing which it was.
     return {
       error:
-        "This link is no longer valid — it may have already been used, or it may have expired. Ask for a new invite.",
+        "This link is no longer valid. It may have already been used, or it may have expired. Ask for a new invite.",
     };
   }
 

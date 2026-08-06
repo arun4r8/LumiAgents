@@ -26,8 +26,8 @@ export default function DashboardError({
         </div>
         <h4>Something went wrong.</h4>
         <p>
-          We couldn&apos;t load this view. This is usually a transient data or network hiccup —
-          try again in a moment.
+          We couldn&apos;t load this view. This is usually a transient data or network hiccup.
+          Try again in a moment.
         </p>
         {error.digest && (
           <p className="mono" style={{ marginTop: 8, color: "var(--ink-3)", fontSize: 11.5 }}>

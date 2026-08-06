@@ -43,7 +43,7 @@ export function SchedulesClient({ schedules, createSchedule, toggleSchedule, del
           <h1 className="p6-h1">Schedules</h1>
           <div className="p6-sub" style={{ margin: 0 }}>
             {schedules.length === 0
-              ? "No scheduled orchestrations yet — all times UTC."
+              ? "No scheduled orchestrations yet. All times UTC."
               : `${schedules.length} cron trigger${schedules.length !== 1 ? "s" : ""} · ${active} active · all times UTC`}
           </div>
         </div>

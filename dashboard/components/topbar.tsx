@@ -165,7 +165,7 @@ export default function Topbar({ isOps = false }: { isOps?: boolean }) {
                 that actually has that surface. */}
             <section className="help-sect">
               <h4>Agents</h4>
-              <p>Each agent covers a domain — recruiting, business development, finance. Open one and say what you need in plain language; it works out which of its tools to use.</p>
+              <p>Each agent covers a domain: recruiting, business development, finance. Open one and say what you need in plain language; it works out which of its tools to use.</p>
             </section>
             <section className="help-sect">
               <h4>Orchestrations</h4>
@@ -173,12 +173,12 @@ export default function Topbar({ isOps = false }: { isOps?: boolean }) {
             </section>
             <section className="help-sect">
               <h4>Runs</h4>
-              <p>When an agent does something, it creates a run — a step-by-step record of what happened and what came back.{isOps ? " Runs lists every run in the fleet." : " Runs lists the ones you started."}</p>
+              <p>When an agent does something, it creates a run: a step-by-step record of what happened and what came back.{isOps ? " Runs lists every run in the fleet." : " Runs lists the ones you started."}</p>
             </section>
             {isOps && (
               <section className="help-sect">
                 <h4>Approvals</h4>
-                <p>Some runs pause for a human decision and wait here, with a count in the nav. Not all of them do — a few orchestrations write to Jira, Teams or the content calendar directly, so treat the pause as a feature of those runs rather than a guarantee.</p>
+                <p>Some runs pause for a human decision and wait here, with a count in the nav. Not all of them do. A few orchestrations write to Jira, Teams or the content calendar directly, so treat the pause as a feature of those runs rather than a guarantee.</p>
               </section>
             )}
             <section className="help-sect">
@@ -188,7 +188,7 @@ export default function Topbar({ isOps = false }: { isOps?: boolean }) {
             {isOps && (
               <section className="help-sect">
                 <h4>Records</h4>
-                <p>The business tables the agents read and write — awards, industry days, RFI drafts, the content calendar, people. Same data the agents see, shown directly.</p>
+                <p>The business tables the agents read and write: awards, industry days, RFI drafts, the content calendar, people. Same data the agents see, shown directly.</p>
               </section>
             )}
 

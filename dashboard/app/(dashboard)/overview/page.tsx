@@ -250,7 +250,7 @@ export default async function OverviewPage() {
         failed24={failed24}
         weekRuns={weekRuns}
         cleanPct={settled > 0 ? (100 * clean) / settled : null}
-        spendLabel={spendRows.length > 0 ? fmtUsd(spend) : "—"}
+        spendLabel={spendRows.length > 0 ? fmtUsd(spend) : "-"}
         fleet={fleet}
         buckets={buckets}
         stream={stream}
@@ -282,6 +282,6 @@ function messageFor(status: string, step: string, job: string): string {
     case "running":   return `running ${step}${where}`;
     case "failed":    return `${step} failed${where}`;
     case "skipped":   return `skipped ${step}${where}`;
-    default:          return `${step} — ${status}${where}`;
+    default:          return `${step}: ${status}${where}`;
   }
 }

@@ -68,7 +68,7 @@ export default async function AgentsPage() {
         <FirstRunNote
           variant="welcome"
           title="Welcome to LumiAgents"
-          body="An agent is a coworker you talk to in plain language. Tell one what you need — screen these resumes, find awards we could enter — and it does the work. Anything it does becomes a run: a step-by-step record you can open and watch, listed under Runs. You can also drop files into Library so the agents can search them. Agents take real actions, so read what one tells you it is about to do."
+          body="An agent is a coworker you talk to in plain language. Tell one what you need (screen these resumes, find awards we could enter) and it does the work. Anything it does becomes a run: a step-by-step record you can open and watch, listed under Runs. You can also drop files into Library so the agents can search them. Agents take real actions, so read what one tells you it is about to do."
           dismissLabel="Got it"
         />
       )}
@@ -155,7 +155,7 @@ function EmptyAgents({ readFailed, isOps }: { readFailed: boolean; isOps: boolea
       <div className="empty-state">
         <div className="empty-title">We couldn&apos;t load the agents</div>
         <p className="empty-body">
-          The catalog didn&apos;t come back this time — that&apos;s a read failing on our
+          The catalog didn&apos;t come back this time. That&apos;s a read failing on our
           side, not anything you did. Reload the page; if it keeps happening, tell ops so
           they can look at it.
         </p>
@@ -167,7 +167,7 @@ function EmptyAgents({ readFailed, isOps }: { readFailed: boolean; isOps: boolea
     <div className="empty-state">
       <div className="empty-title">No agents on staff yet</div>
       <p className="empty-body">
-        An agent is a coworker you talk to in plain language — you tell it what you need
+        An agent is a coworker you talk to in plain language. You tell it what you need
         and it does the work.{" "}
         {isOps
           ? "Add the first one with New agent, above."

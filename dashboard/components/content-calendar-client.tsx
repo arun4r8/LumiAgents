@@ -77,7 +77,7 @@ export function ContentCalendarClient({
     startTransition(async () => {
       try {
         await syncNow();
-        setImportMsg("Live sync started from the M365 planning workbook. Synced rows appear here shortly — refresh to see them.");
+        setImportMsg("Live sync started from the M365 planning workbook. Synced rows appear here shortly. Refresh to see them.");
         setTimeout(() => setImportMsg(null), 8000);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Sync failed");
@@ -135,7 +135,7 @@ export function ContentCalendarClient({
         here with status <b>ready</b>. A human always reviews before posting; nothing publishes automatically.
         <b>Sync now</b> live-pulls the team's Microsoft 365 planning workbook via the Graph API; rows sync in and
         re-syncing an edited sheet updates them without touching existing drafts. <b>Import CSV</b> stays as a manual
-        fallback (export the sheet to CSV first) — both paths key on the same rows, so they stay interchangeable.
+        fallback (export the sheet to CSV first). Both paths key on the same rows, so they stay interchangeable.
       </p>
 
       {importMsg && <div className="chip ok" style={{ marginBottom: 12 }}>{importMsg}</div>}

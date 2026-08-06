@@ -97,7 +97,7 @@ export default function OverviewClient({
             : `${failed24} ${failed24 === 1 ? "run" : "runs"} failed in the last 24 hours`}
           {" · "}
           {pending === 0
-            ? "nothing waiting on you — all caught up"
+            ? "nothing waiting on you, all caught up"
             : `${pending} ${pending === 1 ? "approval" : "approvals"} waiting on you`}
         </p>
       </header>
@@ -105,7 +105,7 @@ export default function OverviewClient({
       <div className="ov-stats">
         <Stat value={weekRuns.toLocaleString()} label="runs this week" />
         <Stat
-          value={cleanPct == null ? "—" : cleanPct.toFixed(1)}
+          value={cleanPct == null ? "-" : cleanPct.toFixed(1)}
           unit={cleanPct == null ? undefined : "%"}
           label="completed without intervention"
         />
