@@ -118,7 +118,7 @@ function SetupCard() {
         style={{
           background: "var(--surface-2, var(--bg-2, #111))",
           border: "1px solid var(--line)",
-          borderRadius: 0,
+          borderRadius: 6,
           padding: "14px 16px",
           fontSize: 12.5,
           lineHeight: 2,
@@ -176,6 +176,18 @@ function formatCost(usd: number): string {
   if (usd < 1) return `$${usd.toFixed(2)}`;
   return `$${usd.toFixed(2)}`;
 }
+
+// Compact request count for the worker tile: 18400 → "18.4k", 1_200_000 → "1.2M".
+function fmtCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+// The configured Cloudflare runtime script. The handoff's 4-col worker grid
+// assumes one worker per agent, but in this codebase the six agents share this
+// single runtime worker, so CF only reports metrics for the one script.
+const RUNTIME_WORKER_NAME = "lumiagents-runtime";
 
 function MetricsTab() {
   const [win, setWin] = useState<SpendWindow>("24h");
@@ -269,6 +281,32 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Worker tiles (README Infrastructure). The handoff pictures one worker
+          per agent; here the agents share the single runtime worker, so this
+          shows the one script CF actually reports metrics for rather than
+          fabricating six more. req/day is today's count; p50 is CF CPU time. */}
+      <section>
+        <div className="p6-sec">Workers</div>
+        <div className="p6-workers" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 264px))" }}>
+          <div className="p6-worker">
+            <div className="p6-worker-h">
+              <span className="p6-worker-name">{RUNTIME_WORKER_NAME}</span>
+              <span className={`p6-worker-dot ${runStats && runStats.failed > 0 ? "is-warn" : "is-ok"}`} />
+            </div>
+            <div className="p6-worker-stats">
+              <span>
+                <span className="p6-stat-v">{fmtCompact(usage?.requestsToday ?? 0)}</span>
+                <span className="p6-stat-l">req / day</span>
+              </span>
+              <span>
+                <span className="p6-stat-v">{avgP50}</span>
+                <span className="p6-stat-l">p50 µs</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Window toggle: drives run-count + LLM spend KPIs and the breakdown */}
       <div className="sec-h">
         <h3>Run &amp; spend metrics</h3>
@@ -360,14 +398,14 @@ function MetricsTab() {
               </div>
               <div style={{
                 height: 8,
-                borderRadius: 0,
+                borderRadius: 6,
                 background: "var(--line)",
                 overflow: "hidden",
               }}>
                 <div style={{
                   height: "100%",
                   width: `${reqPct}%`,
-                  borderRadius: 0,
+                  borderRadius: 6,
                   background: reqPct > 90
                     ? "var(--err)"
                     : reqPct > 70
@@ -689,7 +727,7 @@ function LogsTab() {
           fontSize: 12,
           lineHeight: 1.7,
           background: "var(--surface-2, #0d0d0d)",
-          borderRadius: 0,
+          borderRadius: 6,
         }}
       >
         {lines.length === 0 ? (
@@ -774,7 +812,7 @@ function DeploymentsTab() {
   return (
     <section className="card pad">
       <div className="sec-h" style={{ marginBottom: 16 }}>
-        <h3>Deployments</h3>
+        <h3>Recent deploys</h3>
         <button className="btn ghost sm" onClick={load}>
           <RefreshCw style={{ width: 12, height: 12 }} /> Refresh
         </button>
@@ -786,9 +824,9 @@ function DeploymentsTab() {
         <table className="tbl" style={{ width: "100%", minWidth: 850 }}>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Created</th>
-              <th>Source</th>
+              <th>Deployment</th>
+              <th>When</th>
+              <th>Via</th>
               <th>Author</th>
               <th>Status</th>
             </tr>
@@ -797,31 +835,27 @@ function DeploymentsTab() {
             {deployments.map((d, idx) => {
               const isCurrent = d.is_latest === true || idx === 0;
               return (
-                <tr key={d.id}>
+                <tr key={d.id} style={{ cursor: "default" }}>
                   <td className="mono" style={{ fontSize: 12 }}>
-                    {d.id.slice(0, 16)}…
+                    {d.id.slice(0, 12)}…
                   </td>
-                  <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                  <td className="mono" style={{ fontSize: 12, color: "var(--color-neutral-400)", whiteSpace: "nowrap" }}>
                     {d.metadata?.created_on
                       ? new Date(d.metadata.created_on).toLocaleString()
                       : "-"}
                   </td>
-                  <td className="muted" style={{ fontSize: 12.5 }}>
-                    {d.metadata?.source ?? "-"}
+                  <td>
+                    {d.metadata?.source
+                      ? <span className="tag tag-neutral">{d.metadata.source}</span>
+                      : <span className="muted" style={{ fontSize: 12.5 }}>-</span>}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
                     {d.metadata?.author_email ?? "-"}
                   </td>
                   <td>
-                    {isCurrent ? (
-                      <span className="chip ok" style={{ fontSize: 11 }}>
-                        <Check style={{ width: 11, height: 11 }} /> current
-                      </span>
-                    ) : (
-                      <span className="chip muted" style={{ fontSize: 11 }}>
-                        previous
-                      </span>
-                    )}
+                    <span className={`p6-status ${isCurrent ? "is-ok" : "is-muted"}`}>
+                      {isCurrent ? "deployed" : "previous"}
+                    </span>
                   </td>
                 </tr>
               );
@@ -1017,7 +1051,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 0,
+              borderRadius: 6,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,
@@ -1032,7 +1066,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 0,
+              borderRadius: 6,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,
@@ -1119,15 +1153,11 @@ export function InfraClient() {
   const [tab, setTab] = useState<Tab>("metrics");
 
   return (
-    <div className="page view-fade">
+    <div className="page view-fade" style={{ maxWidth: 1080 }}>
       {/* Page header */}
-      <div className="page-h">
-        <div>
-          <h1>Infrastructure</h1>
-          <div className="sub">
-            Cloudflare Workers management: metrics, logs, deployments, secrets, cron
-          </div>
-        </div>
+      <h1 className="p6-h1">Infrastructure</h1>
+      <div className="p6-sub">
+        Cloudflare Workers · metrics, logs, deployments and secrets
       </div>
 
       {/* Tabs */}
