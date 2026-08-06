@@ -211,8 +211,18 @@ export function LocalTime({
   placeholder = "--:--",
 }: {
   iso: string | null | undefined;
-  /** "abs" → fmtAbs (date+time, today-aware); "clock" → fmtClock (HH:MM:SS). */
-  format?: "abs" | "clock";
+  /**
+   * "abs"    → fmtAbs (date+time, today-aware)   — timezone-dependent
+   * "clock"  → fmtClock (HH:MM:SS)               — timezone- and locale-dependent
+   * "ago"    → fmtTimeAgo ("3m ago")             — clock-dependent
+   * "expiry" → fmtExpiry ("Expires in 2h")       — clock-dependent
+   *
+   * The last two do not read the timezone, but they measure against Date.now(),
+   * so they mismatch whenever a minute boundary falls between the server render
+   * and hydration. Intermittent rather than constant — and therefore worse to
+   * chase, which is why they are gated too.
+   */
+  format?: "abs" | "clock" | "ago" | "expiry";
   placeholder?: string;
 }): React.ReactElement {
   // useSyncExternalStore is the hydration-safe way to read a client-only value:
@@ -221,8 +231,64 @@ export function LocalTime({
   // snapshot (true). No setState-in-effect, no mismatch.
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
   if (!mounted) return <>{placeholder}</>;
-  const text = format === "clock" ? fmtClock(iso) : fmtAbs(iso);
+  const text =
+    format === "clock" ? fmtClock(iso)
+    : format === "ago" ? fmtTimeAgo(iso)
+    : format === "expiry" ? fmtExpiry(iso)
+    : fmtAbs(iso);
   return <>{text ?? placeholder}</>;
+}
+
+/**
+ * The same server/client snapshot split as LocalTime, for callers that must gate
+ * something other than text. An un-gated className derived from the clock is
+ * still a hydration mismatch — React just reports it differently than a text
+ * one — so styling that depends on "how long is left" needs this too.
+ */
+export function useMounted(): boolean {
+  return useSyncExternalStore(subscribeNoop, () => true, () => false);
+}
+
+/**
+ * Expiry tag: the label AND the accent class both derive from the clock, so both
+ * are gated. Pre-mount it renders neutral with a blank label; urgency appears
+ * with the text one frame later.
+ */
+export function UrgencyTag({ expiresAt }: { expiresAt: string | null | undefined }) {
+  const mounted = useMounted();
+  if (!expiresAt) return null;
+  const urgent = mounted && isUrgent(expiresAt);
+  return (
+    <span className={`tag ${urgent ? "tag-accent" : "tag-neutral"}`}>
+      <LocalTime iso={expiresAt} format="expiry" placeholder="" />
+    </span>
+  );
+}
+
+/**
+ * Run duration. A SETTLED run is arithmetic on two fixed instants — fully
+ * deterministic, so it renders immediately with no placeholder. Only an
+ * in-flight run measures against Date.now() and needs the gate. Gating the
+ * settled case would flash a placeholder for nothing.
+ */
+export function LiveDuration({
+  startedAt,
+  endedAt,
+}: {
+  startedAt: string | null;
+  endedAt: string | null;
+}) {
+  const mounted = useMounted();
+  if (!startedAt || endedAt) return <>{fmtDuration(startedAt, endedAt)}</>;
+  return <>{mounted ? fmtDuration(startedAt, endedAt) : "—"}</>;
+}
+
+/** Urgent = under two hours left; the tag flips to accent per the spec.
+ *  Clock-dependent — reach it through <UrgencyTag>, not directly in JSX. */
+export function isUrgent(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ms = new Date(iso).getTime() - Date.now();
+  return ms >= 0 && ms < 2 * 60 * 60 * 1000;
 }
 
 /** A store that never changes — LocalTime only needs the server/client snapshot

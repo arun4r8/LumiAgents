@@ -4,7 +4,7 @@ import { useOptimistic, useState } from "react";
 import Link from "next/link";
 import { AgentMark } from "@/components/agent-mark";
 import { agentOfOrchestration, bareOrchestration } from "@/lib/agent-style";
-import { fmtTimeAgo, LocalTime, fmtExpiry } from "@/components/lumi";
+import { LocalTime, UrgencyTag, fmtExpiry, useMounted } from "@/components/lumi";
 
 /**
  * Approvals — the redesign's single most important functional surface.
@@ -72,13 +72,6 @@ function byExpiry(a: ApprovalItem, b: ApprovalItem): number {
   return ta - tb;
 }
 
-// Urgent = under two hours left; the expiry tag flips to accent to match the spec.
-function isUrgent(iso: string | null): boolean {
-  if (!iso) return false;
-  const ms = new Date(iso).getTime() - Date.now();
-  return ms >= 0 && ms < 2 * 60 * 60 * 1000;
-}
-
 function oldestExpiryLabel(items: ApprovalItem[]): string | null {
   const withExp = items.filter((i) => i.expires_at).sort(byExpiry);
   return withExp.length ? fmtExpiry(withExp[0].expires_at) : null;
@@ -140,7 +133,11 @@ export function ApprovalsClient({
   const decidedCapped = decidedTotal > DECIDED_CAP;
 
   const pendingCount = livePending.length;
-  const oldest = oldestExpiryLabel(livePending);
+  // oldestExpiryLabel runs through fmtExpiry, i.e. Date.now() — gated so the
+  // server and the hydrating client agree. Pre-mount the subtitle simply omits
+  // the clause rather than asserting a stale interval.
+  const mounted = useMounted();
+  const oldest = mounted ? oldestExpiryLabel(livePending) : null;
   const sub =
     pendingCount === 0
       ? "Nothing waiting on you — all caught up"
@@ -229,8 +226,6 @@ function PendingCard({
   const slug = agentOfOrchestration(approval.orchestrationName);
   const orch = bareOrchestration(approval.orchestrationName) || "—";
   const agentName = slug ? slug[0].toUpperCase() + slug.slice(1) : "System";
-  const expiry = fmtExpiry(approval.expires_at);
-  const urgent = isUrgent(approval.expires_at);
 
   return (
     <div className="apv-card">
@@ -239,12 +234,10 @@ function PendingCard({
         <div className="apv-id">
           <span className="apv-orch mono">{orch}</span>
           <span className="apv-sub">
-            {agentName} · requested {fmtTimeAgo(approval.created_at)}
+            {agentName} · requested <LocalTime iso={approval.created_at} format="ago" placeholder="—" />
           </span>
         </div>
-        {expiry && (
-          <span className={`tag ${urgent ? "tag-accent" : "tag-neutral"}`}>{expiry}</span>
-        )}
+        <UrgencyTag expiresAt={approval.expires_at} />
       </div>
 
       <div className="apv-prompt">{approval.prompt}</div>
