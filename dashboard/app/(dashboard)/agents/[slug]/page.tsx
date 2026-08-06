@@ -49,12 +49,26 @@ export default async function AgentDetailPage({ params }: PageProps) {
   const { slug } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: agentRow } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data: agentRow } = await admin
     .schema("orchestration").from("agents")
     .select("slug, display_name, card, source, lifecycle")
     .eq("slug", slug).maybeSingle();
   if (!agentRow) notFound();
   const card = cardFromRow(agentRow as Parameters<typeof cardFromRow>[0]);
+
+  // The chat header's "N orchestrations" tag, counted exactly as the catalog card
+  // counts it (see app/(dashboard)/agents/page.tsx): the agent's own `<slug>/…`
+  // namespace for a code agent, its wired agent_tools rows for a config agent.
+  const [nsRes, wiredRes] = await Promise.all([
+    admin.schema("orchestration").from("orchestrations")
+      .select("name", { count: "exact", head: true })
+      .eq("is_active", true).like("name", `${slug}/%`),
+    admin.schema("orchestration").from("agent_tools")
+      .select("agent_slug", { count: "exact", head: true })
+      .eq("agent_slug", slug),
+  ]);
+  const orchestrationCount = (nsRes.count ?? 0) + (wiredRes.count ?? 0);
 
   // One source of truth for role — see lib/role.ts.
   const isOps = roleOf(user) === "ops";
@@ -80,8 +94,9 @@ export default async function AgentDetailPage({ params }: PageProps) {
       <AgentChatClient
         slug={card.slug}
         agentName={card.name}
-        agentEmoji={card.emoji}
+        agentDomain={card.category}
         description={card.description}
+        orchestrationCount={orchestrationCount}
         suggestedPrompts={card.suggestedPrompts}
       />
 

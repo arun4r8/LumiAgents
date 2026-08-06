@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Send, Loader2, Paperclip, X } from "lucide-react";
+import { Loader2, Paperclip, X } from "lucide-react";
 import mammoth from "mammoth";
 import { jsPDF } from "jspdf";
 import ReactMarkdown from "react-markdown";
@@ -9,6 +9,27 @@ import remarkGfm from "remark-gfm";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
 import { AgentMark } from "@/components/agent-mark";
 import { RunCard } from "@/components/run-card";
+
+/**
+ * Agent chat.
+ *
+ * Redesign phase 4 rewrites the PRESENTATION only — the transport, the file
+ * batching, the runtime error mapping and the embedded run cards are unchanged
+ * from the code that shipped with phase 3, deliberately. What changed:
+ *
+ *  · the header is the design's 32px mark + name + domain/live line, replacing
+ *    the generic .page-h;
+ *  · a user turn is a right-aligned accent-900 bubble; an AGENT turn is plain
+ *    text on the page ground with no bubble at all — so the embedded run card is
+ *    the only filled surface in the transcript, which is the point of the design;
+ *  · the composer is one bordered pill that takes the accent border on focus,
+ *    holding the input, a ghost Attach and a primary (outlined) Send;
+ *  · every style moved out of this component's <style> block into app/lumi.css —
+ *    one styling system. No Tailwind utility classes remain on this screen.
+ *
+ * Enter sends. ⌘↵ / Ctrl+↵ still sends (the behaviour people already have in
+ * their fingers), and Shift+Enter inserts a newline.
+ */
 
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "";
 
@@ -61,8 +82,11 @@ function runsFrom(data: ChatResponse): RunRef[] {
 interface AgentChatClientProps {
   slug: string;
   agentName: string;
-  agentEmoji: string;
+  /** The agent's domain — "GovCon BD", "HR & Recruiting". Shown under the name. */
+  agentDomain: string;
   description: string;
+  /** How many orchestrations this agent can run; the header tag. */
+  orchestrationCount: number;
   suggestedPrompts: string[];
 }
 
@@ -116,7 +140,7 @@ async function docxToPdf(file: File): Promise<AttachedFile> {
 async function readFile(file: File): Promise<AttachedFile> {
   if (/\.docx$/i.test(file.name)) return docxToPdf(file);
   if (/\.doc$/i.test(file.name)) {
-    throw new Error(`"${file.name}" is a legacy .doc file. Please save it as .docx or PDF first`);
+    throw new Error(`"${file.name}" is a Word 97 file — save it as .docx or PDF and try again`);
   }
   const isText = TEXT_TYPES.has(file.type) || TEXT_EXTS.test(file.name);
   if (isText) {
@@ -132,8 +156,9 @@ async function readFile(file: File): Promise<AttachedFile> {
 export default function AgentChatClient({
   slug,
   agentName,
-  agentEmoji,
+  agentDomain,
   description,
+  orchestrationCount,
   suggestedPrompts,
 }: AgentChatClientProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -144,14 +169,23 @@ export default function AgentChatClient({
   const [dragging, setDragging] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const fileRef    = useRef<HTMLInputElement>(null);
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const fileRef     = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, thinking]);
+
+  // The composer is a one-line pill that grows with the draft, so the textarea
+  // is measured rather than given a fixed `rows`. Capped by max-height in CSS.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   // ── File handling ──────────────────────────────────────────────────────────
 
@@ -165,7 +199,7 @@ export default function AgentChatClient({
         return [...prev, ...read.filter((f) => !existing.has(f.name))];
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to read file");
+      setError(err instanceof Error ? err.message : "That file couldn't be read — try another format");
     }
   }, []);
 
@@ -307,49 +341,74 @@ export default function AgentChatClient({
     }
   }
 
+  /**
+   * Enter sends — the handoff's composer spec. ⌘↵ / Ctrl+↵ sends too: it was the
+   * ONLY way to send before this phase, so it keeps working rather than silently
+   * becoming a no-op for anyone who learned it. Shift+Enter is the newline, and
+   * an open IME composition is left alone.
+   */
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      send();
-    }
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return;
+    if (e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    send();
   }
 
   const isEmpty = messages.length === 0;
+  const canSend = (input.trim().length > 0 || pendingFiles.length > 0) && !thinking;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="page view-fade agent-chat-page">
-      {/* Page header */}
-      <div className="page-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <AgentMark slug={slug} name={agentName} size={32} />
-          <div>
-            <h1 style={{ margin: 0 }}>{agentName}</h1>
-            <div className="sub">{description}</div>
-          </div>
+    <div className="chat-page">
+      <header className="chat-h">
+        <AgentMark slug={slug} name={agentName} size={32} />
+        <span>
+          <span className="chat-h-name">{agentName}</span>
+          <span className="chat-h-sub">
+            {agentDomain}
+            {thinking && (
+              <>
+                {" · "}
+                <span className="live">working…</span>
+              </>
+            )}
+          </span>
+        </span>
+        <div className="chat-h-actions">
+          {!isEmpty && (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => { setMessages([]); setError(null); }}
+            >
+              New chat
+            </button>
+          )}
+          <span className="tag tag-outline">
+            {orchestrationCount === 1 ? "1 orchestration" : `${orchestrationCount} orchestrations`}
+          </span>
         </div>
-        {!isEmpty && (
-          <button className="btn sm" onClick={() => { setMessages([]); setError(null); }}>
-            New chat
-          </button>
-        )}
-      </div>
+      </header>
 
-      {/* Chat shell */}
-      <div className="agent-shell">
-
-        {/* ── Messages ── */}
-        <div className="agent-messages">
-          {isEmpty ? (
-            <div className="agent-empty">
-              <div className="agent-empty-emoji" aria-hidden="true">{agentEmoji}</div>
-              <div className="agent-empty-name">{agentName}</div>
-              <div className="agent-empty-desc">{description}</div>
-              <div className="ex-chips" style={{ justifyContent: "center", marginTop: 16 }}>
+      <div className="chat-log">
+        {isEmpty ? (
+          <div className="chat-empty">
+            <AgentMark slug={slug} name={agentName} size={44} />
+            <div className="chat-empty-name">{agentName}</div>
+            <p className="chat-empty-desc">{description}</p>
+            <p className="chat-empty-hint">
+              Say what you need in plain language. {agentName} works out which of its
+              orchestrations to run, and anything it starts appears right here as a run
+              you can watch.
+            </p>
+            {suggestedPrompts.length > 0 && (
+              <div className="chat-chips">
                 {suggestedPrompts.map((prompt) => (
                   <button
                     key={prompt}
+                    type="button"
                     className="ex-chip"
                     onClick={() => send(prompt)}
                     disabled={thinking}
@@ -358,366 +417,153 @@ export default function AgentChatClient({
                   </button>
                 ))}
               </div>
-            </div>
-          ) : (
-            messages.map((msg, i) => (
-              <MessageBubble key={i} message={msg} />
-            ))
-          )}
+            )}
+          </div>
+        ) : (
+          messages.map((msg, i) => <MessageTurn key={i} message={msg} />)
+        )}
 
-          {/* Thinking bubble */}
-          {thinking && (
-            <div className="msg-row assistant">
-              <div className="msg-bubble thinking">
-                <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                <span>
-                  {batchProgress
-                    ? `Processing batch ${batchProgress.current} of ${batchProgress.total}…`
-                    : "Thinking…"}
-                </span>
-              </div>
-            </div>
-          )}
+        {thinking && (
+          <div className="chat-thinking">
+            <Loader2 className="spin" style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <span>
+              {batchProgress
+                ? `Working through batch ${batchProgress.current} of ${batchProgress.total}…`
+                : "Thinking…"}
+            </span>
+          </div>
+        )}
 
-          {/* Error banner */}
-          {error && (
-            <div className="agent-error">{error}</div>
-          )}
+        {error && <div className="chat-error" role="alert">{error}</div>}
 
-          <div ref={bottomRef} />
-        </div>
+        <div ref={bottomRef} />
+      </div>
 
-        {/* ── File chip preview ── */}
+      <div
+        className="chat-composer"
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
         {pendingFiles.length > 0 && (
-          <div className="agent-file-chips">
+          <div className="chat-files">
             {pendingFiles.map((f) => (
-              <div key={f.name} className="file-chip">
+              <span key={f.name} className="chat-file">
                 <Paperclip style={{ width: 11, height: 11, flexShrink: 0 }} />
                 <span className="truncate">{f.name}</span>
                 <button
-                  className="file-chip-rm"
+                  type="button"
+                  className="chat-file-rm"
                   onClick={() => removeFile(f.name)}
-                  title="Remove"
+                  aria-label={`Remove ${f.name}`}
+                  title={`Remove ${f.name}`}
                 >
                   <X style={{ width: 10, height: 10 }} />
                 </button>
-              </div>
+              </span>
             ))}
           </div>
         )}
 
-        {/* ── Input bar ── */}
-        <div
-          className={`agent-input${dragging ? " drag-over" : ""}`}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={handleDrop}
-        >
+        <div className={dragging ? "chat-pill is-drag" : "chat-pill"}>
           <textarea
             ref={textareaRef}
-            className="agent-textarea"
-            placeholder={`Message ${agentName}… (⌘↵ to send)`}
+            className="chat-input"
+            placeholder={
+              dragging
+                ? "Drop the files here"
+                : `Message ${agentName} — attach files, trigger orchestrations…`
+            }
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={thinking}
-            rows={3}
+            rows={1}
           />
-          <div className="agent-input-foot">
-            {/* File upload */}
-            <label
-              className="btn sm"
-              title="Attach file (.txt, .csv, .pdf, .md, .json, .docx; .docx auto-converts to PDF)"
-              style={{ cursor: "pointer" }}
-            >
-              <Paperclip style={{ width: 12, height: 12 }} />
-              Attach
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".txt,.csv,.pdf,.md,.json,.docx,.doc"
-                multiple
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  if (e.target.files) attachFiles(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
 
-            <div className="row gap-sm" style={{ alignItems: "center" }}>
-              <span className="muted mono" style={{ fontSize: 11.5 }}>
-                {thinking ? "Working…" : "⌘ + ↵ to send"}
-              </span>
-              <button
-                className="btn accent"
-                onClick={() => send()}
-                disabled={(!input.trim() && pendingFiles.length === 0) || thinking}
-              >
-                {thinking
-                  ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Working</>
-                  : <><Send style={{ width: 13, height: 13 }} /> Send</>}
-              </button>
-            </div>
-          </div>
+          <label
+            className="btn ghost sm"
+            style={{ cursor: "pointer" }}
+            title="Attach a file — .txt, .csv, .md, .json, .pdf or .docx. Word files are converted to PDF for you, and you can drop files straight onto the box."
+          >
+            <Paperclip style={{ width: 12, height: 12 }} />
+            Attach
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".txt,.csv,.pdf,.md,.json,.docx,.doc"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                if (e.target.files) attachFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+
+          <button
+            type="button"
+            className="btn primary sm"
+            onClick={() => send()}
+            disabled={!canSend}
+          >
+            {thinking ? "Working" : "Send"}
+          </button>
+        </div>
+
+        <div className="chat-hint">
+          <span>Enter sends · Shift + Enter starts a new line</span>
+          <span>Drop files straight onto the box to attach them</span>
         </div>
       </div>
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .agent-chat-page { display: flex; flex-direction: column; }
-
-        .agent-shell {
-          display: flex; flex-direction: column;
-          max-width: 860px;
-          gap: 10px;
-        }
-
-        /* messages area */
-        .agent-messages {
-          display: flex; flex-direction: column; gap: 12px;
-          min-height: 200px;
-          max-height: calc(100vh - 340px);
-          overflow-y: auto;
-          padding: 4px 2px 8px;
-        }
-
-        /* empty state */
-        .agent-empty {
-          display: flex; flex-direction: column; align-items: center;
-          padding: 48px 20px; text-align: center; color: var(--ink-2);
-        }
-        .agent-empty-emoji { font-size: 44px; line-height: 1; margin-bottom: 12px; }
-        .agent-empty-name { font-size: 17px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-        .agent-empty-desc { font-size: 13.5px; color: var(--ink-2); max-width: 480px; line-height: 1.55; }
-
-        /* message rows */
-        .msg-row { display: flex; }
-        .msg-row.user      { justify-content: flex-end; }
-        .msg-row.assistant { justify-content: flex-start; }
-
-        .msg-bubble {
-          max-width: 78%;
-          padding: 10px 14px;
-          border-radius: 0;
-          font-size: 13.5px;
-          line-height: 1.6;
-          white-space: pre-wrap;
-          overflow-wrap: break-word;
-        }
-        .msg-row.user .msg-bubble {
-          background: var(--accent);
-          color: #fff;
-          border-bottom-right-radius: 4px;
-        }
-        .msg-row.assistant .msg-bubble {
-          background: var(--bg-2);
-          color: var(--ink-1);
-          border-bottom-left-radius: 4px;
-          border: 1px solid var(--line);
-        }
-
-        /* markdown-rendered assistant content */
-        .msg-markdown > :first-child { margin-top: 0; }
-        .msg-markdown > :last-child  { margin-bottom: 0; }
-        .msg-markdown p              { margin: 0 0 8px; }
-        .msg-markdown ul, .msg-markdown ol {
-          margin: 0 0 8px; padding-left: 20px;
-        }
-        .msg-markdown li { margin: 2px 0; }
-        .msg-markdown h1, .msg-markdown h2, .msg-markdown h3,
-        .msg-markdown h4, .msg-markdown h5, .msg-markdown h6 {
-          margin: 12px 0 6px; font-weight: 600; line-height: 1.3;
-        }
-        .msg-markdown h1 { font-size: 17px; }
-        .msg-markdown h2 { font-size: 15.5px; }
-        .msg-markdown h3, .msg-markdown h4, .msg-markdown h5, .msg-markdown h6 { font-size: 13.5px; }
-        .msg-markdown a {
-          color: var(--accent); text-decoration: underline; text-underline-offset: 2px;
-        }
-        .msg-markdown code {
-          font-family: ui-monospace, "SF Mono", Menlo, monospace;
-          font-size: 12.5px;
-          background: rgba(0, 0, 0, 0.06);
-          border-radius: 3px;
-          padding: 1px 4px;
-        }
-        .msg-markdown pre {
-          background: rgba(0, 0, 0, 0.06);
-          border-radius: 4px;
-          padding: 10px 12px;
-          margin: 0 0 8px;
-          overflow-x: auto;
-        }
-        .msg-markdown pre code {
-          background: none; padding: 0; font-size: 12.5px;
-        }
-        .msg-markdown blockquote {
-          margin: 0 0 8px; padding-left: 10px;
-          border-left: 2px solid var(--line);
-          color: var(--ink-2);
-        }
-        .msg-markdown hr { border: none; border-top: 1px solid var(--line); margin: 10px 0; }
-        .msg-markdown table {
-          border-collapse: collapse; margin: 0 0 8px; font-size: 12.5px;
-        }
-        .msg-markdown th, .msg-markdown td {
-          border: 1px solid var(--line); padding: 4px 8px; text-align: left;
-        }
-        .msg-markdown strong { font-weight: 600; }
-
-        /* thinking */
-        .msg-bubble.thinking {
-          display: flex; align-items: center; gap: 8px;
-          color: var(--ink-3); font-style: italic;
-          animation: thinking-pulse 1.4s ease-in-out infinite;
-        }
-        @keyframes thinking-pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: .55; }
-        }
-
-        /* attached file chips on user message */
-        .msg-files {
-          display: flex; flex-wrap: wrap; gap: 5px;
-          margin-top: 6px;
-        }
-        .msg-file-chip {
-          display: inline-flex; align-items: center; gap: 4px;
-          padding: 2px 7px;
-          background: rgba(255,255,255,.18);
-          border: 1px solid rgba(255,255,255,.25);
-          border-radius: 0;
-          font-size: 11px;
-          max-width: 180px;
-        }
-
-        /* embedded run cards on an assistant message */
-        .msg-col {
-          display: flex; flex-direction: column; gap: 10px;
-          flex: 1; min-width: 0;
-        }
-        .msg-row.user .msg-col      { align-items: flex-end; }
-        .msg-row.assistant .msg-col { align-items: flex-start; }
-        .msg-runs {
-          display: flex; flex-direction: column; gap: 10px;
-          width: 100%; max-width: 560px;
-        }
-
-        /* pending file chips above input */
-        .agent-file-chips {
-          display: flex; flex-wrap: wrap; gap: 7px;
-          padding: 8px 12px;
-          background: var(--bg-1);
-          border: 1px solid var(--line);
-          border-radius: 0;
-        }
-        .file-chip {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 3px 6px 3px 8px;
-          background: var(--bg);
-          border: 1px solid var(--line-2);
-          border-radius: 0;
-          font-size: 12px;
-          color: var(--ink-1);
-          max-width: 200px;
-        }
-        .file-chip-rm {
-          background: none; border: none; cursor: pointer;
-          color: var(--ink-3); display: flex; align-items: center;
-          padding: 1px; border-radius: 0; flex-shrink: 0;
-        }
-        .file-chip-rm:hover { color: var(--err); background: var(--err-soft); }
-
-        /* input bar */
-        .agent-input {
-          border: 1px solid var(--line-2);
-          border-radius: 0;
-          background: var(--bg);
-          padding: 12px 14px;
-          box-shadow: var(--shadow-md);
-          transition: border-color .12s, box-shadow .12s;
-        }
-        .agent-input:focus-within {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
-        }
-        .agent-input.drag-over {
-          border-color: var(--accent);
-          background: var(--accent-soft);
-        }
-        .agent-textarea {
-          width: 100%; border: 0; outline: 0; resize: none;
-          font-family: var(--sans); font-size: 14px; line-height: 1.55;
-          background: transparent; color: var(--ink);
-        }
-        .agent-input-foot {
-          display: flex; align-items: center; justify-content: space-between;
-          margin-top: 8px;
-        }
-
-        /* error */
-        .agent-error {
-          padding: 10px 14px;
-          border: 1px solid var(--err-line);
-          border-radius: 0;
-          background: var(--err-soft);
-          color: var(--err);
-          font-size: 13px;
-        }
-      `}</style>
     </div>
   );
 }
 
-// ─── Message bubble ───────────────────────────────────────────────────────────
+// ─── One turn ─────────────────────────────────────────────────────────────────
 
-function MessageBubble({ message }: { message: Message }) {
-  const runs = message.role === "assistant" ? message.runs ?? [] : [];
+function MessageTurn({ message }: { message: Message }) {
+  const isUser = message.role === "user";
+  const runs = isUser ? [] : message.runs ?? [];
 
   return (
-    <div className={`msg-row ${message.role}`}>
-      <div className="msg-col">
-        <div className="msg-bubble">
-          {message.role === "assistant" ? (
-            <div className="msg-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
-            </div>
-          ) : (
-            <div>{message.text}</div>
-          )}
-
-          {/* File chips on user messages */}
-          {message.role === "user" && message.files && message.files.length > 0 && (
-            <div className="msg-files">
+    <div className={`chat-msg ${isUser ? "is-user" : "is-agent"}`}>
+      {isUser ? (
+        <div className="chat-bubble">
+          {message.text}
+          {message.files && message.files.length > 0 && (
+            <div className="chat-bubble-files">
               {message.files.map((f) => (
-                <div key={f.name} className="msg-file-chip">
+                <span key={f.name} className="chat-bubble-file">
                   <Paperclip style={{ width: 10, height: 10, flexShrink: 0 }} />
                   <span className="truncate">{f.name}</span>
-                </div>
+                </span>
               ))}
             </div>
           )}
         </div>
+      ) : (
+        <div className="chat-text chat-md">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+        </div>
+      )}
 
-        {/*
-          The runs this turn started, as live run cards — the redesign's signature
-          component, in place of the old static "View run →" chip. Each card follows
-          its own run to completion through the RLS-scoped /api/runs/:id poll, so an
-          enduser watching a run their chat triggered sees exactly the same thing ops
-          does. The cards sit OUTSIDE the message bubble: the card's fill is
-          --color-neutral-800, which is also the assistant bubble's fill, so on the
-          page ground it reads as the tonal card the design intends.
-        */}
-        {runs.length > 0 && (
-          <div className="msg-runs">
-            {runs.map((r) => (
-              <RunCard key={r.runId} runId={r.runId} orchestration={r.orchestration} />
-            ))}
-          </div>
-        )}
-      </div>
+      {/*
+        The runs this turn started, as live run cards — the redesign's signature
+        component, in place of the old static "View run →" chip. Each card follows
+        its own run to completion through the RLS-scoped /api/runs/:id poll, so an
+        enduser watching a run their chat triggered sees exactly the same thing ops
+        does. Unchanged by phase 4 except that the agent turn around them is now
+        plain text, so the card is the only filled surface in the transcript —
+        which is what the design is after.
+      */}
+      {runs.length > 0 && (
+        <div className="chat-runs">
+          {runs.map((r) => (
+            <RunCard key={r.runId} runId={r.runId} orchestration={r.orchestration} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

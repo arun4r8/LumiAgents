@@ -51,6 +51,38 @@ export function agentSoft(agent: string): string {
 }
 
 /**
+ * The letter-mark's text colour for this agent — `oklch(var(--mtext-l) 0.09 H)`.
+ * Used where an agent NAME is tinted with its own identity rather than drawn as
+ * a mark (the Overview activity rows). Flips with the theme, like the mark.
+ */
+export function agentInk(agent: string): string {
+  return `oklch(var(--mtext-l) 0.09 ${agentHue(agent)})`;
+}
+
+// ─── Orchestration ↔ agent ───────────────────────────────────────────────────
+//
+// Every orchestration is named `<agent-slug>/<job>` (see agents/*/index.ts
+// toolMap and the seed migrations), so the owning agent is the prefix. The one
+// exception is the `system/` namespace, which belongs to no agent — it resolves
+// to null and callers fall back to the neutral treatment.
+
+/** The agent slug that owns an orchestration, or null (`system/…`, unnamed). */
+export function agentOfOrchestration(orchestration: string | null | undefined): string | null {
+  if (!orchestration) return null;
+  const slash = orchestration.indexOf("/");
+  if (slash <= 0) return null;
+  const slug = orchestration.slice(0, slash);
+  return slug === "system" ? null : slug;
+}
+
+/** The orchestration name without its `<agent>/` prefix. */
+export function bareOrchestration(orchestration: string | null | undefined): string {
+  if (!orchestration) return "";
+  const slash = orchestration.indexOf("/");
+  return slash > 0 ? orchestration.slice(slash + 1) : orchestration;
+}
+
+/**
  * Back-compat shim for the old `AGENT_COLOR[slug]` lookups. Kept so nothing
  * breaks mid-redesign; prefer agentColor().
  */

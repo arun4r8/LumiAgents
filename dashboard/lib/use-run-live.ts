@@ -12,9 +12,10 @@ import { isTerminal, type RunSnapshot, type RunSnapshotResponse } from "@/lib/ru
  *     RLS-scoped by construction — an enduser gets exactly the runs RLS grants
  *     them and no service-role read path exists.
  *   • `orchestration.runs` / `run_steps` are not added to the `supabase_realtime`
- *     publication anywhere in supabase/migrations, so the existing
- *     `overview-realtime.tsx` subscription is best-effort. The run card is the
- *     screen's primary content and has to be right, not best-effort.
+ *     publication anywhere in supabase/migrations — the publication is empty in
+ *     production (issue #142), so a subscription connects and then never fires.
+ *     Phase 4 deleted the last one (`overview-realtime.tsx`) for exactly that
+ *     reason. Polling is the only mechanism in this app that actually updates.
  *   • The card needs *step* transitions, not just run status, which would mean a
  *     second subscription per card — and a chat transcript can hold several cards.
  *     One conditional poll per in-flight card is cheaper than N websockets.

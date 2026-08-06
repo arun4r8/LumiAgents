@@ -42,15 +42,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${archivo.variable} h-full antialiased`}
-    >
+    // No Tailwind utilities here any more: `h-full antialiased` on <html> and
+    // `min-h-full` on <body> are now plain rules in app/lumi.css (html/body
+    // height; body already declared the font smoothing). The three screens
+    // rebuilt in redesign phase 4 carry no utility classes at all.
+    <html lang="en" className={archivo.variable}>
       {/* eslint-disable-next-line react/no-danger */}
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-full">
+      <body>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
