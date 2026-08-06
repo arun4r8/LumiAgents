@@ -1,27 +1,27 @@
 import Link from "next/link";
 import { OpportunitiesTab } from "./opportunities";
+import { AwardsTab } from "./awards";
 import { IndustryDaysTab } from "./industry-days";
 import { RfiDraftsTab } from "./rfi-drafts";
 
 export const dynamic = "force-dynamic";
 
 /**
- * BD Pipeline — the redesign's RECORDS domain merges three formerly separate
- * routes (/awards, /industry-days, /rfi-drafts) behind one page with a
- * segmented control. Tab state lives in the URL (`?tab=rfi`) so links deep-link
- * and the old routes can 308 straight onto the tab they used to be.
- *
- * Phase 2 relocates and re-shells only: each tab renders its previous page body
- * unchanged (including that body's own page header). Phase 6 rebuilds the
- * records table shell itself.
+ * BD Pipeline — the redesign's RECORDS domain. Tab state lives in the URL
+ * (`?tab=…`) so links deep-link and the old flat routes 308 straight onto the
+ * tab they used to be.
  */
 
-// NOTE: the `opps` key is kept for URL back-compat (/awards redirects to ?tab=opps).
-// The label says "Awards" because that is what this tab renders — the awards table.
-// The design handoff calls this tab "Opportunities"; there is no Opportunities screen
-// yet (the opportunities table has no UI), so the label matches the content until one
-// exists rather than promising something the page does not show.
+// Tab keys are URL-facing and must stay stable for back-compat:
+//   ?tab=opportunities → public.opportunities (Beady's GovCon pipeline; moved
+//                        here out of /records/data's govcon tab)
+//   ?tab=opps          → the `awards` table. Kept as "opps" because /awards
+//                        308-redirects to ?tab=opps (next.config.ts); reusing
+//                        that key for opportunities would silently land old
+//                        links on the wrong data. Labelled "Awards" because
+//                        that is the table ./awards.tsx queries.
 const TABS = [
+  { key: "opportunities", label: "Opportunities" },
   { key: "opps", label: "Awards" },
   { key: "days", label: "Industry days" },
   { key: "rfi", label: "RFI drafts" },
@@ -30,7 +30,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 function tabFrom(raw: string | undefined): TabKey {
-  return raw === "days" || raw === "rfi" ? raw : "opps";
+  return raw === "opportunities" || raw === "days" || raw === "rfi" ? raw : "opps";
 }
 
 export default async function BdPipelinePage({
@@ -59,7 +59,8 @@ export default async function BdPipelinePage({
         </div>
       </div>
 
-      {active === "opps" && <OpportunitiesTab />}
+      {active === "opportunities" && <OpportunitiesTab />}
+      {active === "opps" && <AwardsTab />}
       {active === "days" && <IndustryDaysTab />}
       {active === "rfi" && <RfiDraftsTab />}
     </>
