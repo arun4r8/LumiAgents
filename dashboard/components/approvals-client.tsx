@@ -95,7 +95,10 @@ export function ApprovalsClient({ pending, decided, me, decide }: Props) {
     })
     .filter((r): r is DecidedRow => r !== null);
 
-  const serverRows: DecidedRow[] = decided.map((a) => ({
+  // Decided items collapse in place, but we only surface a recent slice inline
+  // so the screen stays about what still needs a decision — not an ever-growing
+  // audit log. `decided` arrives newest-first from the query's created_at order.
+  const serverRows: DecidedRow[] = decided.slice(0, 20).map((a) => ({
     id: a.id,
     orch: bareOrchestration(a.orchestrationName) || "—",
     approved: a.status === "approved",
