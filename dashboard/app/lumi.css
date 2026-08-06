@@ -1858,6 +1858,10 @@ a.run-card-id:hover { color: var(--color-accent-300); }
 .tag-neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
 .tag-accent  { background: var(--color-accent-800);  color: var(--color-accent-100); }
 .tag-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+/* Top urgency tier: under 30 minutes left on an approval. Uses the shared --err
+   tokens rather than a new red so it reads as the same "something is wrong"
+   colour as failed runs and error notes. */
+.tag-danger  { background: var(--err-soft); color: var(--err); border: 1px solid var(--err-line); }
 
 /* ══ Overview ═════════════════════════════════════════════════════════ */
 

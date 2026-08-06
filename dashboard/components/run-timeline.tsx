@@ -40,14 +40,22 @@ function StepBody({
   // Queued steps have no body at all — the design is explicit about this.
   if (step.state === "queued") return null;
 
+  // A failed step still renders {tech}. It used to return here without it, which
+  // dropped the model, prompt, response, step input and tool calls for exactly the
+  // step someone opened the run to diagnose -- the data was fetched, computed and
+  // passed in, then discarded on this branch alone. `tech` is already ops-gated by
+  // the caller, so this exposes nothing new.
   if (step.errorSummary) {
     return (
-      <RunErrorNote
-        className="rt-card is-error"
-        label="Step failed"
-        summary={step.errorSummary}
-        detail={step.errorDetail}
-      />
+      <>
+        <RunErrorNote
+          className="rt-card is-error"
+          label="Step failed"
+          summary={step.errorSummary}
+          detail={step.errorDetail}
+        />
+        {tech}
+      </>
     );
   }
 

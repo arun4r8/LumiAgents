@@ -161,6 +161,16 @@ export function fmtClock(iso: string | null | undefined): string | null {
   });
 }
 
+/** Calendar date only, no time. Timezone-dependent (a UTC instant near midnight
+ *  is a different day either side of the line) and locale-dependent unless the
+ *  locale is pinned, so like fmtAbs it must reach the DOM through <LocalTime>. */
+export function fmtDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "numeric", day: "numeric" });
+}
+
 export function fmtExpiry(iso: string | null | undefined): string {
   if (!iso) return "";
   const ms = new Date(iso).getTime() - Date.now();
@@ -213,6 +223,7 @@ export function LocalTime({
   iso: string | null | undefined;
   /**
    * "abs"    → fmtAbs (date+time, today-aware)   — timezone-dependent
+   * "date"   → fmtDate ("8/15/2026")             — timezone-dependent
    * "clock"  → fmtClock (HH:MM:SS)               — timezone- and locale-dependent
    * "ago"    → fmtTimeAgo ("3m ago")             — clock-dependent
    * "expiry" → fmtExpiry ("Expires in 2h")       — clock-dependent
@@ -222,7 +233,7 @@ export function LocalTime({
    * and hydration. Intermittent rather than constant — and therefore worse to
    * chase, which is why they are gated too.
    */
-  format?: "abs" | "clock" | "ago" | "expiry";
+  format?: "abs" | "clock" | "ago" | "expiry" | "date";
   placeholder?: string;
 }): React.ReactElement {
   // useSyncExternalStore is the hydration-safe way to read a client-only value:
@@ -233,6 +244,7 @@ export function LocalTime({
   if (!mounted) return <>{placeholder}</>;
   const text =
     format === "clock" ? fmtClock(iso)
+    : format === "date" ? fmtDate(iso)
     : format === "ago" ? fmtTimeAgo(iso)
     : format === "expiry" ? fmtExpiry(iso)
     : fmtAbs(iso);
@@ -257,9 +269,16 @@ export function useMounted(): boolean {
 export function UrgencyTag({ expiresAt }: { expiresAt: string | null | undefined }) {
   const mounted = useMounted();
   if (!expiresAt) return null;
+  // Three tiers, matching what the pre-redesign approvals screen escalated to.
+  // Collapsing these to one meant an approval with eight minutes left looked the
+  // same as one with an hour and fifty, which is the moment the distinction is
+  // load-bearing. The label already says how long is left; the colour is what
+  // makes it scannable down a list.
+  const expiring = mounted && isExpiring(expiresAt);
   const urgent = mounted && isUrgent(expiresAt);
+  const tier = expiring ? "tag-danger" : urgent ? "tag-accent" : "tag-neutral";
   return (
-    <span className={`tag ${urgent ? "tag-accent" : "tag-neutral"}`}>
+    <span className={`tag ${tier}`}>
       <LocalTime iso={expiresAt} format="expiry" placeholder="" />
     </span>
   );
@@ -289,6 +308,16 @@ export function isUrgent(iso: string | null | undefined): boolean {
   if (!iso) return false;
   const ms = new Date(iso).getTime() - Date.now();
   return ms >= 0 && ms < 2 * 60 * 60 * 1000;
+}
+
+/** Expiring = under thirty minutes left, the tier above urgent. Note this stays
+ *  true right down to zero and goes false once expired, so an already-dead
+ *  approval reads as neutral with an "Expired" label rather than shouting.
+ *  Clock-dependent — reach it through <UrgencyTag>, not directly in JSX. */
+export function isExpiring(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ms = new Date(iso).getTime() - Date.now();
+  return ms >= 0 && ms < 30 * 60 * 1000;
 }
 
 /** A store that never changes — LocalTime only needs the server/client snapshot

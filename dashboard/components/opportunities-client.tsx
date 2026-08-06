@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Radar } from "lucide-react";
 import { ScoreCell } from "@/components/records-score";
+import { LocalTime } from "@/components/lumi";
 
 /**
  * Opportunities — the GovCon BD pipeline over `public.opportunities`. Beady
@@ -104,7 +105,7 @@ function OpportunityRow({ opp: o }: { opp: Opportunity }) {
             handoff's ">=70" floor is expressed here as >=7 of 10 (max={10}). */}
         <td style={{ textAlign: "right" }}><ScoreCell score={o.fit_score} max={10} /></td>
         <td>{rec ? <span className={`tag ${REC_TAG[rec] ?? "tag-outline"}`} style={{ textTransform: "capitalize" }}>{rec}</span> : "-"}</td>
-        <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)", whiteSpace: "nowrap" }}>{o.response_deadline ?? "-"}</td>
+        <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)", whiteSpace: "nowrap" }}><LocalTime iso={o.response_deadline} format="date" placeholder="-" /></td>
         <td style={{ color: "var(--ink-2)", textTransform: "capitalize" }}>{o.status ?? "-"}</td>
         <td style={{ textAlign: "right", color: "var(--ink-3)" }}>
           {hasDetail ? (open ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />) : null}
@@ -129,7 +130,7 @@ function OpportunityRow({ opp: o }: { opp: Opportunity }) {
               <div className="rec-detail-meta">
                 {o.solicitation_number && <span>Solicitation <code className="mono">{o.solicitation_number}</code></span>}
                 {o.naics_code && <span>NAICS <code className="mono">{o.naics_code}</code></span>}
-                {o.last_scored_at && <span>Scored {new Date(o.last_scored_at).toLocaleDateString()}</span>}
+                {o.last_scored_at && <span>Scored <LocalTime iso={o.last_scored_at} format="date" placeholder="-" /></span>}
               </div>
             </div>
           </td>
