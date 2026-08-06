@@ -57,8 +57,8 @@ export function IndustryDaysClient({ events, dismiss, findNow }: Props) {
             {events.length === 0 ? "No industry days on the radar yet." : `${upcoming.length} upcoming · ${events.length} total`}
           </div>
         </div>
-        <button className="btn accent" onClick={handleFind} disabled={pending}>
-          {pending ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Find with Beady
+        <button className="btn" onClick={handleFind} disabled={pending}>
+          {pending ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Run a sweep
         </button>
       </div>
 

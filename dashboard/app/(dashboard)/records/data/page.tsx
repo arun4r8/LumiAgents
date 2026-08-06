@@ -17,7 +17,6 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     indirectRatesRes,
     employeesRes,
     pastPerfRes,
-    opportunitiesRes,
     candidatesRes,
     staffRequestsRes,
     resumeJobsRes,
@@ -30,9 +29,6 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
     supabase.from("indirect_rates").select("*").order("fiscal_year", { ascending: false }).limit(50),
     supabase.from("employees").select("*").order("full_name").limit(200),
     supabase.from("past_performance").select("*").order("created_at", { ascending: false }).limit(100),
-    supabase.from("opportunities")
-      .select("id, title, agency, set_aside, recommendation, fit_score, fit_reason, red_flags, last_scored_at, response_deadline, status, solicitation_number, naics_code, created_at")
-      .order("created_at", { ascending: false }).limit(100),
     supabase.from("candidates")
       .select("id, name, email, first_name, last_name, role, status, current_title, current_company, match_score, match_reason, seniority, linkedin_url, source, outreach_sent, created_at")
       .order("created_at", { ascending: false }).limit(100),
@@ -56,7 +52,6 @@ export default async function DataPage({ searchParams }: { searchParams: Promise
       indirectRates={(indirectRatesRes.data ?? []) as Record<string, unknown>[]}
       employees={(employeesRes.data ?? []) as Record<string, unknown>[]}
       pastPerformance={(pastPerfRes.data ?? []) as Record<string, unknown>[]}
-      opportunities={(opportunitiesRes.data ?? []) as Record<string, unknown>[]}
       candidates={(candidatesRes.data ?? []) as Record<string, unknown>[]}
       staffRequests={(staffRequestsRes.data ?? []) as Record<string, unknown>[]}
       resumeJobs={(resumeJobsRes.data ?? []) as Record<string, unknown>[]}

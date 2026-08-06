@@ -131,7 +131,6 @@ interface DataClientProps {
   indirectRates: Record<string, unknown>[];
   employees: Record<string, unknown>[];
   pastPerformance: Record<string, unknown>[];
-  opportunities: Record<string, unknown>[];
   candidates: Record<string, unknown>[];
   staffRequests: Record<string, unknown>[];
   resumeJobs: Record<string, unknown>[];
@@ -146,7 +145,7 @@ interface DataClientProps {
 
 export function DataClient({
   contracts, invoices, budgetLines, laborRecords, indirectRates,
-  employees, pastPerformance, opportunities, candidates, staffRequests,
+  employees, pastPerformance, candidates, staffRequests,
   resumeJobs, resumeResults,
   insertRow, bulkInsert, deleteRow, initialTab,
 }: DataClientProps) {
@@ -204,7 +203,7 @@ export function DataClient({
   const dataMap: Record<string, Record<string, unknown>[]> = {
     contracts, invoices, budget_lines: budgetLines, labor_records: laborRecords,
     indirect_rates: indirectRates, employees, past_performance: pastPerformance,
-    opportunities, candidates,
+    candidates,
   };
 
   return (
@@ -219,7 +218,9 @@ export function DataClient({
       <div className="tabs" style={{ marginBottom: 24 }}>
         <button className={tab === "govcon" ? "active" : ""} onClick={() => setTab("govcon")}>
           GovCon
-          <span className="count" style={{ marginLeft: 6 }}>{opportunities.length + contracts.length + pastPerformance.length}</span>
+          {/* Opportunities moved to /records/bd?tab=opportunities; this tab now
+              covers only the raw contract/past-performance tables. */}
+          <span className="count" style={{ marginLeft: 6 }}>{contracts.length + pastPerformance.length}</span>
         </button>
         <button className={tab === "finance" ? "active" : ""} onClick={() => setTab("finance")}>
           Finance
@@ -236,7 +237,6 @@ export function DataClient({
 
       {tab === "ask" && <AskDataPanel />}
 
-      {tab === "govcon" && <OpportunitiesPanel opportunities={opportunities} />}
       {tab === "people" && (
         <>
           <ResumeResultsPanel resumeJobs={resumeJobs} resumeResults={resumeResults} />
@@ -273,99 +273,6 @@ function ScoreBadge({ score, max = 10 }: { score: unknown; max?: number }) {
       <Star style={{ width: 11, height: 11, fill: color, stroke: "none" }} />
       {n}/{max}
     </span>
-  );
-}
-
-// ─── Opportunities panel ──────────────────────────────────────────────────────
-
-function OpportunitiesPanel({ opportunities }: { opportunities: Record<string, unknown>[] }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
-
-  return (
-    <div style={{ marginBottom: 28 }}>
-      <div className="section-h">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h3>Opportunities</h3>
-          <span className="chip muted" style={{ fontSize: 11 }}>{opportunities.length}</span>
-          <span className="chip accent" style={{ fontSize: 11 }}>beady</span>
-        </div>
-        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Written by beady/opportunity-sweep</span>
-      </div>
-
-      {opportunities.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "16px 0" }}>
-          No opportunities yet. Run <code className="mono" style={{ fontSize: 12 }}>beady/opportunity-sweep</code> to populate.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {opportunities.map((opp) => {
-            const id = opp.id as string;
-            const name = (opp.opportunity_name as string | null) ?? "Untitled";
-            const agency = opp.agency as string | null;
-            const setAside = opp.set_aside as string | null;
-            const naics = opp.naics_codes != null ? String(opp.naics_codes).slice(0, 30) : null;
-            const rec = opp.recommendation as string | null;
-            const recColor = rec === "pursue" ? "ok" : rec === "monitor" ? "warn" : rec === "pass" ? "err" : "muted";
-            const dueDate = opp.response_due_date as string | null;
-            const fitReason = opp.fit_reason as string | null;
-            const redFlags = opp.red_flags as string | null;
-            const solNum = opp.solicitation_number as string | null;
-            const scoredAt = opp.last_scored_at as string | null;
-            const status = opp.status as string | null;
-            const isOpen = expanded === id;
-            return (
-              <div key={id} className="card" style={{ padding: "12px 16px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}
-                     onClick={() => setExpanded(isOpen ? null : id)}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {name}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                      {agency && <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{agency}</span>}
-                      {setAside && <span className="chip muted" style={{ fontSize: 10.5 }}>{setAside}</span>}
-                      {naics && <span className="chip muted mono" style={{ fontSize: 10.5 }}>{naics}</span>}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                    <ScoreBadge score={opp.fit_score} />
-                    {rec && <span className={`chip ${recColor}`} style={{ fontSize: 11 }}>{rec}</span>}
-                    {dueDate && (
-                      <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-                        Due {new Date(dueDate).toLocaleDateString()}
-                      </span>
-                    )}
-                    {isOpen ? <ChevronUp style={{ width: 14, height: 14, color: "var(--ink-3)" }} />
-                             : <ChevronDown style={{ width: 14, height: 14, color: "var(--ink-3)" }} />}
-                  </div>
-                </div>
-                {isOpen && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
-                    {fitReason && (
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>Fit rationale</div>
-                        <div style={{ fontSize: 13, color: "var(--ink-1)" }}>{fitReason}</div>
-                      </div>
-                    )}
-                    {redFlags && (
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "var(--err)", marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>Red flags</div>
-                        <div style={{ fontSize: 13, color: "var(--ink-2)" }}>{redFlags}</div>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-3)" }}>
-                      {solNum && <span>Solicitation: <code className="mono">{solNum}</code></span>}
-                      {scoredAt && <span>Scored {new Date(scoredAt).toLocaleDateString()}</span>}
-                      {status && <span>Status: {status}</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
   );
 }
 
