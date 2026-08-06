@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentMark } from "@/components/agent-mark";
 import { agentInk } from "@/lib/agent-style";
+import { useMounted } from "@/components/lumi";
 
 /**
  * Overview — hero, stat band, fleet, throughput, recent activity.
@@ -278,14 +279,6 @@ function clock(iso: string | null, mounted: boolean): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "--:--";
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-/** True only after the component has mounted on the client — used to gate
- *  timezone-dependent text out of SSR so hydration matches. */
-function useMounted(): boolean {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted;
 }
 
 /**

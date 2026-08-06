@@ -5,7 +5,7 @@
  * passing to Client Component children.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useSyncExternalStore } from "react";
 import { Check, Copy, ChevronRight } from "lucide-react";
 
 // ── Status badge ──────────────────────────────────────────────────────
@@ -145,6 +145,22 @@ export function fmtAbs(iso: string | null | undefined): string {
     d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+/** Wall-clock HH:MM:SS in the runtime's local timezone. Like fmtAbs, this is
+ *  timezone-dependent (and locale-dependent unless the locale is pinned — we pin
+ *  "en-US" so only the timezone can vary), so it must only reach the DOM through
+ *  <LocalTime>, never straight into SSR markup. */
+export function fmtClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 export function fmtExpiry(iso: string | null | undefined): string {
   if (!iso) return "";
   const ms = new Date(iso).getTime() - Date.now();
@@ -169,4 +185,114 @@ export function fmtDuration(startedAt: string | null, endedAt: string | null): s
   const h = Math.floor(m / 60);
   const rm = m % 60;
   return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+/**
+ * Renders a timestamp whose text depends on the viewer's timezone (fmtAbs /
+ * fmtClock read the local zone), deferred to the client so it can't cause a
+ * hydration mismatch.
+ *
+ * The trap this closes (#148, then #149's follow-up): the server renders these
+ * client components during SSR in UTC, the browser re-renders in the viewer's
+ * zone, and the same instant prints different text — React discards the server
+ * subtree (minified #418). Gating the value behind a mount flag makes the server
+ * and the client's first render both emit `placeholder`, so they agree; the real
+ * local time appears one frame later. The placeholder is deliberately a blank
+ * marker ("--:--"), never a plausible-but-wrong guess, and the value is never
+ * silenced — it is correct local time, just deferred.
+ *
+ * Only for timezone/locale-dependent text. A stable server-computed string
+ * (e.g. a pre-baked "3m ago" prop) needs no gate and should not use this — it
+ * would only flash a placeholder for no reason.
+ */
+export function LocalTime({
+  iso,
+  format = "abs",
+  placeholder = "--:--",
+}: {
+  iso: string | null | undefined;
+  /**
+   * "abs"    → fmtAbs (date+time, today-aware)   — timezone-dependent
+   * "clock"  → fmtClock (HH:MM:SS)               — timezone- and locale-dependent
+   * "ago"    → fmtTimeAgo ("3m ago")             — clock-dependent
+   * "expiry" → fmtExpiry ("Expires in 2h")       — clock-dependent
+   *
+   * The last two do not read the timezone, but they measure against Date.now(),
+   * so they mismatch whenever a minute boundary falls between the server render
+   * and hydration. Intermittent rather than constant — and therefore worse to
+   * chase, which is why they are gated too.
+   */
+  format?: "abs" | "clock" | "ago" | "expiry";
+  placeholder?: string;
+}): React.ReactElement {
+  // useSyncExternalStore is the hydration-safe way to read a client-only value:
+  // React uses getServerSnapshot (false) for SSR *and* the first client render,
+  // so both sides emit the placeholder and agree, then re-renders with the client
+  // snapshot (true). No setState-in-effect, no mismatch.
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
+  if (!mounted) return <>{placeholder}</>;
+  const text =
+    format === "clock" ? fmtClock(iso)
+    : format === "ago" ? fmtTimeAgo(iso)
+    : format === "expiry" ? fmtExpiry(iso)
+    : fmtAbs(iso);
+  return <>{text ?? placeholder}</>;
+}
+
+/**
+ * The same server/client snapshot split as LocalTime, for callers that must gate
+ * something other than text. An un-gated className derived from the clock is
+ * still a hydration mismatch — React just reports it differently than a text
+ * one — so styling that depends on "how long is left" needs this too.
+ */
+export function useMounted(): boolean {
+  return useSyncExternalStore(subscribeNoop, () => true, () => false);
+}
+
+/**
+ * Expiry tag: the label AND the accent class both derive from the clock, so both
+ * are gated. Pre-mount it renders neutral with a blank label; urgency appears
+ * with the text one frame later.
+ */
+export function UrgencyTag({ expiresAt }: { expiresAt: string | null | undefined }) {
+  const mounted = useMounted();
+  if (!expiresAt) return null;
+  const urgent = mounted && isUrgent(expiresAt);
+  return (
+    <span className={`tag ${urgent ? "tag-accent" : "tag-neutral"}`}>
+      <LocalTime iso={expiresAt} format="expiry" placeholder="" />
+    </span>
+  );
+}
+
+/**
+ * Run duration. A SETTLED run is arithmetic on two fixed instants — fully
+ * deterministic, so it renders immediately with no placeholder. Only an
+ * in-flight run measures against Date.now() and needs the gate. Gating the
+ * settled case would flash a placeholder for nothing.
+ */
+export function LiveDuration({
+  startedAt,
+  endedAt,
+}: {
+  startedAt: string | null;
+  endedAt: string | null;
+}) {
+  const mounted = useMounted();
+  if (!startedAt || endedAt) return <>{fmtDuration(startedAt, endedAt)}</>;
+  return <>{mounted ? fmtDuration(startedAt, endedAt) : "—"}</>;
+}
+
+/** Urgent = under two hours left; the tag flips to accent per the spec.
+ *  Clock-dependent — reach it through <UrgencyTag>, not directly in JSX. */
+export function isUrgent(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ms = new Date(iso).getTime() - Date.now();
+  return ms >= 0 && ms < 2 * 60 * 60 * 1000;
+}
+
+/** A store that never changes — LocalTime only needs the server/client snapshot
+ *  split, not live updates, so the subscribe callback is a no-op. */
+function subscribeNoop(): () => void {
+  return () => {};
 }
