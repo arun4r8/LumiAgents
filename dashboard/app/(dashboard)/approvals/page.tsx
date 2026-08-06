@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { Check } from "lucide-react";
-import { ApprovalsClient } from "@/components/approvals-client";
+import { ApprovalsClient, type ApprovalItem } from "@/components/approvals-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApprovalsPage() {
   const supabase = await createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
 
   const { data: approvals } = await supabase
     .schema("orchestration")
@@ -48,7 +49,7 @@ export default async function ApprovalsPage() {
     revalidatePath("/overview");
   }
 
-  const all = (approvals ?? []) as unknown as {
+  const raw = (approvals ?? []) as unknown as {
     id: string;
     prompt: string;
     status: string;
@@ -56,134 +57,30 @@ export default async function ApprovalsPage() {
     expires_at: string | null;
     decided_at: string | null;
     decided_by: string | null;
-    decision_notes: string | null;
     run_id: string | null;
     runs: { id: string; orchestrations: { name: string } | null } | null;
   }[];
 
-  const pending = all.filter((a) => a.status === "pending");
-  const decided = all.filter((a) => a.status !== "pending");
+  const items: ApprovalItem[] = raw.map((a) => ({
+    id: a.id,
+    prompt: a.prompt,
+    status: a.status,
+    created_at: a.created_at,
+    expires_at: a.expires_at,
+    decided_at: a.decided_at,
+    decided_by: a.decided_by,
+    orchestrationName: a.runs?.orchestrations?.name ?? null,
+  }));
+
+  const pending = items.filter((a) => a.status === "pending");
+  const decided = items.filter((a) => a.status !== "pending");
 
   return (
-    <div className="page view-fade">
-      <div className="page-h">
-        <div>
-          <h1>Approvals</h1>
-          <div className="sub">
-            {pending.length === 0
-              ? "Nothing waiting on you."
-              : `${pending.length} ${pending.length === 1 ? "decision" : "decisions"} blocking active runs.`}
-          </div>
-        </div>
-      </div>
-
-      {pending.length === 0 ? (
-        <div className="empty">
-          <div className="ico"><Check /></div>
-          <h4>All clear.</h4>
-          <p>No approvals pending. New requests will appear here in real time.</p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
-          {[...pending]
-            .sort((a, b) => {
-              const ta = a.expires_at ? new Date(a.expires_at).getTime() : Infinity;
-              const tb = b.expires_at ? new Date(b.expires_at).getTime() : Infinity;
-              return ta - tb;
-            })
-            .map((a) => (
-              <ApprovalCard key={a.id} approval={a} decide={decide} />
-            ))}
-        </div>
-      )}
-
-      {decided.length > 0 && <ApprovalsClient decided={decided} />}
-    </div>
+    <ApprovalsClient
+      pending={pending}
+      decided={decided}
+      me={user?.email ?? "you"}
+      decide={decide}
+    />
   );
-}
-
-// ── Approval card (renders the form, uses server action) ──────────────
-
-function ApprovalCard({
-  approval,
-  decide,
-}: {
-  approval: {
-    id: string;
-    prompt: string;
-    status: string;
-    created_at: string;
-    expires_at: string | null;
-    run_id: string | null;
-    runs: { id: string; orchestrations: { name: string } | null } | null;
-  };
-  decide: (formData: FormData) => Promise<void>;
-}) {
-  const orchName = approval.runs?.orchestrations?.name ?? "-";
-  const expiresMs = approval.expires_at
-    ? new Date(approval.expires_at).getTime() - Date.now()
-    : null;
-  const expiring = expiresMs != null && expiresMs < 30 * 60_000;
-  const urgent = expiresMs != null && expiresMs < 2 * 60 * 60_000;
-
-  function expiryLabel(): string {
-    if (!approval.expires_at) return "";
-    const ms = new Date(approval.expires_at).getTime() - Date.now();
-    if (ms < 0) return "Expired";
-    const m = Math.floor(ms / 60_000);
-    if (m < 60) return `Expires in ${m}m`;
-    return `Expires in ${Math.floor(m / 60)}h`;
-  }
-
-  return (
-    <div className={`ap-card${expiring ? " expiring" : urgent ? " urgent" : ""}`}>
-      <div className="ah">
-        <div className="meta">
-          <div className="name">{orchName}</div>
-          <div className="sub">
-            <span>
-              requested{" "}
-              <b>{timeAgo(approval.created_at)}</b>
-            </span>
-            {expiresMs != null && (
-              <span style={{ color: expiring ? "var(--err)" : urgent ? "var(--warn)" : "var(--ink-2)" }}>
-                {expiryLabel()}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="row gap-sm">
-          {expiring && (
-            <span className="chip err">Expires soon</span>
-          )}
-          {approval.run_id && (
-            <a href={`/runs/${approval.run_id}`} className="btn ghost sm">
-              View run →
-            </a>
-          )}
-        </div>
-      </div>
-
-      <div className="prompt">{approval.prompt}</div>
-
-      <form action={decide} className="actions">
-        <input type="hidden" name="approvalId" value={approval.id} />
-        <textarea name="notes" className="input" placeholder="Notes (optional)…" />
-        <button name="status" value="approved" type="submit" className="btn success">
-          ✓ Approve
-        </button>
-        <button name="status" value="rejected" type="submit" className="btn danger-out">
-          ✕ Reject
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function timeAgo(iso: string): string {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
 }
