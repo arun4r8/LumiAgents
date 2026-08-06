@@ -18,6 +18,11 @@ export default async function ApprovalsPage() {
   // created_at below. Deliberately NOT filtering server-side by a timestamp — a
   // fragile filter on this query is not worth risking the pending list, the one
   // thing on this page with real side effects.
+  // Server Component: renders once, on the server, with no client render to disagree
+  // with. The rule cannot tell an RSC from a client render; the equivalent call in a
+  // client component WOULD be a bug, which is why records/bd/industry-days.tsx passes
+  // its cutoff down as a prop instead of computing one here.
+  // eslint-disable-next-line react-hooks/purity
   const cutoffIso = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
 
   const { data: approvals } = await supabase

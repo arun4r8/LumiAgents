@@ -133,7 +133,7 @@ export function ContentCalendarClient({
         The eminence plan as a living calendar. Add posts, or have Cleo propose a run of ideas from a theme.
         Cleo drafts the post copy + asset brief for any entry (grounded in the company profile), and the draft lands
         here with status <b>ready</b>. A human always reviews before posting; nothing publishes automatically.
-        <b>Sync now</b> live-pulls the team's Microsoft 365 planning workbook via the Graph API; rows sync in and
+        <b>Sync now</b> live-pulls the team&apos;s Microsoft 365 planning workbook via the Graph API; rows sync in and
         re-syncing an edited sheet updates them without touching existing drafts. <b>Import CSV</b> stays as a manual
         fallback (export the sheet to CSV first). Both paths key on the same rows, so they stay interchangeable.
       </p>

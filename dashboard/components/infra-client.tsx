@@ -242,13 +242,24 @@ function MetricsTab() {
     }
   }, []);
 
+  // Fetch-on-mount: load() flips the loading flag synchronously before awaiting. Data
+  // cannot be fetched during render, so the state write has to happen here.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     void load(win);
   }, [load, win]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // All hooks must be called before any conditional return.
-  const buckets: CfInvocationBucket[] =
-    raw?.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? [];
+  //
+  // Memoised on `raw` rather than computed inline: the `?? []` fallback allocates a
+  // fresh array on every render, so an inline value would change identity each time
+  // and defeat the useMemo below it, rebuilding the buckets on every render even
+  // when nothing fetched.
+  const buckets: CfInvocationBucket[] = useMemo(
+    () => raw?.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive ?? [],
+    [raw],
+  );
   const hourlyBuckets = useMemo(() => buildHourlyBuckets(buckets), [buckets]);
   const maxBar = Math.max(...hourlyBuckets.map((b) => b.requests + b.errors), 1);
 
@@ -828,6 +839,8 @@ function DeploymentsTab() {
     }
   }, []);
 
+  // Fetch-on-mount; see the note on the windowed loader above.
+  /* eslint-disable-next-line react-hooks/set-state-in-effect */
   useEffect(() => { void load(); }, [load]);
 
   if (missingCreds) return <SetupCard />;
@@ -924,6 +937,8 @@ function SecretsTab() {
     }
   }, []);
 
+  // Fetch-on-mount; see the note on the windowed loader above.
+  /* eslint-disable-next-line react-hooks/set-state-in-effect */
   useEffect(() => { void load(); }, [load]);
 
   const handleCreate = async () => {

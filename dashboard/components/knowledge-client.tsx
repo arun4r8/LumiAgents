@@ -186,6 +186,9 @@ function EditorTab() {
     }
   }, [authHeaders]);
 
+  // Fetch-on-mount, same as infra-client: loadTree() sets the loading flag
+  // synchronously, then awaits the network.
+  /* eslint-disable-next-line react-hooks/set-state-in-effect */
   useEffect(() => { void loadTree(); }, [loadTree]);
 
   async function selectFile(path: string, sha: string) {

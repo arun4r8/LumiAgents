@@ -60,5 +60,14 @@ export async function IndustryDaysTab() {
     revalidatePath("/records/bd");
   }
 
-  return <IndustryDaysClient events={(data ?? []) as IndustryDay[]} dismiss={dismiss} findNow={findNow} />;
+  // Computed here, on the server, and passed down rather than derived inside the
+  // client component. A client deriving it from its own Date.now() gets a value a
+  // few ms off the server's, so an event sitting on the boundary is filtered out of
+  // one render and into the other -- the list changes length between SSR and
+  // hydration and React discards the subtree (the #148/#149 failure mode). Passing
+  // the instant down makes both renders agree by construction.
+  // eslint-disable-next-line react-hooks/purity
+  const cutoffMs = Date.now() - 86_400_000;
+
+  return <IndustryDaysClient events={(data ?? []) as IndustryDay[]} cutoffMs={cutoffMs} dismiss={dismiss} findNow={findNow} />;
 }

@@ -54,8 +54,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
+      - name: Lint (runtime + shared)
         run: pnpm lint
+
+      # The root config ignores dashboard/ (it has its own flat config), so for as
+      # long as this job ran only `pnpm lint` the entire frontend was unlinted --
+      # which is how 267 em dashes and nine react-hooks errors accumulated unseen.
+      # Mirrors the two-step split the Typecheck job already uses.
+      # --max-warnings 0 because the dashboard is at a clean zero as of this commit.
+      # Warnings that cannot fail anything are warnings nobody fixes, which is how the
+      # nine react-hooks errors survived. Drop the flag if it proves too strict.
+      - name: Lint (dashboard)
+        working-directory: dashboard
+        run: pnpm exec eslint . --max-warnings 0
 
   test:
     name: Unit Tests

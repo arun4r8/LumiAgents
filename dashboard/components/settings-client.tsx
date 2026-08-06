@@ -790,7 +790,7 @@ function ChangePasswordSection() {
             autoComplete="new-password"
             style={{ fontSize: 13, borderColor: mismatch ? "var(--red, oklch(60% 0.2 25))" : undefined }}
           />
-          {mismatch && <div style={{ fontSize: 12, color: "var(--red, oklch(60% 0.2 25))", marginTop: 4 }}>Passwords don't match</div>}
+          {mismatch && <div style={{ fontSize: 12, color: "var(--red, oklch(60% 0.2 25))", marginTop: 4 }}>Passwords don&apos;t match</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
           {status === "success" && <span className="chip ok"><Check style={{ width: 10, height: 10 }} /> Password updated</span>}

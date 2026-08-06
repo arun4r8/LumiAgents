@@ -716,9 +716,13 @@ function CellValue({ value, col }: { value: unknown; col: string }) {
     return <span className={`chip${tone ? ` ${tone}` : ""}`} style={{ fontSize: 11 }}>{s}</span>;
   }
   if (col.endsWith("_at") || col.endsWith("_date")) {
+    // Computed before the JSX, not inside it: a try/catch cannot catch an error
+    // thrown while React renders a child, only one thrown while building the value.
+    let label: string;
     try {
-      return <span style={{ fontSize: 12 }}>{new Date(s).toLocaleDateString()}</span>;
+      label = new Date(s).toLocaleDateString();
     } catch { return <span>{s}</span>; }
+    return <span style={{ fontSize: 12 }}>{label}</span>;
   }
   if (s.length > 40) return <span title={s}>{s.slice(0, 38)}…</span>;
   return <span>{s}</span>;

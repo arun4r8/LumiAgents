@@ -6,6 +6,9 @@ import type { IndustryDay } from "@/app/(dashboard)/records/bd/industry-days";
 
 interface Props {
   events: IndustryDay[];
+  /** "Yesterday", as a single instant fixed by the server. Not derived here: see
+   *  the note at the call site in app/(dashboard)/records/bd/industry-days.tsx. */
+  cutoffMs: number;
   dismiss: (formData: FormData) => Promise<void>;
   findNow: () => Promise<void>;
 }
@@ -33,12 +36,12 @@ function daysUntil(iso: string | null): string | null {
   return `in ${n}d`;
 }
 
-export function IndustryDaysClient({ events, dismiss, findNow }: Props) {
+export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [justStarted, setJustStarted] = useState(false);
 
-  const upcoming = events.filter((e) => !e.event_date || new Date(e.event_date + "T00:00:00").getTime() >= Date.now() - 86_400_000);
+  const upcoming = events.filter((e) => !e.event_date || new Date(e.event_date + "T00:00:00").getTime() >= cutoffMs);
 
   function handleFind() {
     setError(null);

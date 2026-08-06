@@ -47,7 +47,6 @@ export default function RootLayout({
     // height; body already declared the font smoothing). The three screens
     // rebuilt in redesign phase 4 carry no utility classes at all.
     <html lang="en" className={archivo.variable}>
-      {/* eslint-disable-next-line react/no-danger */}
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

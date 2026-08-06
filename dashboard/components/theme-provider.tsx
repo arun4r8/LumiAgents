@@ -27,7 +27,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("light");
   const [density, setDensityState] = useState<Density>("default");
 
-  // On mount, read persisted prefs and apply them
+  // On mount, read persisted prefs and apply them.
+  //
+  // localStorage cannot be read during render without causing the very hydration
+  // mismatch this defers to avoid. The visible theme is already correct before React
+  // runs (a pre-paint script sets it), so this only syncs React state to what is
+  // already on screen.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const t = (localStorage.getItem("lumi-theme") as Theme) || "light";
     const d = (localStorage.getItem("lumi-density") as Density) || "default";
@@ -36,6 +42,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     applyTheme(t);
     applyDensity(d);
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
