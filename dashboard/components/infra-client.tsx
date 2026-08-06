@@ -184,10 +184,18 @@ function fmtCompact(n: number): string {
   return String(n);
 }
 
-// The configured Cloudflare runtime script. The handoff's 4-col worker grid
-// assumes one worker per agent, but in this codebase the six agents share this
-// single runtime worker, so CF only reports metrics for the one script.
-const RUNTIME_WORKER_NAME = "lumiagents-runtime";
+// One tile per deployed Worker. The list and metrics come from /api/cf/workers,
+// which derives the set from Cloudflare's deployed-scripts list (runtime + agent
+// workers) rather than a hardcoded slug list — a generated agent Worker appears
+// automatically. `hasData: false` is a deployed-but-not-invoked worker, rendered
+// as an honest "no data" tile rather than a misleading "0 req · idle".
+interface WorkerMetric {
+  scriptName: string;
+  requests: number;
+  errors: number;
+  p50: number;
+  hasData: boolean;
+}
 
 function MetricsTab() {
   const [win, setWin] = useState<SpendWindow>("24h");
@@ -195,6 +203,7 @@ function MetricsTab() {
   const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [spendRows, setSpendRows] = useState<SpendRow[]>([]);
   const [usage, setUsage] = useState<UsageData | null>(null);
+  const [workers, setWorkers] = useState<WorkerMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingCreds, setMissingCreds] = useState(false);
@@ -204,11 +213,12 @@ function MetricsTab() {
     setError(null);
     try {
       const days = daysFor(w);
-      const [cfRes, runsRes, spendRes, usageRes] = await Promise.all([
+      const [cfRes, runsRes, spendRes, usageRes, workersRes] = await Promise.all([
         fetch("/api/cf/metrics"),
         fetch(`/api/runs/stats?days=${days}`),
         fetch(`/api/spend?days=${days}`),
         fetch("/api/cf/usage"),
+        fetch(`/api/cf/workers?days=${days}`),
       ]);
       if (cfRes.status === 503) {
         setMissingCreds(true);
@@ -222,6 +232,9 @@ function MetricsTab() {
       if (runsRes.ok) setRunStats((await runsRes.json()) as RunStats);
       setSpendRows(spendRes.ok ? ((await spendRes.json()) as SpendRow[]) : []);
       if (usageRes.ok) setUsage((await usageRes.json()) as UsageData);
+      // The worker grid degrades on its own: a failed fetch leaves it empty
+      // rather than erroring the whole tab (the KPIs + spend still render).
+      setWorkers(workersRes.ok ? ((await workersRes.json()) as { workers: WorkerMetric[] }).workers : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -281,30 +294,42 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Worker tiles (README Infrastructure). The handoff pictures one worker
-          per agent; here the agents share the single runtime worker, so this
-          shows the one script CF actually reports metrics for rather than
-          fabricating six more. req/day is today's count; p50 is CF CPU time. */}
+      {/* Worker tiles (README Infrastructure). One tile per deployed Worker —
+          the runtime worker plus each agent worker — with real per-script
+          invocation counts and CPU p50 for the selected window. A deployed but
+          not-yet-invoked worker shows an honest "no data" tile. */}
       <section>
-        <div className="p6-sec">Workers</div>
-        <div className="p6-workers" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 264px))" }}>
-          <div className="p6-worker">
-            <div className="p6-worker-h">
-              <span className="p6-worker-name">{RUNTIME_WORKER_NAME}</span>
-              <span className={`p6-worker-dot ${runStats && runStats.failed > 0 ? "is-warn" : "is-ok"}`} />
-            </div>
-            <div className="p6-worker-stats">
-              <span>
-                <span className="p6-stat-v">{fmtCompact(usage?.requestsToday ?? 0)}</span>
-                <span className="p6-stat-l">req / day</span>
-              </span>
-              <span>
-                <span className="p6-stat-v">{avgP50}</span>
-                <span className="p6-stat-l">p50 µs</span>
-              </span>
-            </div>
+        <div className="p6-sec">Workers · {winLabel}</div>
+        {workers.length === 0 ? (
+          <div className="muted" style={{ fontSize: 13, padding: "4px 0" }}>
+            No worker metrics available for this window.
           </div>
-        </div>
+        ) : (
+          <div className="p6-workers">
+            {workers.map((w) => {
+              const shortName = w.scriptName.replace(/^lumiagents-/, "");
+              const dot = !w.hasData ? "is-nodata" : w.errors > 0 ? "is-err" : "is-ok";
+              return (
+                <div key={w.scriptName} className={`p6-worker${w.hasData ? "" : " is-nodata"}`}>
+                  <div className="p6-worker-h">
+                    <span className="p6-worker-name" title={w.scriptName}>{shortName}</span>
+                    <span className={`p6-worker-dot ${dot}`} />
+                  </div>
+                  <div className="p6-worker-stats">
+                    <span>
+                      <span className="p6-stat-v">{w.hasData ? fmtCompact(w.requests) : "—"}</span>
+                      <span className="p6-stat-l">{w.hasData ? "requests" : "no data"}</span>
+                    </span>
+                    <span>
+                      <span className="p6-stat-v">{w.hasData ? w.p50 : "—"}</span>
+                      <span className="p6-stat-l">p50 µs</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Window toggle: drives run-count + LLM spend KPIs and the breakdown */}

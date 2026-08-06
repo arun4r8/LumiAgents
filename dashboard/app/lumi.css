@@ -95,9 +95,8 @@
   --font-body:    var(--font-archivo), "Archivo", system-ui, -apple-system, sans-serif;
   --font-heading-weight: 500;
   /* A REAL monospace, for every run id, orchestration name, cron string,
-     timestamp and tabular number. --font-mono-stack is the literal so that the
-     @theme inline block in globals.css can point Tailwind's font-mono at the
-     same value without a self-reference. */
+     timestamp and tabular number. --font-mono-stack holds the literal stack so
+     --font-mono can point at it without a self-reference. */
   --font-mono-stack: ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-mono: var(--font-mono-stack);
 
@@ -196,8 +195,8 @@
   --muted-line: var(--color-neutral-700);
 
   /* type. --mono used to resolve to Archivo (the audit's finding) — it is now a
-     real monospace stack. --font-mono is also set for the components that read
-     it directly, and matches the @theme inline mapping in globals.css. */
+     real monospace stack, aliased to --font-mono for components that read it
+     directly. */
   --sans: var(--font-body);
   --mono: var(--font-mono);
 
@@ -2349,10 +2348,12 @@ a.run-card-id:hover { color: var(--color-accent-300); }
   font-family: var(--font-mono); font-size: 12px; font-weight: 500;
   color: var(--color-text); overflow-wrap: anywhere;
 }
+.p6-worker.is-nodata { opacity: 0.6; }
 .p6-worker-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--color-neutral-500); }
-.p6-worker-dot.is-ok   { background: var(--ok); }
-.p6-worker-dot.is-warn { background: var(--warn); }
-.p6-worker-dot.is-err  { background: var(--err); }
+.p6-worker-dot.is-ok     { background: var(--ok); }
+.p6-worker-dot.is-warn   { background: var(--warn); }
+.p6-worker-dot.is-err    { background: var(--err); }
+.p6-worker-dot.is-nodata { background: var(--color-neutral-600); }
 .p6-worker-stats { display: flex; gap: 18px; }
 .p6-stat-v {
   display: block;
