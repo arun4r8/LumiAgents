@@ -11,18 +11,19 @@ export default async function ApprovalsPage() {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // The stat band is a rolling 30-day view, but the pending LIST must show every
-  // pending item regardless of age (an old blocked run still needs a decision).
-  // One round trip covers both: fetch anything still pending OR decided within the
-  // window. Same RLS-scoped client as before — approvals are permission-sensitive,
-  // so no admin/service-role client here.
+  // One RLS-scoped round trip — approvals are permission-sensitive, so no
+  // admin/service-role client here. We fetch the most recent approvals (raised
+  // from the old limit of 100 to 500) and derive both views in code: the pending
+  // LIST is every pending row returned, and the 30-day stat band is windowed by
+  // created_at below. Deliberately NOT filtering server-side by a timestamp — a
+  // fragile filter on this query is not worth risking the pending list, the one
+  // thing on this page with real side effects.
   const cutoffIso = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
 
   const { data: approvals } = await supabase
     .schema("orchestration")
     .from("approvals")
     .select(`id, prompt, status, created_at, expires_at, decided_at, decided_by, decision_notes, run_id, run_step_id, runs(id, orchestrations(name))`)
-    .or(`status.eq.pending,created_at.gte.${cutoffIso}`)
     .order("created_at", { ascending: false })
     .limit(500);
 
