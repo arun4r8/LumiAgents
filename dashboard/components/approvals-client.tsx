@@ -1,6 +1,7 @@
 "use client";
 
-import { useOptimistic } from "react";
+import { useOptimistic, useState } from "react";
+import Link from "next/link";
 import { AgentMark } from "@/components/agent-mark";
 import { agentOfOrchestration, bareOrchestration } from "@/lib/agent-style";
 import { fmtTimeAgo, fmtAbs, fmtExpiry } from "@/components/lumi";
@@ -32,6 +33,8 @@ export interface ApprovalItem {
   decided_by: string | null;
   /** Full orchestration name, e.g. "beady/rfi-draft". */
   orchestrationName: string | null;
+  /** The run this approval gates, for the "View run →" link. Null = no run (rare). */
+  runId: string | null;
 }
 
 /** Rolling-window counts computed server-side from the single approvals fetch. */
@@ -94,6 +97,11 @@ export function ApprovalsClient({
     [],
     (state, d) => [...state.filter((x) => x.id !== d.id), d],
   );
+  // The inline decided list is capped so the page stays about what still needs a
+  // decision; the cap is labelled and has a toggle so a truncated list can never
+  // masquerade as the whole history. All decided rows are already in hand (the
+  // page fetched them), so "Show all" is a pure client expand, no new round trip.
+  const [showAllDecided, setShowAllDecided] = useState(false);
 
   const optIds = new Set(optimistic.map((d) => d.id));
   const livePending = pending.filter((p) => !optIds.has(p.id)).slice().sort(byExpiry);
@@ -117,7 +125,10 @@ export function ApprovalsClient({
   // Decided items collapse in place, but we only surface a recent slice inline
   // so the screen stays about what still needs a decision — not an ever-growing
   // audit log. `decided` arrives newest-first from the query's created_at order.
-  const serverRows: DecidedRow[] = decided.slice(0, 20).map((a) => ({
+  const DECIDED_CAP = 20;
+  const decidedTotal = decided.length;
+  const shownServer = showAllDecided ? decided : decided.slice(0, DECIDED_CAP);
+  const serverRows: DecidedRow[] = shownServer.map((a) => ({
     id: a.id,
     orch: bareOrchestration(a.orchestrationName) || "—",
     approved: a.status === "approved",
@@ -126,6 +137,7 @@ export function ApprovalsClient({
   }));
 
   const decidedRows = [...optRows, ...serverRows];
+  const decidedCapped = decidedTotal > DECIDED_CAP;
 
   const pendingCount = livePending.length;
   const oldest = oldestExpiryLabel(livePending);
@@ -188,6 +200,20 @@ export function ApprovalsClient({
         {decidedRows.map((r) => (
           <DecidedRowView key={r.id} row={r} />
         ))}
+        {decidedCapped && (
+          <div className="apv-decided-more">
+            <span>
+              Showing {showAllDecided ? decidedTotal : DECIDED_CAP} of {decidedTotal} decided
+            </span>
+            <button
+              type="button"
+              className="apv-linkbtn"
+              onClick={() => setShowAllDecided((v) => !v)}
+            >
+              {showAllDecided ? "Show fewer" : "Show all"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -232,6 +258,13 @@ function PendingCard({
           Decline
         </button>
         <input type="text" name="notes" className="apv-note" placeholder="Add a note…" />
+        {/* The only path from "approve this" to "see what I'm approving". Kept in
+            the actions row, right of the note, so it sits with the decision. */}
+        {approval.runId && (
+          <Link href={`/runs/${approval.runId}`} className="apv-runlink">
+            View run →
+          </Link>
+        )}
       </form>
     </div>
   );

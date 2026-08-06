@@ -81,6 +81,9 @@ export default async function ApprovalsPage() {
     decided_at: a.decided_at,
     decided_by: a.decided_by,
     orchestrationName: a.runs?.orchestrations?.name ?? null,
+    // The run behind this request, so a card can link to what it's approving.
+    // Prefer the joined run id; fall back to the raw run_id column.
+    runId: a.runs?.id ?? a.run_id ?? null,
   }));
 
   const pending = items.filter((a) => a.status === "pending");
