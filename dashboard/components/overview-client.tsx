@@ -84,6 +84,7 @@ export default function OverviewClient({
   stream,
 }: OverviewClientProps) {
   const readAt = usePolledRefresh();
+  const mounted = useMounted();
 
   return (
     <div className="page view-fade">
@@ -140,7 +141,7 @@ export default function OverviewClient({
           ) : (
             <div className="ov-stream">
               {stream.map((ev) => (
-                <ActivityRow key={ev.id} event={ev} />
+                <ActivityRow key={ev.id} event={ev} mounted={mounted} />
               ))}
             </div>
           )}
@@ -237,12 +238,12 @@ function Throughput({ buckets }: { buckets: ThroughputBucket[] }) {
 
 // ─── Recent activity ──────────────────────────────────────────────────────────
 
-function ActivityRow({ event }: { event: StreamEvent }) {
+function ActivityRow({ event, mounted }: { event: StreamEvent; mounted: boolean }) {
   const tone =
     event.status === "failed" ? " is-failed" : event.status === "running" ? " is-running" : "";
   return (
     <div className="ov-ev">
-      <span className="ov-ev-t">{clock(event.at)}</span>
+      <span className="ov-ev-t">{clock(event.at, mounted)}</span>
       {event.agent && (
         <span className="ov-ev-a" style={{ color: agentInk(event.agent) }}>
           {event.agent}
@@ -263,12 +264,28 @@ function heroLine(working: number): string {
   return `${working} agents are working right now.`;
 }
 
-/** Rendered client-side only, so the server/client clocks cannot disagree. */
-function clock(iso: string | null): string {
-  if (!iso) return "--:--";
+/**
+ * Local wall-clock HH:MM for an event timestamp. getHours()/getMinutes() read
+ * the runtime's timezone, so the same ISO renders as e.g. 02:47 under the
+ * server's UTC but 19:47 in a Pacific browser — a hydration text mismatch
+ * (React #418) if emitted during SSR. `mounted` is false on the server and on
+ * the client's first (hydrating) render, so both sides paint the "--:--"
+ * placeholder and agree; the real local time appears once the mount effect
+ * flips it. (#148)
+ */
+function clock(iso: string | null, mounted: boolean): string {
+  if (!mounted || !iso) return "--:--";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "--:--";
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** True only after the component has mounted on the client — used to gate
+ *  timezone-dependent text out of SSR so hydration matches. */
+function useMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
 }
 
 /**
