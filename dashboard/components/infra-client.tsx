@@ -118,7 +118,7 @@ function SetupCard() {
         style={{
           background: "var(--surface-2, var(--bg-2, #111))",
           border: "1px solid var(--line)",
-          borderRadius: 0,
+          borderRadius: 6,
           padding: "14px 16px",
           fontSize: 12.5,
           lineHeight: 2,
@@ -177,12 +177,33 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+// Compact request count for the worker tile: 18400 → "18.4k", 1_200_000 → "1.2M".
+function fmtCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+// One tile per deployed Worker. The list and metrics come from /api/cf/workers,
+// which derives the set from Cloudflare's deployed-scripts list (runtime + agent
+// workers) rather than a hardcoded slug list — a generated agent Worker appears
+// automatically. `hasData: false` is a deployed-but-not-invoked worker, rendered
+// as an honest "no data" tile rather than a misleading "0 req · idle".
+interface WorkerMetric {
+  scriptName: string;
+  requests: number;
+  errors: number;
+  p50: number;
+  hasData: boolean;
+}
+
 function MetricsTab() {
   const [win, setWin] = useState<SpendWindow>("24h");
   const [raw, setRaw] = useState<MetricsData | null>(null);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [spendRows, setSpendRows] = useState<SpendRow[]>([]);
   const [usage, setUsage] = useState<UsageData | null>(null);
+  const [workers, setWorkers] = useState<WorkerMetric[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [missingCreds, setMissingCreds] = useState(false);
@@ -192,11 +213,12 @@ function MetricsTab() {
     setError(null);
     try {
       const days = daysFor(w);
-      const [cfRes, runsRes, spendRes, usageRes] = await Promise.all([
+      const [cfRes, runsRes, spendRes, usageRes, workersRes] = await Promise.all([
         fetch("/api/cf/metrics"),
         fetch(`/api/runs/stats?days=${days}`),
         fetch(`/api/spend?days=${days}`),
         fetch("/api/cf/usage"),
+        fetch(`/api/cf/workers?days=${days}`),
       ]);
       if (cfRes.status === 503) {
         setMissingCreds(true);
@@ -210,6 +232,9 @@ function MetricsTab() {
       if (runsRes.ok) setRunStats((await runsRes.json()) as RunStats);
       setSpendRows(spendRes.ok ? ((await spendRes.json()) as SpendRow[]) : []);
       if (usageRes.ok) setUsage((await usageRes.json()) as UsageData);
+      // The worker grid degrades on its own: a failed fetch leaves it empty
+      // rather than erroring the whole tab (the KPIs + spend still render).
+      setWorkers(workersRes.ok ? ((await workersRes.json()) as { workers: WorkerMetric[] }).workers : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -269,6 +294,44 @@ function MetricsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Worker tiles (README Infrastructure). One tile per deployed Worker —
+          the runtime worker plus each agent worker — with real per-script
+          invocation counts and CPU p50 for the selected window. A deployed but
+          not-yet-invoked worker shows an honest "no data" tile. */}
+      <section>
+        <div className="p6-sec">Workers · {winLabel}</div>
+        {workers.length === 0 ? (
+          <div className="muted" style={{ fontSize: 13, padding: "4px 0" }}>
+            No worker metrics available for this window.
+          </div>
+        ) : (
+          <div className="p6-workers">
+            {workers.map((w) => {
+              const shortName = w.scriptName.replace(/^lumiagents-/, "");
+              const dot = !w.hasData ? "is-nodata" : w.errors > 0 ? "is-err" : "is-ok";
+              return (
+                <div key={w.scriptName} className={`p6-worker${w.hasData ? "" : " is-nodata"}`}>
+                  <div className="p6-worker-h">
+                    <span className="p6-worker-name" title={w.scriptName}>{shortName}</span>
+                    <span className={`p6-worker-dot ${dot}`} />
+                  </div>
+                  <div className="p6-worker-stats">
+                    <span>
+                      <span className="p6-stat-v">{w.hasData ? fmtCompact(w.requests) : "—"}</span>
+                      <span className="p6-stat-l">{w.hasData ? "requests" : "no data"}</span>
+                    </span>
+                    <span>
+                      <span className="p6-stat-v">{w.hasData ? w.p50 : "—"}</span>
+                      <span className="p6-stat-l">p50 µs</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* Window toggle: drives run-count + LLM spend KPIs and the breakdown */}
       <div className="sec-h">
         <h3>Run &amp; spend metrics</h3>
@@ -360,14 +423,14 @@ function MetricsTab() {
               </div>
               <div style={{
                 height: 8,
-                borderRadius: 0,
+                borderRadius: 6,
                 background: "var(--line)",
                 overflow: "hidden",
               }}>
                 <div style={{
                   height: "100%",
                   width: `${reqPct}%`,
-                  borderRadius: 0,
+                  borderRadius: 6,
                   background: reqPct > 90
                     ? "var(--err)"
                     : reqPct > 70
@@ -689,7 +752,7 @@ function LogsTab() {
           fontSize: 12,
           lineHeight: 1.7,
           background: "var(--surface-2, #0d0d0d)",
-          borderRadius: 0,
+          borderRadius: 6,
         }}
       >
         {lines.length === 0 ? (
@@ -774,7 +837,7 @@ function DeploymentsTab() {
   return (
     <section className="card pad">
       <div className="sec-h" style={{ marginBottom: 16 }}>
-        <h3>Deployments</h3>
+        <h3>Recent deploys</h3>
         <button className="btn ghost sm" onClick={load}>
           <RefreshCw style={{ width: 12, height: 12 }} /> Refresh
         </button>
@@ -786,9 +849,9 @@ function DeploymentsTab() {
         <table className="tbl" style={{ width: "100%", minWidth: 850 }}>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Created</th>
-              <th>Source</th>
+              <th>Deployment</th>
+              <th>When</th>
+              <th>Via</th>
               <th>Author</th>
               <th>Status</th>
             </tr>
@@ -797,31 +860,27 @@ function DeploymentsTab() {
             {deployments.map((d, idx) => {
               const isCurrent = d.is_latest === true || idx === 0;
               return (
-                <tr key={d.id}>
+                <tr key={d.id} style={{ cursor: "default" }}>
                   <td className="mono" style={{ fontSize: 12 }}>
-                    {d.id.slice(0, 16)}…
+                    {d.id.slice(0, 12)}…
                   </td>
-                  <td className="mono muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                  <td className="mono" style={{ fontSize: 12, color: "var(--color-neutral-400)", whiteSpace: "nowrap" }}>
                     {d.metadata?.created_on
                       ? new Date(d.metadata.created_on).toLocaleString()
                       : "-"}
                   </td>
-                  <td className="muted" style={{ fontSize: 12.5 }}>
-                    {d.metadata?.source ?? "-"}
+                  <td>
+                    {d.metadata?.source
+                      ? <span className="tag tag-neutral">{d.metadata.source}</span>
+                      : <span className="muted" style={{ fontSize: 12.5 }}>-</span>}
                   </td>
                   <td className="muted" style={{ fontSize: 12.5 }}>
                     {d.metadata?.author_email ?? "-"}
                   </td>
                   <td>
-                    {isCurrent ? (
-                      <span className="chip ok" style={{ fontSize: 11 }}>
-                        <Check style={{ width: 11, height: 11 }} /> current
-                      </span>
-                    ) : (
-                      <span className="chip muted" style={{ fontSize: 11 }}>
-                        previous
-                      </span>
-                    )}
+                    <span className={`p6-status ${isCurrent ? "is-ok" : "is-muted"}`}>
+                      {isCurrent ? "deployed" : "previous"}
+                    </span>
                   </td>
                 </tr>
               );
@@ -1017,7 +1076,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 0,
+              borderRadius: 6,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,
@@ -1032,7 +1091,7 @@ function SecretsTab() {
             style={{
               padding: "8px 12px",
               border: "1px solid var(--line)",
-              borderRadius: 0,
+              borderRadius: 6,
               background: "var(--bg)",
               color: "var(--ink)",
               fontSize: 13,
@@ -1119,15 +1178,11 @@ export function InfraClient() {
   const [tab, setTab] = useState<Tab>("metrics");
 
   return (
-    <div className="page view-fade">
+    <div className="page view-fade" style={{ maxWidth: 1080 }}>
       {/* Page header */}
-      <div className="page-h">
-        <div>
-          <h1>Infrastructure</h1>
-          <div className="sub">
-            Cloudflare Workers management: metrics, logs, deployments, secrets, cron
-          </div>
-        </div>
+      <h1 className="p6-h1">Infrastructure</h1>
+      <div className="p6-sub">
+        Cloudflare Workers · metrics, logs, deployments and secrets
       </div>
 
       {/* Tabs */}

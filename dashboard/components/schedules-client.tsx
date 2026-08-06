@@ -37,17 +37,17 @@ export function SchedulesClient({ schedules, createSchedule, toggleSchedule, del
   const active = schedules.filter((s) => s.is_active).length;
 
   return (
-    <div className="page view-fade">
-      <div className="page-h">
+    <div className="page view-fade" style={{ maxWidth: 980 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 26 }}>
         <div>
-          <h1>Schedules</h1>
-          <div className="sub">
+          <h1 className="p6-h1">Schedules</h1>
+          <div className="p6-sub" style={{ margin: 0 }}>
             {schedules.length === 0
-              ? "No scheduled orchestrations yet."
-              : `${schedules.length} schedule${schedules.length !== 1 ? "s" : ""} · ${active} active`}
+              ? "No scheduled orchestrations yet — all times UTC."
+              : `${schedules.length} cron trigger${schedules.length !== 1 ? "s" : ""} · ${active} active · all times UTC`}
           </div>
         </div>
-        <button className="btn accent" onClick={() => setShowCreate((v) => !v)}>
+        <button className="btn primary" onClick={() => setShowCreate((v) => !v)}>
           {showCreate ? <X style={{ width: 13, height: 13 }} /> : <Plus style={{ width: 13, height: 13 }} />}
           {showCreate ? "Cancel" : "New Schedule"}
         </button>
@@ -65,13 +65,11 @@ export function SchedulesClient({ schedules, createSchedule, toggleSchedule, del
         </div>
       ) : schedules.length > 0 ? (
         <div className="card" style={{ overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="tbl">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                {["Schedule", "Orchestration", "Cron", "Last run", "Status", ""].map((h) => (
-                  <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)", whiteSpace: "nowrap" }}>
-                    {h}
-                  </th>
+              <tr>
+                {["Schedule", "Orchestration", "Cron", "Last run", "Status", ""].map((h, i) => (
+                  <th key={h || i}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -147,7 +145,7 @@ function CreateForm({
         {error && (
           <span style={{ fontSize: 12.5, color: "var(--err)", flex: 1 }}>{error}</span>
         )}
-        <button type="submit" className="btn accent" disabled={pending} style={{ marginLeft: "auto" }}>
+        <button type="submit" className="btn primary" disabled={pending} style={{ marginLeft: "auto" }}>
           {pending
             ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Creating…</>
             : <><Plus style={{ width: 13, height: 13 }} /> Create</>}
@@ -220,7 +218,7 @@ function ScheduleRow({
               />
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "flex-end", paddingBottom: 2 }}>
-              <button type="submit" className="btn accent sm" disabled={editPending}>
+              <button type="submit" className="btn primary sm" disabled={editPending}>
                 {editPending
                   ? <Loader2 style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
                   : <Check style={{ width: 12, height: 12 }} />}
@@ -237,29 +235,29 @@ function ScheduleRow({
   }
 
   return (
-    <tr style={{ borderBottom: "1px solid var(--line)" }}>
-      <td style={{ padding: "12px 16px" }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--ink)" }}>
-          {s.label ?? <span style={{ color: "var(--ink-3)" }}>-</span>}
+    <tr style={{ cursor: "default" }}>
+      <td>
+        <div style={{ fontSize: 13.5, fontWeight: 500, color: "var(--color-text)" }}>
+          {s.label ?? <span style={{ color: "var(--color-neutral-500)" }}>-</span>}
         </div>
       </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span className="mono" style={{ fontSize: 12.5, color: "var(--ink-1)" }}>{s.orchestration_name}</span>
+      <td>
+        <span className="mono" style={{ fontSize: 12.5, color: "var(--color-neutral-200)" }}>{s.orchestration_name}</span>
       </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span className="mono chip" style={{ fontSize: 12 }}>{s.cron_expression}</span>
+      <td>
+        <span className="mono" style={{ fontSize: 12, color: "var(--color-neutral-300)" }}>{s.cron_expression}</span>
       </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-          {s.last_run_at ? timeAgo(s.last_run_at) : <span style={{ color: "var(--ink-3)" }}>Never</span>}
+      <td>
+        <span className="mono" style={{ fontSize: 12, color: "var(--color-neutral-400)" }}>
+          {s.last_run_at ? timeAgo(s.last_run_at) : "Never"}
         </span>
       </td>
-      <td style={{ padding: "12px 16px" }}>
-        <span className={`chip ${s.is_active ? "ok" : ""}`} style={{ fontSize: 12 }}>
-          {s.is_active ? "Active" : "Paused"}
+      <td>
+        <span className={`tag ${s.is_active ? "tag-accent" : "tag-outline"}`}>
+          {s.is_active ? "active" : "paused"}
         </span>
       </td>
-      <td style={{ padding: "12px 16px" }}>
+      <td>
         <div className="row gap-sm" style={{ justifyContent: "flex-end" }}>
           <button className="btn ghost sm" onClick={openEdit} title="Edit">
             <Pencil style={{ width: 13, height: 13 }} />

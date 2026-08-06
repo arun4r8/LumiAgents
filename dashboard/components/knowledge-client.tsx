@@ -71,33 +71,14 @@ export function KnowledgeClient({
   );
 
   return (
-    <div className="page view-fade">
-      <div className="page-h">
-        <div>
-          <h1>Knowledge Base</h1>
-          <div className="sub">Obsidian vault editor and shared RAG document corpus</div>
-        </div>
-      </div>
+    <div className="page view-fade" style={{ maxWidth: 1020 }}>
+      <h1 className="p6-h1">Library</h1>
+      <div className="p6-sub">Obsidian vault editor and the shared RAG document corpus · Dewey keeps it tagged</div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 2, marginBottom: 20, borderBottom: "1px solid var(--line)", paddingBottom: 0 }}>
+      <div className="tabs" style={{ marginBottom: 20 }}>
         {visibleTabs.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              padding: "7px 14px",
-              fontSize: 13,
-              fontWeight: 500,
-              background: "none",
-              border: "none",
-              borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-              color: tab === t ? "var(--accent)" : "var(--ink-3)",
-              cursor: "pointer",
-              marginBottom: -1,
-              transition: "color .15s, border-color .15s",
-            }}
-          >
+          <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {TAB_LABELS[t]}
           </button>
         ))}
@@ -356,7 +337,7 @@ function EditorTab() {
             display: "flex", alignItems: "center", gap: 6,
             padding: "4px 8px", width: "100%", textAlign: "left",
             background: isSelected ? "var(--accent-soft, oklch(95% 0.04 260))" : "none",
-            border: "none", cursor: "pointer", borderRadius: 0,
+            border: "none", cursor: "pointer", borderRadius: 6,
             fontSize: 12.5, color: isSelected ? "var(--accent)" : "var(--ink)",
           }}
         >
@@ -396,7 +377,7 @@ function EditorTab() {
               placeholder="path/to/note.md"
               style={{
                 width: "100%", fontSize: 12, padding: "4px 6px",
-                border: "1px solid var(--line)", borderRadius: 0,
+                border: "1px solid var(--line)", borderRadius: 6,
                 background: "var(--surface)", color: "var(--ink)",
                 boxSizing: "border-box",
               }}
@@ -450,7 +431,7 @@ function EditorTab() {
             Delete
           </button>
           <button
-            className="btn accent"
+            className="btn primary"
             onClick={() => void handleSave()}
             disabled={!selectedPath || saving}
             style={{ fontSize: 12, padding: "4px 10px", display: "flex", alignItems: "center", gap: 5 }}
@@ -468,7 +449,7 @@ function EditorTab() {
           {loadingFile && (
             <div style={{
               position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-              background: "var(--surface)", opacity: 0.8, borderRadius: 0, zIndex: 1,
+              background: "var(--surface)", opacity: 0.8, borderRadius: 6, zIndex: 1,
             }}>
               <Loader2 style={{ width: 20, height: 20, animation: "spin 1s linear infinite", color: "var(--ink-3)" }} />
             </div>
@@ -486,7 +467,7 @@ function EditorTab() {
               lineHeight: 1.6,
               padding: "14px 16px",
               border: "1px solid var(--line)",
-              borderRadius: 0,
+              borderRadius: 6,
               background: "var(--surface)",
               color: "var(--ink)",
               resize: "vertical",
@@ -535,7 +516,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <button className="btn accent" onClick={() => void handleManualSync()} disabled={syncing}>
+        <button className="btn primary" onClick={() => void handleManualSync()} disabled={syncing}>
           {syncing
             ? <><Loader2 style={{ width: 13, height: 13, animation: "spin 1s linear infinite" }} /> Syncing…</>
             : <><RefreshCw style={{ width: 13, height: 13 }} /> Sync now</>
@@ -546,7 +527,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
       {syncResult && syncResult !== "error" && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 14px", borderRadius: 0, marginBottom: 20,
+          padding: "10px 14px", borderRadius: 6, marginBottom: 20,
           background: "var(--ok-soft, oklch(97% 0.02 145))",
           border: "1px solid oklch(88% 0.06 145)",
           fontSize: 13, color: "var(--ok)",
@@ -558,7 +539,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
       {syncResult === "error" && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 14px", borderRadius: 0, marginBottom: 20,
+          padding: "10px 14px", borderRadius: 6, marginBottom: 20,
           background: "var(--err-soft)", border: "1px solid var(--err-line)",
           fontSize: 13, color: "var(--err)",
         }}>
