@@ -20,12 +20,3 @@ export function formatDuration(startedAt: string | null, endedAt: string | null)
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
 }
-
-export const STATUS_COLORS: Record<string, string> = {
-  pending:   "bg-yellow-100 text-yellow-800",
-  running:   "bg-blue-100 text-blue-800",
-  paused:    "bg-purple-100 text-purple-800",
-  completed: "bg-green-100 text-green-800",
-  failed:    "bg-red-100 text-red-800",
-  cancelled: "bg-gray-100 text-gray-600",
-};

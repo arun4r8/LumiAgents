@@ -1,23 +1,105 @@
-@import "tailwindcss";
-
 /*
- * TODO(redesign): remove Tailwind entirely — the owner has signed off on one
- * styling system (app/lumi.css). It is NOT removed here on purpose: redesign
- * phases 4–6 rewrite every screen, so the utility classes come out screen by
- * screen as each one is rebuilt, and the `@import "tailwindcss"` + the
- * tailwindcss/@tailwindcss-postcss dependencies get dropped in a final sweep.
- * Ripping them out now would mean rewriting the same components twice.
+ * Base reset — formerly Tailwind's Preflight.
  *
- * What IS fixed here is the conflict the front-end audit called out: this file
- * used to set `body { font-family: Arial }` (losing to lumi.css only by import
- * order) and to map Tailwind's `--font-mono` onto the Archivo variable, so the
- * app had no real monospace. Both are gone. The theme below now points at the
- * Nocturne tokens in app/lumi.css, which is the single source of truth for
- * colour and type; there are no colour or font declarations left in this file.
+ * Redesign phase 6 (final sweep): the owner signed off on one styling system
+ * (app/lumi.css). A repo-wide grep proved zero Tailwind utility classes remain
+ * on any screen, so `@import "tailwindcss"` and the tailwindcss /
+ * @tailwindcss/postcss dependencies were dropped. Removing the import also
+ * removes Tailwind's Preflight, so the essential parts of it are inlined below —
+ * this file still loads BEFORE app/lumi.css (see app/layout.tsx import order),
+ * exactly where Preflight used to sit, so lumi.css continues to override it.
+ *
+ * The old `@theme inline` block (which mapped Tailwind's --color-background /
+ * --font-mono onto the Nocturne tokens) is gone with Tailwind: nothing consumed
+ * those Tailwind theme vars, and app/lumi.css defines --font-mono itself.
  */
-@theme inline {
-  --color-background: var(--color-bg);
-  --color-foreground: var(--color-text);
-  --font-sans: var(--font-body);
-  --font-mono: var(--font-mono-stack);
+
+*,
+::before,
+::after,
+::backdrop {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+  line-height: 1.5;
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+hr {
+  height: 0;
+  color: inherit;
+  border-top-width: 1px;
+}
+
+/* headings inherit here; app/lumi.css (loaded after) sets the real size/weight */
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+b, strong { font-weight: bolder; }
+
+code, kbd, samp, pre {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 1em;
+}
+
+small { font-size: 80%; }
+
+table {
+  text-indent: 0;
+  border-color: inherit;
+  border-collapse: collapse;
+}
+
+button, input, optgroup, select, textarea {
+  font: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button, select { text-transform: none; }
+
+button,
+[type="button"],
+[type="reset"],
+[type="submit"] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+  cursor: pointer;
+}
+
+:-moz-focusring { outline: auto; }
+
+progress { vertical-align: baseline; }
+
+summary { display: list-item; }
+
+ol, ul, menu { list-style: none; }
+
+textarea { resize: vertical; }
+
+::placeholder { opacity: 1; color: color-mix(in oklab, currentColor 50%, transparent); }
+
+img, svg, video, canvas, audio, iframe, embed, object {
+  display: block;
+  vertical-align: middle;
+}
+
+img, video { max-width: 100%; height: auto; }
+
+[hidden] { display: none; }
