@@ -4,7 +4,7 @@ import { useOptimistic, useState } from "react";
 import Link from "next/link";
 import { AgentMark } from "@/components/agent-mark";
 import { agentOfOrchestration, bareOrchestration } from "@/lib/agent-style";
-import { fmtTimeAgo, fmtAbs, fmtExpiry } from "@/components/lumi";
+import { fmtTimeAgo, LocalTime, fmtExpiry } from "@/components/lumi";
 
 /**
  * Approvals — the redesign's single most important functional surface.
@@ -304,7 +304,7 @@ function DecidedRowView({ row }: { row: DecidedRow }) {
       />
       <span className="apv-decided-orch mono">{row.orch}</span>
       <span className="apv-decided-text">
-        {row.approved ? "approved" : "declined"} by {row.by} · {fmtAbs(row.at)}
+        {row.approved ? "approved" : "declined"} by {row.by} · <LocalTime iso={row.at} />
       </span>
     </div>
   );

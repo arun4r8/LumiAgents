@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, RefreshCw, X } from "lucide-react";
-import { StatusBadge, TriggerChip, MonoId, fmtAbs, fmtDuration } from "@/components/lumi";
+import { StatusBadge, TriggerChip, MonoId, LocalTime, fmtDuration } from "@/components/lumi";
 
 interface Run {
   id: string;
@@ -149,7 +149,7 @@ export function RunsClient({
                     <TriggerChip trigger={{ kind: r.triggered_by ?? "-", label: r.triggered_by }} />
                   </td>
                   <td className="mono tabular" style={{ color: "var(--ink-2)", fontSize: 12 }}>
-                    {fmtAbs(r.created_at)}
+                    <LocalTime iso={r.created_at} />
                   </td>
                   <td className="mono tabular" style={{ color: "var(--ink-1)", fontSize: 12 }}>
                     {fmtDuration(r.started_at, r.ended_at)}

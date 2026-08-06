@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RunTimeline } from "@/components/run-timeline";
 import { RunErrorNote } from "@/components/run-error-note";
+import { LocalTime } from "@/components/lumi";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
 import { useNow, useRunLive } from "@/lib/use-run-live";
 import {
@@ -139,13 +140,6 @@ function bareName(orchestration: string | null): string {
   if (!orchestration) return "run";
   const slash = orchestration.indexOf("/");
   return slash > 0 ? orchestration.slice(slash + 1) : orchestration;
-}
-
-function fmtClock(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function statusWordOf(status: string): string {
@@ -369,7 +363,7 @@ export function RunDetailClient({ snapshot: seed, tech, resultNote, outputDetail
     : undefined;
 
   const agent = agentOf(run.orchestration);
-  const started = fmtClock(run.startedAt ?? run.createdAt);
+  const startedIso = run.startedAt ?? run.createdAt;
   const statusWord = statusWordOf(run.status);
 
   return (
@@ -404,7 +398,7 @@ export function RunDetailClient({ snapshot: seed, tech, resultNote, outputDetail
           {agent ? `${agent} · ` : ""}
           triggered by {run.triggeredBy ?? "unknown"}
         </span>
-        {started && <span>started {started}</span>}
+        {startedIso && <span>started <LocalTime format="clock" iso={startedIso} placeholder="--:--:--" /></span>}
         <span className="rd-elapsed">elapsed {elapsed}</span>
         <span className="rd-elapsed">
           {run.doneCount}/{run.total || run.steps.length} steps
