@@ -226,6 +226,11 @@ describe("the readOnly declarations themselves", () => {
   it("flags exactly the audited read-only orchestrations", () => {
     expect(readOnly.sort()).toEqual([
       "angie/recent-resume-jobs",
+      // #156: blind resume export. Audited read-only: it reads no table and writes
+      // none, calls no integration, and contains no await_approval. Its whole body
+      // is two llm_extract passes plus a pure verify/scrub step over the text it
+      // was handed, so the inline path is safe and Angie can dispatch it sync.
+      "angie/resume-redact",
       "beady/recent-opportunities",
       "cleo/recent-awards",
       "cleo/recent-content",

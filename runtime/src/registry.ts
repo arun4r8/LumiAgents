@@ -6,6 +6,7 @@ import type { OrchestrationDefinition } from "./types";
 
 import angieCandidateSourcing    from "../../orchestrations/angie/candidate-sourcing/definition";
 import angieResumeFormat         from "../../orchestrations/angie/resume-format/definition";
+import angieResumeRedact         from "../../orchestrations/angie/resume-redact/definition";
 import angieResumeScoring        from "../../orchestrations/angie/resume-scoring/definition";
 import angieRecentResumeJobs     from "../../orchestrations/angie/recent-resume-jobs/definition";
 import beadyGovconAssessment     from "../../orchestrations/beady/govcon-assessment/definition";
@@ -44,6 +45,7 @@ function reg(o: AnyOrch): [string, AnyOrch] {
 export const orchestrations = new Map<string, AnyOrch>([
   reg(angieCandidateSourcing   as unknown as AnyOrch),
   reg(angieResumeFormat        as unknown as AnyOrch),
+  reg(angieResumeRedact        as unknown as AnyOrch),
   reg(angieResumeScoring       as unknown as AnyOrch),
   reg(angieRecentResumeJobs    as unknown as AnyOrch),
   reg(beadyGovconAssessment    as unknown as AnyOrch),
