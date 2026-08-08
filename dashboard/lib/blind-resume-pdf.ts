@@ -9,15 +9,20 @@ import { jsPDF } from "jspdf";
  * here means no storage to stand up, no binary in the run output, and the file
  * lands in the user's downloads the moment it is ready.
  *
- * The mark is drawn rather than placed. public/lumiture-badge.png is 31x31, a
- * favicon rather than a logo, and upscaling it onto letterhead looks exactly as
- * bad as it sounds. The in-app identity is typographic anyway (a boxed "L" plus
- * the wordmark, components/sidebar.tsx), so this reproduces that in vector and
- * stays crisp at any zoom or print size. Swap in a real asset when there is one.
+ * Centred, black and white, per Tommy in the Aug 7 thread: "people can randomly
+ * set the left margin to any amount, can we center the LUMITURE logo? Let's use
+ * the black and white one." Centring is margin-independent, which is the point.
+ * The original ask said top left; this supersedes it.
+ *
+ * The wordmark is drawn rather than placed. public/lumiture-badge.png is 31x31,
+ * a favicon rather than a logo, and the only full logo in the thread is the
+ * colour gradient version. The real mark is a letter-spaced uppercase wordmark,
+ * so setting it as vector type in black is a faithful monochrome rendition and
+ * stays crisp at any print size. Drop in the official black and white asset when
+ * someone sends it: replace drawLetterhead's text call with doc.addImage.
  */
 
-/** --color-accent from app/lumi.css, as RGB. */
-const ACCENT: [number, number, number] = [0x91, 0x84, 0xd9];
+// Monochrome by request. No accent colour is used anywhere in this document.
 const INK: [number, number, number] = [0x1a, 0x1a, 0x1f];
 const MUTED: [number, number, number] = [0x6b, 0x6b, 0x76];
 
@@ -36,33 +41,25 @@ function isSectionHeader(line: string): boolean {
 }
 
 function drawLetterhead(doc: jsPDF, candidateCode?: string): number {
-  // Boxed "L" mark, top-left.
-  doc.setDrawColor(...ACCENT);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(MARGIN, MARGIN, 9, 9, 1.2, 1.2, "S");
-  doc.setTextColor(...ACCENT);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("L", MARGIN + 4.5, MARGIN + 6.4, { align: "center" });
-
-  // Wordmark beside it.
+  // Centred wordmark. Letter-spaced uppercase, matching the real mark's shape.
   doc.setTextColor(...INK);
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  doc.text("Lumiture", MARGIN + 12.5, MARGIN + 6.6);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(15);
+  const wordmark = "LUMITURE".split("").join("\u2009\u2009");
+  doc.text(wordmark, PAGE_W / 2, MARGIN + 7, { align: "center" });
 
   if (candidateCode) {
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
-    doc.text(`Candidate ${candidateCode}`, PAGE_W - MARGIN, MARGIN + 6.4, { align: "right" });
+    doc.text(`Candidate ${candidateCode}`, PAGE_W / 2, MARGIN + 13.5, { align: "center" });
   }
 
-  doc.setDrawColor(0xe4, 0xe4, 0xea);
+  doc.setDrawColor(0x99, 0x99, 0x99);
   doc.setLineWidth(0.3);
-  doc.line(MARGIN, MARGIN + 13, PAGE_W - MARGIN, MARGIN + 13);
+  const ruleY = MARGIN + (candidateCode ? 18 : 12);
+  doc.line(MARGIN, ruleY, PAGE_W - MARGIN, ruleY);
 
-  return MARGIN + 22;
+  return ruleY + 9;
 }
 
 function drawFooter(doc: jsPDF, page: number, pages: number): void {
@@ -118,7 +115,7 @@ export function buildBlindResumePdf({ text, candidateCode }: BlindResumeOptions)
     const header = isSectionHeader(line);
     doc.setFont("helvetica", header ? "bold" : "normal");
     doc.setFontSize(header ? 10 : 9.5);
-    doc.setTextColor(...(header ? ACCENT : INK));
+    doc.setTextColor(...INK);
 
     if (header) y += 3;
 
@@ -129,7 +126,7 @@ export function buildBlindResumePdf({ text, candidateCode }: BlindResumeOptions)
         y = drawLetterhead(doc, candidateCode);
         doc.setFont("helvetica", header ? "bold" : "normal");
         doc.setFontSize(header ? 10 : 9.5);
-        doc.setTextColor(...(header ? ACCENT : INK));
+        doc.setTextColor(...INK);
       }
       doc.text(w, MARGIN, y);
       y += header ? 5.4 : 4.6;
