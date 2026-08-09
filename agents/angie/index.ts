@@ -56,6 +56,23 @@ Do not use em dashes.`,
       },
     },
     {
+      name: "redact_resume",
+      description:
+        "Produce a blind (client-submission) copy of a resume: strips the candidate's name, contact details, personal links and referees so a client evaluates the experience before the person. Returns redaction-verified text ready to render on Lumiture letterhead. Use this when asked for a blind, anonymised or client-ready resume. This does NOT redact employer names.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          resume_text: { type: "string", description: "Raw resume text to redact" },
+          candidate_code: {
+            type: "string",
+            description:
+              "Optional non-identifying label printed where the name was, e.g. 'LUM-0042', so a submission can be traced back internally. Omit for a fully anonymous document.",
+          },
+        },
+        required: ["resume_text"],
+      },
+    },
+    {
       name: "get_recent_candidates",
       description:
         "Get top-scored candidates from résumé scoring jobs run recently (e.g. 'who scored well from today's batch'). Reads existing results; does not score anything new.",
@@ -72,6 +89,7 @@ Do not use em dashes.`,
     score_resumes:     { orchestration: "angie/resume-scoring" },
     source_candidates: { orchestration: "angie/candidate-sourcing" },
     format_resume:     { orchestration: "angie/resume-formatting" },
+    redact_resume:     { orchestration: "angie/resume-redact", mode: "sync" },
     get_recent_candidates: { orchestration: "angie/recent-resume-jobs", mode: "sync" },
   },
 };
