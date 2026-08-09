@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { Search, Sparkles, Check, Loader2, Trash2, FileText, FileSpreadsheet, File, Upload, ScanText } from "lucide-react";
 import { runtimeAuthHeader } from "@/lib/runtime-auth";
+import { LocalTime } from "@/components/lumi";
 
 const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
@@ -651,7 +652,7 @@ function DocCorpus({
                         {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k` : "-"}
                       </td>
                       <td style={{ fontSize: 12.5, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
-                        {new Date(doc.created_at).toLocaleDateString()}
+                        <LocalTime iso={doc.created_at} format="date" placeholder="-" />
                       </td>
                       <td>
                         <button
@@ -728,7 +729,7 @@ function DocCorpus({
               </div>
               <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>
                 {doc.source_kind} · {doc.char_count ? `${(doc.char_count / 1000).toFixed(1)}k chars` : "unknown size"} ·{" "}
-                {new Date(doc.created_at).toLocaleDateString()}
+                <LocalTime iso={doc.created_at} format="date" placeholder="-" />
               </div>
             </div>
             <ProvenanceTag prov={provenanceOf(doc.source_kind, null)} />
