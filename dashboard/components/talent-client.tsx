@@ -11,6 +11,8 @@ interface Props {
   resumeResults: Record<string, unknown>[];
   startRedaction: (resumeText: string, candidateCode: string) => Promise<string>;
   getRedactionResult: (runId: string) => Promise<RedactionState>;
+  /** From ?run=<id>, set when arriving from the Teams bot deep link. */
+  initialRunId?: string;
 }
 
 /**
@@ -27,6 +29,7 @@ export function TalentClient({
   resumeResults,
   startRedaction,
   getRedactionResult,
+  initialRunId,
 }: Props) {
   const empty =
     candidates.length === 0 &&
@@ -43,7 +46,11 @@ export function TalentClient({
         </div>
       </div>
 
-      <BlindResumePanel startRedaction={startRedaction} getRedactionResult={getRedactionResult} />
+      <BlindResumePanel
+        startRedaction={startRedaction}
+        getRedactionResult={getRedactionResult}
+        initialRunId={initialRunId}
+      />
 
       {empty ? (
         <div className="empty-state">
