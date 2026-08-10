@@ -25,11 +25,15 @@ const STATUS_COLOR: Record<string, string> = {
   posted: "oklch(58% 0.16 145)",
 };
 
+/** release_date is a DATE column parsed as LOCAL midnight, which is
+ *  timezone-stable. Only the `undefined` locale varied between server and
+ *  browser, so pinning en-US makes this deterministic. See the fuller note in
+ *  industry-days-client.tsx. */
 function fmtDate(iso: string | null): string {
   if (!iso) return "-";
   const d = new Date(iso + "T00:00:00");
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function StatusBadge({ status }: { status: string }) {

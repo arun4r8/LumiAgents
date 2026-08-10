@@ -19,11 +19,18 @@ const REC_COLOR: Record<string, string> = {
   skip: "oklch(60% 0.02 260)",
 };
 
+/** event_date is a DATE column, and appending T00:00:00 parses it as LOCAL
+ *  midnight, then formats in that same zone. That round trip is timezone-stable
+ *  (Aug 15 reads as Aug 15 in UTC, New York and Tokyo alike), so this needs no
+ *  <LocalTime> gate. The locale was the only thing that varied: `undefined`
+ *  takes the runtime's, which differs between the SSR render and the browser
+ *  and mismatches on hydration. Pinning en-US removes the last variable and
+ *  matches every other formatter in components/lumi.tsx. */
 function fmtDate(iso: string | null): string {
   if (!iso) return "Date TBD";
   const d = new Date(iso + "T00:00:00");
   if (isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
 function daysUntil(iso: string | null): string | null {

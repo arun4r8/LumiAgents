@@ -9,6 +9,7 @@ import {
 import { useTransition, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { AgentMark } from "@/components/agent-mark";
+import { LocalTime } from "@/components/lumi";
 import { agentColor } from "@/lib/agent-style";
 import { SubscriptionsClient, type Subscription, type SubscriptionKind } from "@/components/subscriptions-client";
 
@@ -115,9 +116,9 @@ export function SettingsClient({
   const requested = tabs.find((t) => t === initialTab);
   const [tab, setTab] = useState<Tab>(requested ?? (isOps ? "agents" : "account"));
 
-  const memberSince = userCreatedAt
-    ? new Date(userCreatedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-    : null;
+  // Rendered through <LocalTime> rather than formatted here: these are
+  // timestamptz values, so the server (UTC) and the browser can land on
+  // different calendar days and mismatch on hydration.
 
   return (
     <div className="page view-fade">
@@ -147,7 +148,7 @@ export function SettingsClient({
               </SettingsRow>
               <Divider />
               <SettingsRow label="Role"><span className="chip">{isOps ? "ops" : "enduser"}</span></SettingsRow>
-              {memberSince && (<><Divider /><SettingsRow label="Member since"><span style={{ fontSize: 13, color: "var(--ink-2)" }}>{memberSince}</span></SettingsRow></>)}
+              {userCreatedAt && (<><Divider /><SettingsRow label="Member since"><span style={{ fontSize: 13, color: "var(--ink-2)" }}><LocalTime iso={userCreatedAt} format="date" dateOptions={{ month: "long", year: "numeric" }} placeholder="-" /></span></SettingsRow></>)}
             </div>
           </Section>
           <Section heading="Security">
@@ -226,7 +227,7 @@ function AgentCard({ agentId, meta, config, updateAgentConfig }: {
   }
 
   const selectedModel = MODELS.find((m) => m.value === model);
-  const updatedAt = config.updated_at ? new Date(config.updated_at).toLocaleDateString() : null;
+
 
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -241,7 +242,7 @@ function AgentCard({ agentId, meta, config, updateAgentConfig }: {
           <div style={{ fontWeight: 500, fontSize: 14.5, color: "var(--color-text)" }}>{meta.label}</div>
           <div style={{ fontSize: 12, color: "var(--color-neutral-500)" }}>{meta.role}</div>
         </div>
-        {updatedAt && <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>Updated {updatedAt}</div>}
+        {config.updated_at && <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>Updated <LocalTime iso={config.updated_at} format="date" placeholder="-" /></div>}
       </div>
 
       {/* Body */}
@@ -643,9 +644,7 @@ function MemberRow({ member, isSelf, revokeMember, resendInvite }: {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const created = member.created_at
-    ? new Date(member.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "-";
+
 
   function revoke() {
     if (!confirm(`Remove ${member.email}? This deletes their account.`)) return;
@@ -694,7 +693,7 @@ function MemberRow({ member, isSelf, revokeMember, resendInvite }: {
         <td>
           <span className={`chip${member.status === "active" ? " ok" : " info"}`}>{member.status}</span>
         </td>
-        <td style={{ color: "var(--ink-2)", fontSize: 12.5 }}>{created}</td>
+        <td style={{ color: "var(--ink-2)", fontSize: 12.5 }}><LocalTime iso={member.created_at} format="date" dateOptions={{ month: "short", day: "numeric", year: "numeric" }} placeholder="-" /></td>
         <td>
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
             {member.status === "invited" && (

@@ -164,11 +164,14 @@ export function fmtClock(iso: string | null | undefined): string | null {
 /** Calendar date only, no time. Timezone-dependent (a UTC instant near midnight
  *  is a different day either side of the line) and locale-dependent unless the
  *  locale is pinned, so like fmtAbs it must reach the DOM through <LocalTime>. */
-export function fmtDate(iso: string | null | undefined): string | null {
+export function fmtDate(
+  iso: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { year: "numeric", month: "numeric", day: "numeric" },
+): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "numeric", day: "numeric" });
+  return d.toLocaleDateString("en-US", options);
 }
 
 export function fmtExpiry(iso: string | null | undefined): string {
@@ -218,6 +221,7 @@ export function fmtDuration(startedAt: string | null, endedAt: string | null): s
 export function LocalTime({
   iso,
   format = "abs",
+  dateOptions,
   placeholder = "--:--",
 }: {
   iso: string | null | undefined;
@@ -234,6 +238,10 @@ export function LocalTime({
    * chase, which is why they are gated too.
    */
   format?: "abs" | "clock" | "ago" | "expiry" | "date";
+  /** Only for format="date". Same shape Intl takes, so a caller can ask for
+   *  "Aug 8, 2026" or "August 2026" without a new format name each time. The
+   *  locale stays pinned to en-US: see the note on fmtClock. */
+  dateOptions?: Intl.DateTimeFormatOptions;
   placeholder?: string;
 }): React.ReactElement {
   // useSyncExternalStore is the hydration-safe way to read a client-only value:
@@ -244,7 +252,7 @@ export function LocalTime({
   if (!mounted) return <>{placeholder}</>;
   const text =
     format === "clock" ? fmtClock(iso)
-    : format === "date" ? fmtDate(iso)
+    : format === "date" ? fmtDate(iso, dateOptions)
     : format === "ago" ? fmtTimeAgo(iso)
     : format === "expiry" ? fmtExpiry(iso)
     : fmtAbs(iso);

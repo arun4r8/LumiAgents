@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { AskDataPanel } from "./ask-data-panel";
+import { LocalTime } from "@/components/lumi";
 import {
   Plus, Upload, X, ChevronDown, ChevronUp,
   Check, Loader2, AlertTriangle, ExternalLink, Star,
@@ -363,7 +364,7 @@ export function ResumeResultsPanel({
                       {jobResults.length > 0 && (
                         <span>{jobResults.length} result{jobResults.length !== 1 ? "s" : ""} loaded</span>
                       )}
-                      {createdAt && <span>{new Date(createdAt).toLocaleDateString()}</span>}
+                      {createdAt && <span><LocalTime iso={createdAt} format="date" placeholder="-" /></span>}
                     </div>
                   </div>
                   <button
@@ -553,7 +554,7 @@ export function StaffRequestsPanel({ staffRequests }: { staffRequests: Record<st
                       ) : <span style={{ color: "var(--ink-3)" }}>-</span>}
                     </td>
                     <td style={{ fontSize: 12 }}>
-                      {r.created_at ? new Date(r.created_at as string).toLocaleDateString() : "-"}
+                      <LocalTime iso={r.created_at as string | null} format="date" placeholder="-" />
                     </td>
                   </tr>
                 );
@@ -716,13 +717,10 @@ function CellValue({ value, col }: { value: unknown; col: string }) {
     return <span className={`chip${tone ? ` ${tone}` : ""}`} style={{ fontSize: 11 }}>{s}</span>;
   }
   if (col.endsWith("_at") || col.endsWith("_date")) {
-    // Computed before the JSX, not inside it: a try/catch cannot catch an error
-    // thrown while React renders a child, only one thrown while building the value.
-    let label: string;
-    try {
-      label = new Date(s).toLocaleDateString();
-    } catch { return <span>{s}</span>; }
-    return <span style={{ fontSize: 12 }}>{label}</span>;
+    // fmtDate returns null for an unparseable value and LocalTime then renders
+    // the placeholder, so showing the raw cell text covers what the old
+    // try/catch did, without formatting a timezone-dependent date during render.
+    return <span style={{ fontSize: 12 }}><LocalTime iso={s} format="date" placeholder={s} /></span>;
   }
   if (s.length > 40) return <span title={s}>{s.slice(0, 38)}…</span>;
   return <span>{s}</span>;
