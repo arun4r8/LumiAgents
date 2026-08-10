@@ -113,8 +113,36 @@ export function SettingsClient({
   const tabs: Tab[] = isOps
     ? ["agents", "orchestrations", "team", "subscriptions", "account", "appearance"]
     : ["account", "appearance"];
+  const fallbackTab: Tab = isOps ? "agents" : "account";
   const requested = tabs.find((t) => t === initialTab);
-  const [tab, setTab] = useState<Tab>(requested ?? (isOps ? "agents" : "account"));
+  const [tab, setTab] = useState<Tab>(requested ?? fallbackTab);
+
+  // A ?tab= this user cannot open used to resolve to `undefined` and drop them on
+  // the fallback tab with no explanation. /reports 308s to ?tab=subscriptions,
+  // which is ops-only, so an enduser following a bookmarked link landed on
+  // Account and was left to guess why. Name what happened instead.
+  //
+  // This grants nothing: the tab is still absent from `tabs`, its body is still
+  // gated on isOps, and the page still never fetched the data.
+  const unavailable = !!initialTab && requested === undefined;
+  // Own-property lookup, not `in`: `?tab=toString` hits Object.prototype and
+  // would otherwise name the section after a function.
+  const unavailableLabel =
+    unavailable && initialTab && Object.prototype.hasOwnProperty.call(TAB_LABEL, initialTab)
+      ? TAB_LABEL[initialTab as Tab]
+      : null;
+  const [notice, setNotice] = useState<string | null>(
+    unavailable
+      ? `${unavailableLabel ?? "That settings section"} is not available on your account, ` +
+        `so we opened ${TAB_LABEL[fallbackTab]} instead. Ask an ops teammate if you need it.`
+      : null,
+  );
+
+  // Any deliberate tab choice means the person has moved on from the note.
+  function pickTab(t: Tab) {
+    setTab(t);
+    setNotice(null);
+  }
 
   // Rendered through <LocalTime> rather than formatted here: these are
   // timestamptz values, so the server (UTC) and the browser can land on
@@ -125,9 +153,23 @@ export function SettingsClient({
       <h1 className="p6-h1">Settings</h1>
       <div className="p6-sub" style={{ marginBottom: 22 }}>Configure agents, models, and platform preferences.</div>
 
+      {notice && (
+        <div
+          className="card"
+          role="note"
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 14px", marginBottom: 18, maxWidth: 640,
+          }}
+        >
+          <span className="chip info">Not available</span>
+          <span style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{notice}</span>
+        </div>
+      )}
+
       <div className="tabs" style={{ marginBottom: 24 }}>
         {tabs.map((t) => (
-          <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
+          <button key={t} className={tab === t ? "active" : ""} onClick={() => pickTab(t)}>
             {TAB_LABEL[t]}
           </button>
         ))}

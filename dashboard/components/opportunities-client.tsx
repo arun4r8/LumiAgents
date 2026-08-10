@@ -39,8 +39,25 @@ const REC_TAG: Record<string, "tag-accent" | "tag-neutral" | "tag-outline"> = {
   pass: "tag-outline",
 };
 
-export function OpportunitiesClient({ opportunities }: { opportunities: Opportunity[] }) {
-  const scored = opportunities.filter((o) => o.fit_score != null).length;
+interface Props {
+  opportunities: Opportunity[];
+  /** True row count of public.opportunities, counted server-side. */
+  total: number;
+  /** True count of scored rows (fit_score not null), counted server-side. */
+  scoredTotal: number;
+  /** The server's page cap. Hitting it means rows were left behind. */
+  limit: number;
+}
+
+export function OpportunitiesClient({ opportunities, total, scoredTotal, limit }: Props) {
+  // The page is capped and ordered by fit, so unscored rows sort last and are
+  // the first thing to fall off the end. Saying "200 tracked" when there are
+  // 512 would make a freshly swept, not-yet-scored notice invisible AND make
+  // the screen look complete, so the header states the cap outright.
+  const truncated = opportunities.length >= limit && total > opportunities.length;
+  const sub = truncated
+    ? `Showing the top ${opportunities.length} by fit of ${total} tracked · ${scoredTotal} scored`
+    : `${total} tracked · ${scoredTotal} scored`;
 
   return (
     <div className="page view-fade" style={{ paddingTop: 0 }}>
@@ -48,10 +65,13 @@ export function OpportunitiesClient({ opportunities }: { opportunities: Opportun
         <div>
           <h1>Opportunities</h1>
           <div className="sub">
-            {opportunities.length === 0
-              ? "No opportunities on the radar yet."
-              : `${opportunities.length} tracked · ${scored} scored`}
+            {opportunities.length === 0 ? "No opportunities on the radar yet." : sub}
           </div>
+          {truncated && (
+            <div className="sub" style={{ marginTop: 3 }}>
+              Ordered by fit score, so unscored notices sort last and may not appear here yet.
+            </div>
+          )}
         </div>
         {/* opportunity-sweep is Beady's; run it from her chat. */}
         <Link href="/agents/beady" className="btn">Run a sweep</Link>

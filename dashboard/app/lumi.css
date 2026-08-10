@@ -1899,6 +1899,68 @@ a.run-card-id:hover { color: var(--color-accent-300); }
 .ov-stat-v .unit { font-size: 20px; color: var(--color-neutral-400); }
 /* the pending-approvals number, and only that one, carries the accent */
 .ov-stat-v.is-accent { color: var(--color-accent-200); }
+/* A KPI that is also a route. Inherits the stat typography exactly so the band
+   reads as one row; only the hover state marks it as clickable. */
+/* "What needs you": the inline approval queue on Overview. Sits between the
+   stat band and the two columns, and only renders when something is pending. */
+.ov-needs { margin: 22px 0 4px; }
+.ov-needs-h {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.ov-appr {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-2);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.ov-appr-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.ov-appr-orch {
+  font-size: 12px; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.ov-appr-prompt {
+  margin: 0 0 10px; font-size: 13.5px; color: var(--ink-1);
+  /* Clamped: the full prompt lives on the Approvals screen and a long one
+     would push the next pending item off the fold. */
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ov-appr-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.ov-appr-note { flex: 1 1 220px; min-width: 160px; }
+
+.ov-stat-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  transition: opacity .12s ease;
+}
+.ov-stat-link:hover { opacity: .72; }
+.ov-stat-link:focus-visible {
+  outline: 2px solid var(--color-accent-600);
+  outline-offset: 3px;
+}
+
+/* Inline "Refresh now" in the freshness note. Reads as a link, not a button,
+   because it sits mid-sentence. */
+.ov-refresh {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-accent-300);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ov-refresh:hover { color: var(--color-accent-200); }
+
 .ov-stat-l {
   margin-top: 2px;
   font-size: 11.5px;
@@ -2548,6 +2610,15 @@ a.run-card-id:hover { color: var(--color-accent-300); }
   background: var(--bg);
   transition: border-color .12s, box-shadow .12s;
 }
+/* The note is a <textarea>, so it has to shed the 34px input height and get the
+   same resize/line-height treatment as .ta. Two rows by default keeps the
+   actions row the shape it was designed as; the drag handle covers the rest. */
+textarea.apv-note {
+  height: auto;
+  line-height: 1.45;
+  resize: vertical;
+  font-family: var(--sans);
+}
 .apv-note::placeholder { color: var(--color-neutral-500); }
 .apv-note:focus {
   outline: 0;
@@ -2566,7 +2637,16 @@ a.run-card-id:hover { color: var(--color-accent-300); }
 .apv-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .apv-decided-orch {
   font-family: var(--font-mono); font-size: 12px; color: var(--color-neutral-300);
+  flex-shrink: 0;
 }
+/* The prompt preview takes the slack in the row and ellipsises (via .truncate),
+   so history says WHAT was decided without ever wrapping to a second line. */
+.apv-decided-prompt {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-neutral-500);
+}
+.apv-decided-text { flex-shrink: 0; }
 
 /* "View run →" — the path from "approve this" to "see what I'm approving".
    Sits in the actions row, right of the flex-1 note, so it never crowds the

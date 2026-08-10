@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentMark } from "@/components/agent-mark";
 import { agentInk } from "@/lib/agent-style";
-import { useMounted } from "@/components/lumi";
+import { useMounted, UrgencyTag } from "@/components/lumi";
 
 /**
  * Overview — hero, stat band, fleet, throughput, recent activity.
@@ -56,7 +56,19 @@ export interface StreamEvent {
   message: string;
 }
 
+export interface UrgentApproval {
+  id: string;
+  prompt: string;
+  createdAt: string;
+  expiresAt: string | null;
+  runId: string | null;
+  orchestration: string;
+}
+
 interface OverviewClientProps {
+  /** The few soonest-expiring pending approvals, for the inline decide panel. */
+  urgent: UrgentApproval[];
+  decideApproval: (formData: FormData) => Promise<void>;
   working: number;
   pending: number;
   failed24: number;
@@ -74,6 +86,8 @@ const POLL_MS = 30_000;
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function OverviewClient({
+  urgent,
+  decideApproval,
   working,
   pending,
   failed24,
@@ -84,7 +98,7 @@ export default function OverviewClient({
   buckets,
   stream,
 }: OverviewClientProps) {
-  const readAt = usePolledRefresh();
+  const { readAt, refreshNow } = usePolledRefresh();
   const mounted = useMounted();
 
   return (
@@ -103,15 +117,30 @@ export default function OverviewClient({
       </header>
 
       <div className="ov-stats">
-        <Stat value={weekRuns.toLocaleString()} label="runs this week" />
+        <Stat value={weekRuns.toLocaleString()} label="runs this week" href="/runs" />
         <Stat
           value={cleanPct == null ? "-" : cleanPct.toFixed(1)}
           unit={cleanPct == null ? undefined : "%"}
           label="completed without intervention"
+          href="/runs"
         />
-        <Stat value={String(pending)} label="pending approvals" accent />
-        <Stat value={spendLabel} label="LLM spend · 7 days" />
+        <Stat value={String(pending)} label="pending approvals" accent href="/approvals" />
+        <Stat value={spendLabel} label="LLM spend · 7 days" href="/infrastructure" />
       </div>
+
+      {urgent.length > 0 && (
+        <section className="ov-needs">
+          <div className="ov-needs-h">
+            <h2 className="ov-sec">What needs you</h2>
+            <Link className="ov-more" href="/approvals">
+              Approvals ({pending}) →
+            </Link>
+          </div>
+          {urgent.map((a) => (
+            <MiniApproval key={a.id} approval={a} decide={decideApproval} />
+          ))}
+        </section>
+      )}
 
       <div className="ov-cols">
         <div className="ov-col">
@@ -149,6 +178,10 @@ export default function OverviewClient({
           {/* Deliberately plain about how fresh this is — see the note above. */}
           <p className="ov-note">
             {readAt && `last read ${readAt} · `}refreshes every {POLL_MS / 1000}s
+            {" · "}
+            <button type="button" className="ov-refresh" onClick={refreshNow}>
+              Refresh now
+            </button>
           </p>
           <Link className="ov-more" href="/runs">
             All runs →
@@ -161,25 +194,91 @@ export default function OverviewClient({
 
 // ─── Stat band ────────────────────────────────────────────────────────────────
 
+/**
+ * A stat, optionally a link.
+ *
+ * The pre-redesign Overview made every KPI a route into the screen that
+ * explains it, and the redesign flattened them to plain text. That removed the
+ * obvious next click from the first screen an ops user sees, so the numbers are
+ * navigation again wherever there is somewhere sensible to go.
+ */
 function Stat({
   value,
   unit,
   label,
   accent,
+  href,
 }: {
   value: string;
   unit?: string;
   label: string;
   accent?: boolean;
+  href?: string;
 }) {
-  return (
-    <div>
+  const body = (
+    <>
       <div className={accent ? "ov-stat-v is-accent" : "ov-stat-v"}>
         {value}
         {unit && <span className="unit">{unit}</span>}
       </div>
       <div className="ov-stat-l">{label}</div>
-    </div>
+    </>
+  );
+  if (!href) return <div>{body}</div>;
+  return (
+    <Link href={href} className="ov-stat-link">
+      {body}
+    </Link>
+  );
+}
+
+/**
+ * One pending approval, decidable in place.
+ *
+ * Deliberately not a full replica of the Approvals screen: no history, no
+ * filters, no decided rows. This is the "you are three clicks from unblocking a
+ * run" affordance, and anything more would be a second Approvals page drifting
+ * out of sync with the first. The note field is optional here for the same
+ * reason; a considered rationale belongs on the screen built for it.
+ *
+ * Urgency styling comes from <UrgencyTag>, so this picks up the same three
+ * tiers the Approvals screen uses rather than inventing a fourth.
+ */
+function MiniApproval({
+  approval,
+  decide,
+}: {
+  approval: UrgentApproval;
+  decide: (formData: FormData) => Promise<void>;
+}) {
+  return (
+    <form action={decide} className="ov-appr">
+      <input type="hidden" name="approvalId" value={approval.id} />
+      <div className="ov-appr-head">
+        <span className="ov-appr-orch">{approval.orchestration}</span>
+        <UrgencyTag expiresAt={approval.expiresAt} />
+      </div>
+      <p className="ov-appr-prompt">{approval.prompt}</p>
+      <div className="ov-appr-actions">
+        <input
+          className="input ov-appr-note"
+          type="text"
+          name="notes"
+          placeholder="Optional note"
+        />
+        <button className="btn accent sm" type="submit" name="status" value="approved">
+          Approve
+        </button>
+        <button className="btn sm" type="submit" name="status" value="rejected">
+          Reject
+        </button>
+        {approval.runId && (
+          <Link className="btn ghost sm" href={`/runs/${approval.runId}`}>
+            Open run
+          </Link>
+        )}
+      </div>
+    </form>
   );
 }
 
@@ -290,7 +389,7 @@ function clock(iso: string | null, mounted: boolean): string {
  * server render, and stamping a client clock onto it in the effect body would
  * both cascade a render and print a time that isn't when the data was read.
  */
-function usePolledRefresh(): string | null {
+function usePolledRefresh(): { readAt: string | null; refreshNow: () => void } {
   const router = useRouter();
   const [readAt, setReadAt] = useState<string | null>(null);
 
@@ -302,7 +401,16 @@ function usePolledRefresh(): string | null {
     return () => clearInterval(id);
   }, [router]);
 
-  return readAt;
+  // The poll is every 30s, which is a long time to stare at a screen wondering
+  // whether the thing you just triggered has landed. The pre-redesign Overview
+  // had a Refresh button and this restores it. Safe to call during an event
+  // handler: stamp() only runs on a click, never during render.
+  const refreshNow = useCallback(() => {
+    router.refresh();
+    setReadAt(stamp());
+  }, [router]);
+
+  return { readAt, refreshNow };
 }
 
 function stamp(): string {

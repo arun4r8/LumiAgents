@@ -64,6 +64,10 @@ interface DecidedRow {
   approved: boolean;
   by: string;
   at: string;
+  /** What was decided. Truncated in the row; the full text stays in the title. */
+  prompt: string;
+  /** The run this approval gated, so history keeps its way back to the evidence. */
+  runId: string | null;
 }
 
 function byExpiry(a: ApprovalItem, b: ApprovalItem): number {
@@ -111,6 +115,8 @@ export function ApprovalsClient({
         approved: d.approved,
         by: d.by,
         at: d.at,
+        prompt: src.prompt,
+        runId: src.runId,
       } satisfies DecidedRow;
     })
     .filter((r): r is DecidedRow => r !== null);
@@ -127,6 +133,8 @@ export function ApprovalsClient({
     approved: a.status === "approved",
     by: a.decided_by ?? "-",
     at: a.decided_at ?? a.created_at,
+    prompt: a.prompt,
+    runId: a.runId,
   }));
 
   const decidedRows = [...optRows, ...serverRows];
@@ -250,7 +258,10 @@ function PendingCard({
         <button type="submit" name="status" value="rejected" className="btn ghost">
           Decline
         </button>
-        <input type="text" name="notes" className="apv-note" placeholder="Add a note…" />
+        {/* A decision rationale is prose, not a search box: a single-line input
+            silently caps what a reviewer can say. Compact by default (2 rows,
+            the length of most notes) and resizable for the ones that are not. */}
+        <textarea name="notes" className="apv-note" rows={2} placeholder="Add a note…" />
         {/* The only path from "approve this" to "see what I'm approving". Kept in
             the actions row, right of the note, so it sits with the decision. */}
         {approval.runId && (
@@ -287,7 +298,13 @@ function Stat({
   );
 }
 
+// A collapsed row still has to answer "what was decided, and where did it come
+// from". A status dot plus an orchestration name answers neither. The prompt
+// preview (single line, ellipsised, full text on hover) and the "View run" link
+// are what make the history readable rather than merely present.
 function DecidedRowView({ row }: { row: DecidedRow }) {
+  const preview = row.prompt.trim();
+
   return (
     <div className="apv-decided">
       <span
@@ -296,9 +313,17 @@ function DecidedRowView({ row }: { row: DecidedRow }) {
         aria-hidden="true"
       />
       <span className="apv-decided-orch mono">{row.orch}</span>
+      <span className="apv-decided-prompt truncate" title={preview || undefined}>
+        {preview || "-"}
+      </span>
       <span className="apv-decided-text">
         {row.approved ? "approved" : "declined"} by {row.by} · <LocalTime iso={row.at} />
       </span>
+      {row.runId && (
+        <Link href={`/runs/${row.runId}`} className="apv-runlink">
+          View run →
+        </Link>
+      )}
     </div>
   );
 }

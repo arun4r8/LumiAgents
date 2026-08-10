@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
 import OverviewClient, {
   type FleetAgent,
   type StreamEvent,
   type ThroughputBucket,
+  type UrgentApproval,
 } from "@/components/overview-client";
 import FirstRunNote from "@/components/first-run-note";
 import { roleOf } from "@/lib/role";
@@ -71,6 +73,7 @@ export default async function OverviewPage() {
     weekCleanRes,
     weekSettledRes,
     pendingRes,
+    urgentRes,
     dayRunsRes,
     openRunsRes,
     stepsRes,
@@ -102,6 +105,16 @@ export default async function OverviewPage() {
     supabase.schema("orchestration").from("approvals")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
+
+    // The few most urgent pending approvals, for the inline decide panel.
+    // Soonest expiry first, because that is the only ordering that matters when
+    // the thing being surfaced is a deadline. Nulls last: an approval with no
+    // expiry is never the most urgent one.
+    supabase.schema("orchestration").from("approvals")
+      .select("id, prompt, created_at, expires_at, run_id, runs(orchestrations(name))")
+      .eq("status", "pending")
+      .order("expires_at", { ascending: true, nullsFirst: false })
+      .limit(3),
 
     // 24h of runs drives the throughput chart and the "nothing failed" line.
     supabase.schema("orchestration").from("runs")
@@ -236,6 +249,62 @@ export default async function OverviewPage() {
 
   const working = fleet.filter((f) => f.state === "running").length;
 
+  // Shape the urgent approvals for the inline decide panel.
+  const urgent: UrgentApproval[] = ((urgentRes.data ?? []) as unknown as {
+    id: string;
+    prompt: string;
+    created_at: string;
+    expires_at: string | null;
+    run_id: string | null;
+    runs: { orchestrations: { name: string } | null } | null;
+  }[]).map((a) => ({
+    id: a.id,
+    prompt: a.prompt,
+    createdAt: a.created_at,
+    expiresAt: a.expires_at,
+    runId: a.run_id,
+    orchestration: bareOrchestration(a.runs?.orchestrations?.name ?? "") || "-",
+  }));
+
+  /**
+   * Decide an approval without leaving Overview.
+   *
+   * The pre-redesign Overview could approve and reject in place and the
+   * redesign dropped it, leaving a number that told you something was waiting
+   * but not letting you do anything about it. This is the same POST the
+   * Approvals screen makes; getSession() is valid here because a server action
+   * runs in a request context, unlike a server render.
+   */
+  async function decideApproval(formData: FormData): Promise<void> {
+    "use server";
+    const approvalId = formData.get("approvalId") as string;
+    const approved = formData.get("status") === "approved";
+    const notes = formData.get("notes") as string | null;
+
+    const sb = await createClient();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error("No active session");
+
+    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
+    const res = await fetch(`${runtimeUrl}/api/approvals/${approvalId}/respond`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        approved,
+        ...(notes?.trim() ? { notes: notes.trim() } : {}),
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Worker responded ${res.status}: ${await res.text()}`);
+    }
+
+    revalidatePath("/overview");
+    revalidatePath("/approvals");
+  }
+
   return (
     <>
       {showFirstRun && (
@@ -245,6 +314,8 @@ export default async function OverviewPage() {
         />
       )}
       <OverviewClient
+        urgent={urgent}
+        decideApproval={decideApproval}
         working={working}
         pending={pending}
         failed24={failed24}
