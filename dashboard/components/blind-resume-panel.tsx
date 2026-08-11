@@ -134,7 +134,7 @@ export function BlindResumePanel({ startRedaction, getRedactionResult, initialRu
     if (!file || phase === "running") return;
     const name = file.name.toLowerCase();
     if (!TEXT_EXTENSIONS.some((ext) => name.endsWith(ext))) {
-      setError("Only .txt and .md files can be read here. Send a PDF or DOCX to Angie in chat instead.");
+      setError("Only .txt and .md files can be read here. Attach a PDF to Angie in chat, which reads it directly.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
@@ -210,8 +210,8 @@ export function BlindResumePanel({ startRedaction, getRedactionResult, initialRu
               disabled={running}
             />
             <span className="hint">
-              PDF and DOCX are not parsed here. Send those to Angie in chat, which already handles
-              the conversion, then paste the text back.
+              PDF is not parsed here. Attach it to Angie in chat instead: she passes the file
+              straight to the model, so there is no need to paste the text back.
             </span>
           </div>
 

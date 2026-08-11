@@ -21,7 +21,14 @@ import { z } from "zod";
  */
 
 const inputSchema = z.object({
-  resume_text: z.string().min(1).describe("Raw resume text to redact"),
+  // Either is enough. Text is the ordinary path; the PDF exists because resumes
+  // arrive as PDFs and nothing in the runtime can extract their text (pdf-lib
+  // creates PDFs, it does not parse them), so the model reads the file directly.
+  resume_text: z.string().default("").describe("Raw resume text to redact. Omit when supplying resume_pdf_base64."),
+  resume_pdf_base64: z
+    .string()
+    .optional()
+    .describe("Base64 PDF of the resume, read directly by the model. Supplied automatically when a PDF is attached in chat."),
   candidate_code: z
     .string()
     .optional()
@@ -144,6 +151,17 @@ export default defineOrchestration({
   },
 
   async run(ctx, input) {
+    const pdf = input.resume_pdf_base64
+      ? [{ base64: input.resume_pdf_base64, mediaType: "application/pdf" }]
+      : undefined;
+
+    if (!input.resume_text.trim() && !pdf) {
+      throw new Error(
+        "Supply either resume_text or resume_pdf_base64. Neither was provided, " +
+          "so there is nothing to redact.",
+      );
+    }
+
     const identifiers = await llm_extract(ctx, {
       name: "find-identifiers",
       prompt:
@@ -153,7 +171,8 @@ export default defineOrchestration({
         `document we send to a client. Include the first name on its own, the surname on its own, any ` +
         `shortened or informal form, and the possessive stem (for "John's", list "John").\n\n` +
         `Return empty arrays for categories that genuinely do not appear.`,
-      input: { resume_text: input.resume_text },
+      input: { resume_text: input.resume_text || "(supplied as an attached PDF)" },
+      ...(pdf ? { documents: pdf } : {}),
       schema: identifiersSchema,
     });
 
@@ -185,9 +204,10 @@ export default defineOrchestration({
           ? `Open the document with the line "Candidate ${input.candidate_code}" in place of the name.\n`
           : `Do not add any replacement label where the name was.\n`),
       input: {
-        resume_text: input.resume_text,
+        resume_text: input.resume_text || "(supplied as an attached PDF)",
         identifiers_to_remove: identifiers,
       },
+      ...(pdf ? { documents: pdf } : {}),
       schema: redactedSchema,
     });
 

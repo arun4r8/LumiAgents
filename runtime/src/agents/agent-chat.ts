@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AGENTS } from "../../../agents";
 import type { AgentDefinition, AgentTool, ToolMapping } from "../../../agents";
-import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, ensurePdfBase64 } from "../utils/pdf";
+import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, PDF_FIELD_BY_TOOL, ensurePdfBase64 } from "../utils/pdf";
 
 const MODEL = "claude-sonnet-4-6";
 const MAX_TOOL_ROUNDS = 6;
@@ -214,9 +214,20 @@ async function dispatchTool(
         const pdfBase64s = await Promise.all(files.map(ensurePdfBase64));
         payload = { ...payload, pdfBase64s };
       } else {
-        // Single-file tools: use the first attached file.
+        // Single-file tools: use the first attached file, in the field that tool
+        // actually declares. Assuming one field name here is what broke #166.
+        const field = PDF_FIELD_BY_TOOL[toolName];
+        if (!field) {
+          return {
+            result: {
+              error:
+                `${toolName} is listed in PDF_REQUIRED_TOOLS but has no entry in ` +
+                `PDF_FIELD_BY_TOOL, so the attachment cannot be passed to it.`,
+            },
+          };
+        }
         const pdfBase64 = await ensurePdfBase64(files[0]!);
-        payload = { ...payload, solicitationPdfBase64: pdfBase64 };
+        payload = { ...payload, [field]: pdfBase64 };
       }
     } catch (err) {
       return { result: { error: err instanceof Error ? err.message : "PDF conversion failed" } };
