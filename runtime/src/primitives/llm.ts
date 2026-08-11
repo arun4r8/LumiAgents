@@ -126,6 +126,49 @@ export async function llm_decide<const T extends string>(
 
 // ─── llm_extract ─────────────────────────────────────────────────────────────
 
+/**
+ * A file handed to the model as a native document block rather than as text.
+ *
+ * Exists because some inputs cannot be stringified into the JSON context: a
+ * resume arrives as a PDF, and `pdf-lib` (the only PDF library in the runtime)
+ * creates PDFs rather than extracting text from them. The model reads the file
+ * directly instead, which is the route integrations/anthropic/score-resume.ts
+ * already takes for resume scoring.
+ */
+export interface LlmDocument {
+  /** Base64-encoded file bytes. */
+  base64: string;
+  /** Currently only "application/pdf" is accepted by the document block API. */
+  mediaType: string;
+}
+
+/**
+ * Build the user message content.
+ *
+ * Returns the bare prompt STRING when there are no documents, which is what this
+ * did before documents existed. That matters: every orchestration in the registry
+ * goes through here, so the no-document path has to produce exactly the request it
+ * always did, not a one-element content array that merely behaves the same.
+ */
+function buildUserContent(
+  prompt: string,
+  documents?: LlmDocument[],
+): string | Anthropic.ContentBlockParam[] {
+  if (!documents || documents.length === 0) return prompt;
+  return [
+    ...documents.map((d) => ({
+      type: "document" as const,
+      source: {
+        type: "base64" as const,
+        media_type: d.mediaType as "application/pdf",
+        data: d.base64,
+      },
+    })),
+    // Text last so the instruction reads as being about the documents above it.
+    { type: "text" as const, text: prompt },
+  ];
+}
+
 export async function llm_extract<T extends z.ZodTypeAny>(
   ctx: RunContext,
   options: {
@@ -133,6 +176,8 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     prompt: string;
     input: unknown;
     schema: T;
+    /** Files the model should read directly. Omit for the ordinary text path. */
+    documents?: LlmDocument[];
   },
 ): Promise<z.infer<T>> {
   const db = new SupabaseClient(ctx.env);
@@ -150,10 +195,24 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     step_name: options.name,
     step_type: "llm_extract",
     status: "running",
-    input: { prompt: options.prompt, context: options.input },
+    input: {
+      prompt: options.prompt,
+      context: options.input,
+      // Metadata only. Persisting base64 here would put a multi-megabyte file in
+      // run_steps.input and in every run detail view that reads it back.
+      ...(options.documents?.length
+        ? {
+            documents: options.documents.map((d) => ({
+              mediaType: d.mediaType,
+              approxBytes: Math.round((d.base64.length * 3) / 4),
+            })),
+          }
+        : {}),
+    },
   });
 
   const userPrompt = `${options.prompt}\n\nContext:\n${JSON.stringify(options.input, null, 2)}`;
+  const userContent = buildUserContent(userPrompt, options.documents);
   const toolSchema = zodToJsonSchema(options.schema);
 
   // In Workflow mode, wrap the LLM call in step.do() for durability + retry
@@ -174,7 +233,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
             },
           ],
           tool_choice: { type: "tool", name: "extract" },
-          messages: [{ role: "user", content: userPrompt }],
+          messages: [{ role: "user", content: userContent }],
         });
 
         const toolUse = response.content.find((b) => b.type === "tool_use");
@@ -226,7 +285,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
         },
       ],
       tool_choice: { type: "tool", name: "extract" },
-      messages: [{ role: "user", content: userPrompt }],
+      messages: [{ role: "user", content: userContent }],
     });
 
     const toolUse = response.content.find((b) => b.type === "tool_use");

@@ -3,9 +3,26 @@ import mammoth from "mammoth";
 import type { FileAttachment } from "../agents/agent-chat";
 
 // Tools that require PDF input: intercept and convert at dispatch time.
-export const PDF_REQUIRED_TOOLS = new Set(["assess_opportunity", "score_resumes"]);
+export const PDF_REQUIRED_TOOLS = new Set([
+  "assess_opportunity",
+  "score_resumes",
+  "redact_resume",
+]);
 // Which of those tools accept multiple PDFs (batch).
 export const PDF_BATCH_TOOLS = new Set(["score_resumes"]);
+
+/**
+ * Where each single-PDF tool expects the bytes.
+ *
+ * This used to be hardcoded to `solicitationPdfBase64` for every non-batch tool,
+ * which silently gave the wrong field name to anything that was not
+ * assess_opportunity. #166: redact_resume was added to the set without a field,
+ * and the orchestration received a payload it did not understand.
+ */
+export const PDF_FIELD_BY_TOOL: Record<string, string> = {
+  assess_opportunity: "solicitationPdfBase64",
+  redact_resume: "resume_pdf_base64",
+};
 
 // ─── Format detection ─────────────────────────────────────────────────────────
 
