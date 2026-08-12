@@ -22,6 +22,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "search_knowledge",
+      examples: [
+        "What do we know about past performance on cloud migrations?",
+      ],
       description:
         "Answer a question from the shared central knowledge base (RAG). Returns a cited answer drawn only from ingested documents. Use for any 'what do we know about…' question.",
       inputSchema: {
@@ -35,6 +38,9 @@ Do not use em dashes.`,
     },
     {
       name: "retag_document",
+      examples: [
+        "Lock the FY25 financial model to restricted",
+      ],
       description:
         "Re-tag a document's corpus and/or sensitivity: move it between corpora or lock it to 'restricted' (ops-only). Use when curating access to knowledge.",
       inputSchema: {
@@ -49,6 +55,9 @@ Do not use em dashes.`,
     },
     {
       name: "knowledge_inventory",
+      examples: [
+        "Give me an inventory of the knowledge base",
+      ],
       description:
         "Summarize the knowledge base: document counts by corpus and sensitivity, plus the most recent documents. Use to see coverage or find mis-tagged material.",
       inputSchema: { type: "object", properties: {} },

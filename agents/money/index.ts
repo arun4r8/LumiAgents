@@ -16,6 +16,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "generate_financial_report",
+      examples: [
+        "Summarize revenue by contract for Q1 2025",
+      ],
       description: "Generate a structured financial report for a date range.",
       inputSchema: {
         type: "object",
@@ -37,6 +40,9 @@ Do not use em dashes.`,
     },
     {
       name: "query_data",
+      examples: [
+        "Which contracts are burning over budget?",
+      ],
       description: "Run a natural-language query against the financial database.",
       inputSchema: {
         type: "object",

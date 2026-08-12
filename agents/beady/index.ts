@@ -19,6 +19,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "assess_opportunity",
+      examples: [
+        "Assess this solicitation for go/no-go",
+      ],
       description: "Run a full GovCon qualification assessment for an opportunity already in the database. Produces a 5-dimensional score, go/no-go recommendation, and executive memo. If the user attaches a solicitation PDF it will be forwarded to the pipeline automatically; only a single PDF is supported per assessment.",
       inputSchema: {
         type: "object",
@@ -32,6 +35,9 @@ Do not use em dashes.`,
     },
     {
       name: "draft_rfi",
+      examples: [
+        "Draft an RFI response for this notice",
+      ],
       description:
         "Draft a Sources Sought / RFI response for an opportunity, grounded in Lumiture's profile and past performance. Runs in the background; the finished draft appears on the RFI Drafts dashboard page. Use when the user wants to respond to a Sources Sought / RFI.",
       inputSchema: {
@@ -47,6 +53,9 @@ Do not use em dashes.`,
     },
     {
       name: "find_industry_days",
+      examples: [
+        "Any industry days worth attending soon?",
+      ],
       description:
         "Discover upcoming government agency industry days / vendor-outreach / small-business matchmaking events (SAM.gov Special Notices + web), scored for relevance to Lumiture. Runs in the background; results land on the Industry Days dashboard page. Use when the user wants to find events to attend.",
       inputSchema: {
@@ -59,6 +68,9 @@ Do not use em dashes.`,
     },
     {
       name: "seed_past_performance",
+      examples: [
+        "Add this contract to our past performance",
+      ],
       description: "Embed a past performance record into the GovCon RAG index so it is available for future assessments.",
       inputSchema: {
         type: "object",
@@ -70,6 +82,9 @@ Do not use em dashes.`,
     },
     {
       name: "search_all_opportunities",
+      examples: [
+        "Find SBIR opportunities closing this month",
+      ],
       description: "Parallel sweep of SAM.gov AND DoD SBIR/STTR topics in one shot. Scores everything together and saves the shortlist. Prefer this over calling the two search tools separately.",
       inputSchema: {
         type: "object",
@@ -87,6 +102,9 @@ Do not use em dashes.`,
     },
     {
       name: "get_recent_opportunities",
+      examples: [
+        "What did the sweep turn up today?",
+      ],
       description:
         "Get opportunities the sweep has found/touched recently, ranked by fit score (e.g. 'top 3 contracts from today's sweep'). Reads existing results; does not run a new sweep.",
       inputSchema: {

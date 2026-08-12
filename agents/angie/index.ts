@@ -14,6 +14,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "score_resumes",
+      examples: [
+        "Screen these resumes for a cleared IT PM role",
+      ],
       description: "Score and rank candidate résumés against a job description using the AI pipeline. Attach the PDF résumés to this message (multiple allowed; batch processing is supported). Non-PDF files are converted automatically.",
       inputSchema: {
         type: "object",
@@ -26,6 +29,9 @@ Do not use em dashes.`,
     },
     {
       name: "source_candidates",
+      examples: [
+        "Find 5 senior Java developers in DC",
+      ],
       description: "Search Apollo for candidates matching a role. Runs a sourcing workflow that scores and filters results.",
       inputSchema: {
         type: "object",
@@ -40,6 +46,9 @@ Do not use em dashes.`,
     },
     {
       name: "format_resume",
+      examples: [
+        "Reformat this resume for a data scientist proposal",
+      ],
       description: "Reformat an employee's resume for a consulting client proposal. Tailors content to a target role, removes weak language, quantifies impact, and trims to 3 pages.",
       inputSchema: {
         type: "object",
@@ -57,6 +66,10 @@ Do not use em dashes.`,
     },
     {
       name: "redact_resume",
+      examples: [
+        "Make a blind copy of this resume for the client",
+        "Strip the name and contact details off this resume",
+      ],
       description:
         "Produce a blind (client-submission) copy of a resume: strips the candidate's name, contact details, personal links and referees so a client evaluates the experience before the person. Returns redaction-verified text ready to render on Lumiture letterhead. Use this when asked for a blind, anonymised or client-ready resume. This does NOT redact employer names.",
       inputSchema: {
@@ -74,6 +87,9 @@ Do not use em dashes.`,
     },
     {
       name: "get_recent_candidates",
+      examples: [
+        "Who scored well in the last batch?",
+      ],
       description:
         "Get top-scored candidates from résumé scoring jobs run recently (e.g. 'who scored well from today's batch'). Reads existing results; does not score anything new.",
       inputSchema: {
