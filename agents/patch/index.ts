@@ -16,6 +16,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "create_ticket",
+      examples: [
+        "Create a ticket for the VPN issue affecting the BD team",
+      ],
       description: "Create a Jira ticket from a plain-language request.",
       inputSchema: {
         type: "object",
@@ -30,6 +33,9 @@ Do not use em dashes.`,
     },
     {
       name: "search_tickets",
+      examples: [
+        "Search for open critical tickets",
+      ],
       description: "Search Jira tickets with a JQL query.",
       inputSchema: {
         type: "object",
@@ -42,6 +48,9 @@ Do not use em dashes.`,
     },
     {
       name: "update_ticket",
+      examples: [
+        "Move LUM-142 to in progress",
+      ],
       description: "Transition or comment on an existing Jira ticket.",
       inputSchema: {
         type: "object",
@@ -55,6 +64,9 @@ Do not use em dashes.`,
     },
     {
       name: "staff_request",
+      examples: [
+        "Request a new hire for the CISA contract",
+      ],
       description: "Log a staff request (new hire, equipment, access, etc.) and create an HR Jira ticket.",
       inputSchema: {
         type: "object",
@@ -72,6 +84,9 @@ Do not use em dashes.`,
     },
     {
       name: "query_documents",
+      examples: [
+        "What does the CISA SOW say about surge support?",
+      ],
       description: "Search the internal document knowledge base.",
       inputSchema: {
         type: "object",

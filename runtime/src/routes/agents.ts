@@ -9,6 +9,7 @@ import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
 import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
 import { parseBotActivity, sendBotReplyWithToken, downloadTeamsFiles } from "../../../integrations/teams/bot";
+import { suggestedPromptsFor } from "../../../agents";
 import { json, requireUser, rateLimited, schemaToJsonSchema } from "./helpers";
 
 /**
@@ -101,13 +102,24 @@ export async function handleAgents(
     // (getSession() returns null in RSC), so gating it here broke the whole Agents list.
     try {
       const rows = await new SupabaseClient(env).getCatalogAgents();
-      return json(rows.map((r) => ({
-        slug: r.slug,
-        displayName: r.display_name,
-        card: r.card,
-        source: r.source,
-        lifecycle: r.lifecycle,
-      })));
+      return json(rows.map((r) => {
+        // For a code agent the tools are the source of truth, so its suggestions
+        // are derived rather than read from card.suggestedPrompts. That column was
+        // seeded once by a migration and has been drifting behind every tool added
+        // since (#165); redact_resume had no suggestion at all. A config agent has
+        // no code definition, so it keeps whatever its card carries.
+        const derived = suggestedPromptsFor(r.slug);
+        const card = derived.length > 0
+          ? { ...(r.card as Record<string, unknown> ?? {}), suggestedPrompts: derived }
+          : r.card;
+        return {
+          slug: r.slug,
+          displayName: r.display_name,
+          card,
+          source: r.source,
+          lifecycle: r.lifecycle,
+        };
+      }));
     } catch (err) {
       console.error("[agents] catalogue read failed:", err);
       return json([]);

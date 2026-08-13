@@ -445,6 +445,28 @@ export default function AgentChatClient({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
       >
+        {/* Suggestions stayed in the empty state, so the moment a conversation
+            started there was no way to find out what else the agent could do.
+            #165: keep them reachable, collapsed so they do not crowd the box. */}
+        {suggestedPrompts.length > 0 && messages.length > 0 && (
+          <details className="chat-more">
+            <summary>What else can {agentName} do?</summary>
+            <div className="ex-chips">
+              {suggestedPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  className="ex-chip"
+                  onClick={() => send(prompt)}
+                  disabled={thinking}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </details>
+        )}
+
         {pendingFiles.length > 0 && (
           <div className="chat-files">
             {pendingFiles.map((f) => (

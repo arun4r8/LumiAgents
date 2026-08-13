@@ -20,6 +20,9 @@ Do not use em dashes.`,
   tools: [
     {
       name: "sweep_awards",
+      examples: [
+        "Run a fresh award sweep",
+      ],
       description:
         "Run a fresh Tavily sweep for industry recognition awards and government small business award programs. Scores each on fit, prestige, and application effort, then saves the shortlist. Use this when the user wants to discover new awards or refresh the current list.",
       inputSchema: {
@@ -42,6 +45,9 @@ Do not use em dashes.`,
     },
     {
       name: "send_award_digest",
+      examples: [
+        "Send the award digest to Tommy",
+      ],
       description:
         "Send the current award digest email to a specific subscription immediately, bypassing the normal cadence. Use this when the user wants to push the latest awards to a recipient right now.",
       inputSchema: {
@@ -57,6 +63,9 @@ Do not use em dashes.`,
     },
     {
       name: "plan_calendar",
+      examples: [
+        "Plan a month of posts about GovCon AI adoption",
+      ],
       description:
         "Propose a run of content-calendar post ideas from a theme and add them as idea rows (weekly cadence) for the team to review. Use when the user wants to fill out the eminence calendar.",
       inputSchema: {
@@ -71,6 +80,9 @@ Do not use em dashes.`,
     },
     {
       name: "draft_content",
+      examples: [
+        "Draft the post copy for the cloud modernization entry",
+      ],
       description:
         "Draft an eminence post (copy + asset brief) for a specific content-calendar entry, grounded in the company profile. Defaults to LinkedIn; pass channel to draft for another surface (e.g. Instagram). Runs in the background; the draft appears on the Content Calendar dashboard page with status 'ready'.",
       inputSchema: {
@@ -88,6 +100,9 @@ Do not use em dashes.`,
     },
     {
       name: "get_recent_awards",
+      examples: [
+        "Which open awards are high prestige?",
+      ],
       description:
         "Get awards the sweep has found/touched recently, ranked by fit score (e.g. 'what have you found in the awards pipeline'). Reads existing results; does not run a new sweep.",
       inputSchema: {
@@ -100,6 +115,9 @@ Do not use em dashes.`,
     },
     {
       name: "get_recent_content",
+      examples: [
+        "What has moved in the content calendar this week?",
+      ],
       description:
         "Get content-calendar items updated recently (e.g. 'what have you drafted today'). Reads existing entries; does not draft anything new.",
       inputSchema: {
