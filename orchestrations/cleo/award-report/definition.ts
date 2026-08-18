@@ -221,7 +221,7 @@ function renderEmail(
     cadence: sub.cadence,
     filterBits,
     cards,
-    footer: "Filtered to this subscription's eligibility profile. Sent by Cleo · manage this report from the LumiAgents dashboard &rarr; Awards.",
+    footer: "Filtered to this subscription's eligibility profile. Sent by Cleo &middot; manage this digest in LumiAgents under Settings &rarr; Subscriptions.",
   });
 
   return { subject, html };

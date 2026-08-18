@@ -196,7 +196,7 @@ function renderEmail(
     cadence: sub.cadence,
     filterBits,
     cards,
-    footer: "Sent by Beady · manage this report from the LumiAgents dashboard &rarr; Reports.",
+    footer: "Sent by Beady &middot; manage this digest in LumiAgents under Settings &rarr; Subscriptions.",
   });
 
   return { subject, html };
