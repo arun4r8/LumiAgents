@@ -16,6 +16,19 @@ export interface TeamsEnv {
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   /** Azure Bot App ID (from Bot Framework registration). */
   TEAMS_BOT_APP_ID?: string;
+  /**
+   * Directory (tenant) GUID. Required when the bot registration is SingleTenant.
+   *
+   * Azure deprecated MultiTenant bot creation, so every new registration is
+   * SingleTenant. Absent, the legacy multi-tenant flow is used, which still works
+   * for registrations made before the deprecation.
+   *
+   * The difference is not cosmetic. A SingleTenant bot takes its token from the
+   * tenant authority, and its inbound activities are signed by the tenant rather
+   * than by Bot Framework. Validate one against the other and every request 401s,
+   * which is indistinguishable from the bot being offline.
+   */
+  TEAMS_BOT_TENANT_ID?: string;
   /** Azure Bot App Secret (from Bot Framework registration). */
   TEAMS_BOT_APP_SECRET?: string;
 }
@@ -45,8 +58,11 @@ export function assertBotConfigured(env: TeamsEnv): void {
 export async function getBotToken(env: TeamsEnv): Promise<string> {
   assertBotConfigured(env);
 
+  // SingleTenant bots mint against their own tenant authority; multi-tenant ones
+  // against the shared botframework.com authority.
+  const authority = env.TEAMS_BOT_TENANT_ID ?? "botframework.com";
   const resp = await fetch(
-    "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token",
+    `https://login.microsoftonline.com/${authority}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -70,27 +86,53 @@ export async function getBotToken(env: TeamsEnv): Promise<string> {
 
 // Module-level JWKS cache: { keys, fetchedAt }. Workers isolates are short-lived
 // so this mainly avoids redundant fetches within a single invocation burst.
-let jwksCache: { keys: JsonWebKey[]; fetchedAt: number } | null = null;
+let jwksCache: { url: string; keys: JsonWebKey[]; fetchedAt: number } | null = null;
 const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const BOT_FRAMEWORK_OIDC =
   "https://login.botframework.com/v1/.well-known/openidconfiguration";
-const KNOWN_ISSUERS = new Set([
+
+/** Issuers that sign a multi-tenant bot's inbound activities. */
+const BOT_FRAMEWORK_ISSUERS = [
   "https://api.botframework.com",
   "https://sts.windows.net/d6d49420-f39b-4df7-a1dc-d59a935871db/",
-]);
+];
 
-async function fetchJwks(): Promise<JsonWebKey[]> {
-  if (jwksCache && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS) {
+/**
+ * Where the signing keys live, and who is allowed to have issued the token.
+ *
+ * These two move together. Accepting a Bot Framework issuer while fetching
+ * tenant keys (or the reverse) is the whole bug this fixes, so they are returned
+ * as one value rather than read from two places.
+ */
+export function trustFor(tenantId?: string): { oidc: string; issuers: Set<string> } {
+  if (!tenantId) {
+    return { oidc: BOT_FRAMEWORK_OIDC, issuers: new Set(BOT_FRAMEWORK_ISSUERS) };
+  }
+  return {
+    oidc: `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
+    // v2 tokens carry the /v2.0 issuer, v1 the sts.windows.net form. Accept both
+    // rather than guess which the Connector sends.
+    issuers: new Set([
+      `https://login.microsoftonline.com/${tenantId}/v2.0`,
+      `https://sts.windows.net/${tenantId}/`,
+    ]),
+  };
+}
+
+async function fetchJwks(oidcUrl: string): Promise<JsonWebKey[]> {
+  // Keyed by URL: one shared cache would serve tenant keys for a Bot Framework
+  // lookup, or the reverse, if both ever ran in the same isolate.
+  if (jwksCache && jwksCache.url === oidcUrl && Date.now() - jwksCache.fetchedAt < JWKS_TTL_MS) {
     return jwksCache.keys;
   }
-  const oidcResp = await fetch(BOT_FRAMEWORK_OIDC);
+  const oidcResp = await fetch(oidcUrl);
   if (!oidcResp.ok) throw new Error(`OIDC config fetch failed: ${oidcResp.status}`);
   const oidc = (await oidcResp.json()) as { jwks_uri: string };
   const jwksResp = await fetch(oidc.jwks_uri);
   if (!jwksResp.ok) throw new Error(`JWKS fetch failed: ${jwksResp.status}`);
   const jwks = (await jwksResp.json()) as { keys: (JsonWebKey & { kid?: string })[] };
-  jwksCache = { keys: jwks.keys, fetchedAt: Date.now() };
+  jwksCache = { url: oidcUrl, keys: jwks.keys, fetchedAt: Date.now() };
   return jwks.keys;
 }
 
@@ -107,6 +149,7 @@ function base64UrlToBytes(b64: string): Uint8Array {
 export async function verifyBotToken(
   authHeader: string | null,
   appId: string,
+  tenantId?: string,
 ): Promise<boolean> {
   if (!authHeader?.startsWith("Bearer ")) return false;
   const token = authHeader.slice(7);
@@ -128,10 +171,11 @@ export async function verifyBotToken(
   if (typeof payload.exp === "number" && payload.exp < now) return false;
   if (typeof payload.nbf === "number" && payload.nbf > now + 300) return false;
   if (payload.aud !== appId) return false;
-  if (!payload.iss || !KNOWN_ISSUERS.has(payload.iss)) return false;
+  const trust = trustFor(tenantId);
+  if (!payload.iss || !trust.issuers.has(payload.iss)) return false;
 
   try {
-    const keys = await fetchJwks();
+    const keys = await fetchJwks(trust.oidc);
     const jwk = (keys as (JsonWebKey & { kid?: string })[]).find((k) => k.kid === header.kid);
     if (!jwk) return false;
 

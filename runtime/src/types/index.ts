@@ -37,6 +37,8 @@ export interface Env {
   TEAMS_INCOMING_WEBHOOK_URL?: string;
   TEAMS_BOT_APP_ID?: string;
   TEAMS_BOT_APP_SECRET?: string;
+  /** Required for SingleTenant bot registrations. See integrations/teams/base.ts. */
+  TEAMS_BOT_TENANT_ID?: string;
   // GitHub integration (Obsidian vault sync)
   VAULT_OWNER: string;           // set in wrangler.toml [vars]; org/user that owns LumiKnowledge
   VAULT_REPO: string;            // set in wrangler.toml [vars]

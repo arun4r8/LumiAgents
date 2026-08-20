@@ -10,6 +10,11 @@
  * Azure Bot setup:
  *   1. Go to portal.azure.com → Azure Bot resource (or Bot Channels Registration)
  *   2. Note the "Microsoft App ID" → TEAMS_BOT_APP_ID
+ *   2a. Note the "App Tenant ID" → TEAMS_BOT_TENANT_ID. Azure deprecated
+ *       MultiTenant bot creation, so the registration is SingleTenant and this
+ *       is required. Without it the runtime validates against Bot Framework's
+ *       issuer instead of the tenant's and rejects every activity with a 401,
+ *       which looks exactly like the bot never receiving anything.
  *   3. Under "Configuration" → manage → New client secret → TEAMS_BOT_APP_SECRET
  *   4. Set messaging endpoint to: https://lumiagents-runtime.<account>.workers.dev/api/teams/bot
  *   5. Add "Microsoft Teams" channel in the bot resource
@@ -90,7 +95,7 @@ export async function parseBotActivity(
   env: TeamsEnv,
 ): Promise<ParsedBotMessage> {
   const authHeader = request.headers.get("Authorization");
-  const isValid = await verifyBotToken(authHeader, env.TEAMS_BOT_APP_ID ?? "");
+  const isValid = await verifyBotToken(authHeader, env.TEAMS_BOT_APP_ID ?? "", env.TEAMS_BOT_TENANT_ID);
 
   if (!isValid) {
     return {
