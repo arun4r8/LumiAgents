@@ -1,0 +1,13 @@
+{
+    "orchestration_tables": 23,
+    "public_tables": 29,
+    "orchestration_rls_off": [
+        "award_scored"
+    ],
+    "key_functions": [
+        "custom_access_token_hook",
+        "is_ops",
+        "list_orchestration_tables"
+    ],
+    "vector_schema": "extensions"
+}

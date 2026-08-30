@@ -40,6 +40,14 @@
 --   Supabase dashboard → SQL Editor → paste → Run. Or:
 --     psql "$DATABASE_URL" -f supabase/bootstrap-fresh-project.sql
 --
+-- IS IT STILL CORRECT?
+--   `scripts/verify-db-rebuild.sh` proves it -- it spins a throwaway Postgres,
+--   runs this file, replays every migration in order, and compares the result
+--   against supabase/expected-shape.json. CI runs it on every change under
+--   supabase/ (issue #125). If you add a migration that assumes a shape this
+--   file does not create, that build goes red immediately rather than during
+--   the next disaster recovery.
+--
 -- SCOPE / FIDELITY
 --   These tables are vestigial. Most are empty in production, several are
 --   dropped again by later migrations in the same chain

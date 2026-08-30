@@ -1,0 +1,52 @@
+# ============================================================================
+# Verify the database can still be rebuilt from scratch (issue #125)
+#
+# The migration chain is not self-contained -- it was written against the
+# n8n-era schema, which was created by hand and never captured in a migration.
+# `supabase/bootstrap-fresh-project.sql` closes that gap. This job proves the
+# gap STAYS closed.
+#
+# Without it, the next migration that assumes an already-migrated shape does not
+# fail until someone next tries to rebuild -- during a disaster, or while
+# standing up a new environment. That is the worst possible moment to find out.
+# Standing up staging cost 7 sequential manual fixes for exactly this reason.
+#
+# Triggers on any change under supabase/ (the only way the chain can break),
+# plus weekly, because the image and its extensions move underneath us too.
+# ============================================================================
+name: DB Rebuild
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/verify-db-rebuild.sh"
+      - ".github/workflows/db-rebuild.yml"
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    name: Rebuild from scratch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest ships a psql, but not necessarily one matching the server
+      # major version. The script only runs plain SQL files, so any recent
+      # client works; this pins one rather than inheriting whatever the image has.
+      - name: Ensure psql is available
+        # `A || B && C` parses as `(A || B) && C` in bash, which would run the
+        # install even when psql is already present. Keep the branches explicit.
+        run: |
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Verify rebuild
+        run: ./scripts/verify-db-rebuild.sh

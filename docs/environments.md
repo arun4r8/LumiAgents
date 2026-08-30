@@ -305,6 +305,18 @@ The general shape: **`ADD COLUMN IF NOT EXISTS … CHECK (…)` is a trap.** If 
 
 All of these are **project settings, not schema**. `db push` will never create them, nothing in the repo will tell you they are missing, and each breaks the app in a different, non-obvious way.
 
+> **These are now asserted automatically (#140).** `scripts/check-supabase-settings.mjs`
+> reads both projects through the Management API and fails if any of them has drifted.
+> The section below stays authoritative for *why* each one matters; the script is what
+> notices when one changes months from now. Run it by hand with:
+>
+> ```bash
+> SUPABASE_ACCESS_TOKEN=$(security find-generic-password -s supabase-mgmt -a lumi -w) \
+>   node scripts/check-supabase-settings.mjs
+> ```
+>
+> It never writes — a drifted setting is reported, not repaired.
+
 **1. Exposed schemas (`public, graphql_public, orchestration`).**
 A new project exposes `public, graphql_public` only. `orchestration` is where essentially the entire platform lives — orchestrations, runs, run_steps, tool_calls, artifacts, approvals, documents. Leave it off and PostgREST returns `PGRST106` / "The schema must be one of the following" for every dashboard and runtime query against it. The database is *correct*; the API in front of it refuses to serve it. Note that `supabase/config.toml`'s `[api] schemas` applies to the **local** stack only — it does not configure a hosted project.
 
