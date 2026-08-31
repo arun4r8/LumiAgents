@@ -50,8 +50,21 @@ async function resolveConfigAgent(
  * ATTRIBUTION ONLY — the id of the signed-in end user whose chat message caused this
  * dispatch. routes/orchestrations.ts stamps it into `triggered_by_user_id` so the run
  * shows up for that user under enduser RLS. No route may grant access based on it.
+ *
+ * `agent_slug` (#177) names the agent this token was minted FOR. It is NARROWING ONLY:
+ * routes/orchestrations.ts uses it to look up that agent's declared knowledge corpora and
+ * clamp retrieval to them. It can never widen access — an unknown or absent slug simply
+ * leaves the orchestration's own scope in place.
+ *
+ * It is minted here, by the runtime, from the slug being routed to. The agent Worker does
+ * not hold SUPABASE_JWT_SECRET and so cannot forge or alter it, which is why the claim is
+ * trustworthy and a request header would not be.
  */
-async function mintDispatchToken(jwtSecret: string, actForUserId?: string): Promise<string> {
+async function mintDispatchToken(
+  jwtSecret: string,
+  actForUserId?: string,
+  agentSlug?: string,
+): Promise<string> {
   const enc = (s: string) =>
     btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
   const header = enc(JSON.stringify({ alg: "HS256", typ: "JWT" }));
@@ -60,6 +73,7 @@ async function mintDispatchToken(jwtSecret: string, actForUserId?: string): Prom
     sub: "agent-dispatch",
     user_role: "ops",
     ...(actForUserId ? { act_for: actForUserId } : {}),
+    ...(agentSlug ? { agent_slug: agentSlug } : {}),
     iat: now,
     exp: now + 300,
   }));
@@ -163,7 +177,7 @@ export async function handleAgents(
     // principal (agent → agent), carry through whoever it was already acting for rather
     // than losing attribution. Undefined for a genuine machine caller.
     const actFor = authResult.userId === "agent-dispatch" ? authResult.actFor : authResult.userId;
-    const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET, actFor);
+    const dispatchToken = await mintDispatchToken(env.SUPABASE_JWT_SECRET, actFor, slug);
 
     let body: { messages?: ChatMessage[]; files?: FileAttachment[]; conversationId?: string };
     try { body = await request.json() as typeof body; }

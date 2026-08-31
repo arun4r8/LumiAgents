@@ -14,6 +14,7 @@
  */
 
 import type { Env, OrchestrationDefinition, RunContext } from "./types";
+import type { KnowledgeScope } from "./agents/knowledge-access";
 import { z } from "zod";
 import { SupabaseClient } from "./db/client";
 import { PauseSignal } from "./primitives/pause";
@@ -48,6 +49,9 @@ export async function runOrchestrationInline(
   orch: AnyOrch,
   runId: string,
   input: unknown,
+  /** Caller's read scope (#177). Undefined for a direct run, where the orchestration's
+   *  own scope applies. Narrowing only — see routes/orchestrations.ts. */
+  knowledgeScope?: KnowledgeScope,
 ): Promise<InlineRunResult> {
   const model = await resolveOrchestrationModel(db, orch.name);
   let stepCounter = 0;
@@ -59,6 +63,7 @@ export async function runOrchestrationInline(
     idempotencyKey: (tool, ...parts) => `${runId}:${tool}:${parts.join(":")}`,
     fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
     model,
+    ...(knowledgeScope ? { knowledgeScope } : {}),
     // workflowStep intentionally omitted.
   };
 

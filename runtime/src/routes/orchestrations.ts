@@ -5,6 +5,8 @@ import { SupabaseClient } from "../db/client";
 import { runOrchestrationInline } from "../run-inline";
 import { json, schemaToJsonSchema, requireUser, requireOpsToken, rateLimited } from "./helpers";
 import type { AuthPrincipal } from "./helpers";
+import type { KnowledgeScope } from "../agents/knowledge-access";
+import { scopeForAgent, scopeForConfigAgent } from "../agents/knowledge-access";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -68,6 +70,39 @@ async function parseAndCreateRun(
   return { orch, db, run, input: parsed.data };
 }
 
+/**
+ * The knowledge scope a run should retrieve under, derived from the CALLER (#177).
+ *
+ * `auth.agentSlug` comes from the `agent_slug` claim the runtime itself mints onto a
+ * dispatch token — never from the request body or a header, so a caller cannot choose
+ * its own scope.
+ *
+ *   · config agent (has a catalog row) → its declared corpora, intersected with
+ *     [shared, <ownSlug>, enduser]. This is the #177 fix: a config agent that wires
+ *     `dewey/knowledge-search` no longer inherits dewey's private corpus.
+ *   · code agent (no catalog row)      → scopeForAgent(slug). Each of the six wires only
+ *     its own retrieval orchestration, so caller and donor slug coincide and this is
+ *     identical to the pre-#177 behaviour.
+ *   · no slug / lookup failure         → undefined, leaving the orchestration's own scope
+ *     in place. Retrieval must not start failing because the catalog is briefly
+ *     unreachable; the fallback is the previous behaviour, never a wider one.
+ */
+async function callerKnowledgeScope(
+  db: SupabaseClient,
+  auth: Pick<AuthPrincipal, "agentSlug">,
+): Promise<KnowledgeScope | undefined> {
+  const slug = auth.agentSlug;
+  if (!slug) return undefined;
+  try {
+    const row = await db.getCatalogAgent(slug);
+    return row
+      ? scopeForConfigAgent(slug, row.knowledge_corpora)
+      : scopeForAgent(slug);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function handleOrchestrations(
   request: Request,
   env: Env,
@@ -89,11 +124,17 @@ export async function handleOrchestrations(
     const name = decodeURIComponent(runMatch[1] ?? "");
     const created = await parseAndCreateRun(request, env, name, authResult);
     if ("error" in created) return created.error;
-    const { run } = created;
+    const { run, db } = created;
 
     await env.ORCHESTRATION_WORKFLOW.create({
       id: run.id,
-      params: { runId: run.id, orchestrationName: name },
+      // knowledgeScope travels in params so the durable path clamps retrieval the same
+      // way the inline path does (#177). Serializable by construction.
+      params: {
+        runId: run.id,
+        orchestrationName: name,
+        knowledgeScope: await callerKnowledgeScope(db, authResult),
+      },
     });
 
     return json({ runId: run.id, status: "running" }, 202);
@@ -136,7 +177,8 @@ export async function handleOrchestrations(
     if ("error" in created) return created.error;
     const { orch, db, run, input } = created;
 
-    const result = await runOrchestrationInline(env, db, orch, run.id, input);
+    const knowledgeScope = await callerKnowledgeScope(db, authResult);
+    const result = await runOrchestrationInline(env, db, orch, run.id, input, knowledgeScope);
     if (result.status === "failed") {
       return json({ runId: run.id, status: "failed", error: result.error }, 200);
     }

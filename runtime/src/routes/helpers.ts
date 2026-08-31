@@ -63,6 +63,13 @@ export interface AuthPrincipal {
   userId: string;
   role: string;
   actFor?: string;
+  /**
+   * The agent an internally-minted dispatch token was created FOR (#177).
+   * NARROWING ONLY: routes/orchestrations.ts uses it to clamp knowledge retrieval to
+   * that agent's declared corpora. No route may widen access based on it, and an
+   * absent slug simply leaves the orchestration's own scope in place.
+   */
+  agentSlug?: string;
 }
 
 /** Pull the attribution-only `act_for` claim off a verified dispatch-token payload. */
@@ -71,6 +78,18 @@ function actForClaim(payload: Record<string, unknown>): { actFor?: string } {
   // Never let the reserved internal principal be echoed back as an end user.
   if (typeof raw !== "string" || raw === "" || raw === "agent-dispatch") return {};
   return { actFor: raw };
+}
+
+/**
+ * Pull the narrowing-only `agent_slug` claim off a verified dispatch-token payload (#177).
+ * Shape-checked against the same slug grammar the catalog enforces, so a malformed claim
+ * degrades to "no caller scope" (the orchestration's own scope) rather than reaching a
+ * database lookup.
+ */
+function agentSlugClaim(payload: Record<string, unknown>): { agentSlug?: string } {
+  const raw = payload["agent_slug"];
+  if (typeof raw !== "string" || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(raw)) return {};
+  return { agentSlug: raw };
 }
 
 export async function requireOpsToken(
@@ -108,7 +127,7 @@ export async function requireOpsToken(
     const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
     if (payload?.["sub"] === "agent-dispatch") {
       // `act_for` is surfaced for attribution only; the principal stays agent-dispatch/ops.
-      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload) };
+      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload), ...agentSlugClaim(payload) };
     }
   }
 
@@ -152,7 +171,7 @@ export async function requireUser(
   if (env.SUPABASE_JWT_SECRET) {
     const payload = await verifyJwt(token, env.SUPABASE_JWT_SECRET);
     if (payload?.["sub"] === "agent-dispatch") {
-      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload) };
+      return { userId: "agent-dispatch", role: "ops", ...actForClaim(payload), ...agentSlugClaim(payload) };
     }
   }
 

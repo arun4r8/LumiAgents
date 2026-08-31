@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
-import { scopeForAgent } from "@/runtime/agents/knowledge-access";
+import { scopeForRun } from "@/runtime/agents/knowledge-access";
+import type { KnowledgeScope } from "@/runtime/agents/knowledge-access";
 import {
   pdfToText,
   extractOpportunityFacts,
@@ -84,8 +85,12 @@ async function embed(env: Env, text: string): Promise<number[]> {
   return r.data[0] ?? [];
 }
 
-async function matchChunks(env: Env, queryText: string, k = 5): Promise<Array<{ content: string; similarity: number; source_name: string }>> {
-  const scope = scopeForAgent("beady");
+async function matchChunks(
+  env: Env,
+  queryText: string,
+  scope: KnowledgeScope,
+  k = 5,
+): Promise<Array<{ content: string; similarity: number; source_name: string }>> {
   try {
     const emb = await embed(env, queryText);
     if (!emb.length) return [];
@@ -213,8 +218,11 @@ export default defineOrchestration({
         `${opp.opportunity_name} evaluation criteria best value past performance management staffing`,
         `${opp.agency || ""} mission objectives operating environment compliance security`,
       ];
+      // Retrieval runs under the CALLER's scope (#177), not beady's own, so a config
+      // agent that wires this orchestration cannot read beady's private corpus.
+      const scope = scopeForRun(ctx, "beady");
       const hits: any[] = [];
-      for (const q of queries) hits.push(...(await matchChunks(env, q, 5)));
+      for (const q of queries) hits.push(...(await matchChunks(env, q, scope, 5)));
       const seen = new Set<string>();
       const retrievedEvidence: any[] = [];
       for (const h of hits) {

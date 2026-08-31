@@ -49,31 +49,26 @@ export function scopeForRole(role: string): KnowledgeScope {
   return role === "ops" ? OPS_SCOPE : ENDUSER_SCOPE;
 }
 
-// ─── Tier 1 (#67): the config-agent corpus allow-list ───────────────────────────
+// ─── Tier 1 (#67 / #177): the config-agent corpus allow-list ────────────────────
 //
-// ⚠️  READ THIS BEFORE RELYING ON `scopeForConfigAgent`.
+// A config agent declares `knowledge_corpora` in its catalog row. The composer and
+// catalog-validation.ts clamp that declaration to [shared, <ownSlug>, enduser] at
+// AUTHOR time -- a bound on what may be STORED.
 //
-// A config agent declares `knowledge_corpora` in its catalog row, and the composer +
-// catalog-validation.ts clamp that declaration to [shared, <ownSlug>, enduser] at AUTHOR time.
-// That is an author-time bound on what may be STORED — it is NOT a read-time enforcement of
-// what the agent actually retrieves.
+// As of #177 it is also enforced at READ time. A config agent has no retrieval path
+// of its own: it runs the orchestrations it wires, and those used to call
+// `scopeForAgent(<their own slug>)` unconditionally -- so a config agent that wired
+// `dewey/knowledge-search` read dewey's private corpus regardless of its declaration.
 //
-// What actually happens at read time: a config agent has no retrieval path of its own. It runs
-// the orchestrations it wires, and each of those hardcodes its own scope — `dewey/knowledge-search`
-// calls `scopeForAgent("dewey")`, `patch/document-rag` calls `scopeForAgent("patch")`, and so on
-// (grep: those are the only production callers of scopeForAgent). So a config agent that wires
-// `dewey/knowledge-search` reads dewey's private corpus regardless of what its own
-// `knowledge_corpora` says. **A config agent inherits the knowledge scope of the orchestrations
-// it wires.**
+// Now the dispatch token carries an `agent_slug` claim, routes/orchestrations.ts
+// derives the caller's scope from that claim and the catalog row, and the run context
+// carries it (`RunContext.knowledgeScope`). Retrieval orchestrations call
+// `scopeForRun(ctx, "<donor>")` instead, which prefers the caller's scope.
 //
-// `scopeForConfigAgent` below has ZERO production call sites (audit #67). It is kept because it
-// is the correct clamp to apply once a scope can be threaded into orchestration execution, and
-// catalog-validation.ts already shares `allowedCorporaFor` with it. Wiring it through means
-// carrying a KnowledgeScope from the catalog row into the orchestration run context — a change
-// to run-inline.ts / routes/agents.ts / the OrchestrationContext type, i.e. real plumbing, not
-// a doc fix. Until that exists, do not describe the declared scope as a guarantee anywhere: the
-// old comment here claimed a runtime backstop that "guarantees a config agent can never read
-// another agent's private corpus", and that claim was false.
+// The claim is minted by the runtime, never sent by the agent Worker, and the scope is
+// computed server-side from the catalog row -- a caller cannot widen its own access.
+// `scopeForRun` can only ever NARROW: it never returns a scope broader than the
+// orchestration's own would have been for a corpus the caller may not read.
 
 /** The corpora a config agent named `ownSlug` may ever be granted. */
 export function allowedCorporaFor(ownSlug: string): string[] {
@@ -87,9 +82,8 @@ export function allowedCorporaFor(ownSlug: string): string[] {
  *     malicious corpus (another agent's slug, "restricted") is silently dropped.
  * `includeRestricted` is hard-wired false: a config agent is never ops.
  *
- * NOT ENFORCED ANYWHERE YET — this function has no production callers (see the section comment
- * above). Retrieval scope comes from the wired orchestration's own `scopeForAgent(<donorSlug>)`.
- * Wire this in before citing it as a control.
+ * Enforced at read time as of #177: routes/orchestrations.ts calls this for a config-agent
+ * caller and puts the result on `RunContext.knowledgeScope`, which `scopeForRun` returns.
  */
 export function scopeForConfigAgent(
   ownSlug: string,
@@ -99,4 +93,28 @@ export function scopeForConfigAgent(
   const requested = (declared ?? []).filter((c) => allowed.has(c));
   const corpora = requested.length > 0 ? requested : [SHARED_CORPUS, ownSlug];
   return { allowedCorpora: corpora, includeRestricted: false };
+}
+
+
+// ─── Read scope for a running orchestration (#177) ──────────────────────────────
+
+/**
+ * The scope a retrieval orchestration should read under.
+ *
+ * Prefers the scope of the agent that INITIATED the run (`ctx.knowledgeScope`,
+ * derived server-side from the dispatch token's `agent_slug` claim) over the
+ * orchestration's own author slug.
+ *
+ * Falls back to `scopeForAgent(donorSlug)` for a direct run with no initiating agent,
+ * which is the pre-#177 behaviour and remains correct there.
+ *
+ * For the six code agents this is a no-op: each wires only its own retrieval
+ * orchestration, so caller slug and donor slug coincide. It changes behaviour only for
+ * a config agent that wired someone else's orchestration -- exactly the gap in #177.
+ */
+export function scopeForRun(
+  ctx: { knowledgeScope?: KnowledgeScope },
+  donorSlug: string,
+): KnowledgeScope {
+  return ctx.knowledgeScope ?? scopeForAgent(donorSlug);
 }

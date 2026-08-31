@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import { queryDocuments } from "@/runtime/agents/document-rag";
-import { scopeForAgent } from "@/runtime/agents/knowledge-access";
+import { scopeForRun } from "@/runtime/agents/knowledge-access";
 
 // Dewey answers questions over the shared central knowledge base. It reads the
 // `shared` corpus plus its own `dewey` corpus, internal sensitivity only. This is the same
@@ -40,7 +40,7 @@ export default defineOrchestration({
     visibleTo: ["role:ops"],
   },
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
-    const scope = scopeForAgent("dewey");
+    const scope = scopeForRun(ctx, "dewey");
     return step(ctx, "retrieve-and-answer", () =>
       queryDocuments(ctx.env, {
         question: input.question,

@@ -16,12 +16,16 @@ import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from "cloudflare:work
 import type { Env, RunContext } from "./types";
 import { SupabaseClient } from "./db/client";
 import { orchestrations } from "./registry";
+import type { KnowledgeScope } from "./agents/knowledge-access";
 import { failRun, notifyRunSuccess } from "./utils/run-failure-alert";
 import { resolveOrchestrationModel } from "./utils/resolve-model";
 
 export interface RunWorkflowParams {
   runId: string;
   orchestrationName: string;
+  /** Caller's knowledge scope (#177), when the run was started by an agent. Narrowing
+   *  only; absent for a direct run, where the orchestration's own scope applies. */
+  knowledgeScope?: KnowledgeScope;
 }
 
 export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams> {
@@ -29,7 +33,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
     event: WorkflowEvent<RunWorkflowParams>,
     step: WorkflowStep,
   ): Promise<void> {
-    const { runId, orchestrationName } = event.payload;
+    const { runId, orchestrationName, knowledgeScope } = event.payload;
 
     const db = new SupabaseClient(this.env);
 
@@ -64,6 +68,7 @@ export class RunOrchestration extends WorkflowEntrypoint<Env, RunWorkflowParams>
       fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
       workflowStep: step,
       model: resolvedModel,
+      ...(knowledgeScope ? { knowledgeScope } : {}),
     };
 
     try {

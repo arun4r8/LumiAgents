@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import { ingestDocument, queryDocuments } from "@/runtime/agents/document-rag";
-import { scopeForAgent } from "@/runtime/agents/knowledge-access";
+import { scopeForRun } from "@/runtime/agents/knowledge-access";
 
 // ─── Ingest orchestration ─────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ export const documentQuery = defineOrchestration({
     visibleTo: ["role:ops", "role:enduser"],
   },
   async run(ctx, input) {
-    const scope = scopeForAgent("patch");
+    const scope = scopeForRun(ctx, "patch");
     return step(ctx, "retrieve-and-answer", () =>
       queryDocuments(ctx.env, {
         question: input.question,

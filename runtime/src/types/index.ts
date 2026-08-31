@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { KnowledgeScope } from "../agents/knowledge-access";
 import type { WorkflowStep } from "cloudflare:workers";
 
 export interface Env {
@@ -91,6 +92,21 @@ export interface RunContext {
   /** LLM model resolved at run start from orchestration.agent_configs (with per-orchestration
    *  override). Falls back to claude-sonnet-4-6. llm_decide / llm_extract read this automatically. */
   model: string;
+  /**
+   * Read scope of the AGENT THAT INITIATED this run, when one did (#177).
+   *
+   * Retrieval orchestrations historically called `scopeForAgent("<their own slug>")`,
+   * so a config agent that wired `dewey/knowledge-search` read dewey's private corpus
+   * no matter what its own `knowledge_corpora` declared. This carries the caller's
+   * scope so the orchestration can retrieve as its CALLER rather than as its author.
+   *
+   * Derived server-side in routes/orchestrations.ts from the `agent_slug` claim on the
+   * dispatch token — never from the request body. It can only ever NARROW retrieval:
+   * `scopeForConfigAgent` intersects the declaration with `allowedCorporaFor(slug)`.
+   *
+   * Undefined for a direct (non-agent) run, where the orchestration's own scope applies.
+   */
+  knowledgeScope?: KnowledgeScope;
 }
 
 // ─── Orchestration definition ─────────────────────────────────────────────────
