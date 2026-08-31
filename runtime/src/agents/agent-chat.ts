@@ -97,16 +97,26 @@ export function resolveSystemPrompt(base: string, override?: AgentOverrideInput 
 
 /**
  * Restrict an agent's tools to an enabled subset.
- *   - empty/absent allow-list → all tools (no customization).
- *   - non-empty allow-list → only the named tools; unknown names are ignored.
- * If a non-empty allow-list matches nothing (all names unknown — shouldn't happen given
- * save-time validation), fall back to all tools rather than stranding the agent.
+ *   - empty/absent allow-list → all tools (no customization was requested).
+ *   - non-empty allow-list → only the named tools; unknown names are dropped.
+ *
+ * A non-empty allow-list that matches NOTHING yields no tools. It used to fall back to
+ * ALL tools "rather than stranding the agent", which inverted the control: an allow-list
+ * is a ceiling, and a ceiling that fails open is not a ceiling.
+ *
+ * Save-time validation makes an all-unknown list unlikely at save time, but the list is
+ * stored data and the tool set is code -- they drift. Rename or unregister the last
+ * orchestration an agent wired and its previously-valid allow-list silently matches
+ * nothing, which under the old behaviour handed that agent EVERY tool.
+ *
+ * Not actually stranding: the caller always appends LIST_RECENT_RUNS_TOOL, so the agent
+ * keeps run history and ordinary conversation. It loses exactly the tools nobody could
+ * show it was entitled to.
  */
 export function resolveEnabledTools(tools: AgentTool[], enabled?: string[] | null): AgentTool[] {
   if (!enabled || enabled.length === 0) return tools;
   const allow = new Set(enabled);
-  const filtered = tools.filter((t) => allow.has(t.name));
-  return filtered.length > 0 ? filtered : tools;
+  return tools.filter((t) => allow.has(t.name));
 }
 
 /**
