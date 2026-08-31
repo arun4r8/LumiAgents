@@ -138,7 +138,16 @@ SHAPE_QUERY="select json_build_object(
                              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
                             where n.nspname='public'
                               and p.proname in ('is_ops','custom_access_token_hook','list_orchestration_tables')),
-  'vector_schema',        (select n.nspname from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='vector')
+  'vector_schema',        (select n.nspname from pg_extension e join pg_namespace n on n.oid=e.extnamespace where e.extname='vector'),
+  -- Column-level fingerprint. Table counts alone missed #147: public.resume_results
+  -- existed on a rebuild but with 4 of its 23 columns, because 19 were created by
+  -- hand outside the chain. A per-table column count is compact enough to read in
+  -- a diff and catches that whole class.
+  'table_columns',        (select json_object_agg(t.k, t.n) from (
+                             select c.table_schema||'.'||c.table_name as k, count(*) as n
+                               from information_schema.columns c
+                              where c.table_schema in ('public','orchestration')
+                              group by 1) t)
 )"
 
 actual=$(psql -tA "$DB_URL" -c "$SHAPE_QUERY")
@@ -161,8 +170,22 @@ print("")
 print("✗ the rebuild succeeded but the resulting shape changed:")
 for k, exp, got in drift:
     print(f"    {k}")
-    print(f"       expected: {json.dumps(exp)}")
-    print(f"       actual:   {json.dumps(got)}")
+    # table_columns is a 50+ entry map. Printing both copies whole to show one
+    # changed table is how a check becomes unreadable and therefore ignored --
+    # report only the entries that actually differ.
+    if isinstance(exp, dict) and isinstance(got, dict):
+        for name in sorted(set(exp) | set(got)):
+            a, b = exp.get(name), got.get(name)
+            if a != b:
+                if a is None:
+                    print(f"       + {name}: {b} columns (table is new)")
+                elif b is None:
+                    print(f"       - {name}: table is missing (had {a} columns)")
+                else:
+                    print(f"       ~ {name}: expected {a} columns, got {b}")
+    else:
+        print(f"       expected: {json.dumps(exp)}")
+        print(f"       actual:   {json.dumps(got)}")
 print("")
 print("If this change is intended, re-snapshot and commit the result so the diff")
 print("is reviewed like any other change:")

@@ -16,7 +16,10 @@ const EXAMPLES = [
   "What's our average approval response time this month?",
   "Show me all opportunities scored 'pursue' with their agencies",
   "Top 5 contracts by obligated value",
-  "Which candidates have overall_score above 80?",
+  // overall_score is a 1-10 scale, not 0-100 (#147): every score is clamped to
+  // 1..10 by orchestrations/angie/resume-scoring and the column now CHECKs that
+  // range. The old "above 80" example could never match a row.
+  "Which candidates scored 8 or higher overall?",
 ];
 
 interface AnalystResult {
