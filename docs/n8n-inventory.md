@@ -1,5 +1,8 @@
 # n8n Workflow Inventory
 
+<!-- doc-facts: illustrative -->
+<!-- historical inventory of retired n8n flows; scripts/check-doc-facts.py skips existence checks here -->
+
 Phase 0 inventory of all n8n workflows in `lumiture.app.n8n.cloud`. Last updated: 2026-05-06.
 
 ## Summary

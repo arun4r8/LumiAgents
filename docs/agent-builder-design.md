@@ -1,5 +1,8 @@
 # In-app agent/tool builder — architecture & plug-in contract
 
+<!-- doc-facts: illustrative -->
+<!-- design doc: names proposed artifacts that intentionally do not exist yet; scripts/check-doc-facts.py skips existence checks here -->
+
 > Design pass for [#67](https://github.com/LumitureLabs/LumiAgents/issues/67). Status: proposal, no runtime code changed. Read alongside `docs/auth-model.md`, `docs/workflow-contract.md`, and `docs/databricks-assessment.md` §4 (the plug-in contract v0.1 this doc makes concrete).
 
 ## 0. What #67 asks for
