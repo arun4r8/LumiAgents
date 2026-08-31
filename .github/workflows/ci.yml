@@ -68,6 +68,25 @@ jobs:
         working-directory: dashboard
         run: pnpm exec eslint . --max-warnings 0
 
+  dashboard-columns:
+    name: Dashboard Column References
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The dashboard talks to PostgREST with string column lists, which TypeScript
+      # cannot check. A renamed or invented column fails at RUNTIME as a 400 and the
+      # panel renders empty -- invisible in review, and often invisible in the product
+      # too (knowledge/page.tsx selected runs.completed_at for months; the orchestration
+      # it lists has never run, so the panel would have been empty either way).
+      #
+      # Validates against supabase/prod-columns.json, a committed manifest of the real
+      # production schema, so this needs no credentials.
+      - name: Check dashboard column references
+        run: python3 scripts/check-dashboard-columns.py
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest

@@ -18,7 +18,7 @@ interface VaultRun {
   input: { changedPaths?: string[]; removedPaths?: string[]; repoName?: string } | null;
   output: { ingested?: number; skipped?: number; errors?: string[] } | null;
   started_at: string;
-  completed_at: string | null;
+  ended_at: string | null;
   triggered_by: string;
 }
 
@@ -491,7 +491,7 @@ function SyncTab({ initialRuns, vaultDocs }: { initialRuns: VaultRun[]; vaultDoc
   const [syncResult, setSyncResult] = useState<{ runId: string } | "error" | null>(null);
 
   const lastRun = initialRuns[0] ?? null;
-  const lastSyncedAt = lastRun?.completed_at ?? lastRun?.started_at ?? null;
+  const lastSyncedAt = lastRun?.ended_at ?? lastRun?.started_at ?? null;
 
   async function handleManualSync() {
     setSyncing(true);

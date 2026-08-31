@@ -67,7 +67,21 @@ describe("resolveEnabledTools", () => {
     expect(out.map((t) => t.name)).toEqual(["draft_content"]);
   });
 
-  it("falls back to all tools if a non-empty allow-list matches nothing", () => {
-    expect(resolveEnabledTools(TOOLS, ["only_bogus_names"])).toBe(TOOLS);
+  // Previously this fell back to ALL tools "rather than stranding the agent", which
+  // inverted the control: a ceiling that fails open is not a ceiling. The realistic
+  // trigger is drift, not a bad save -- rename or unregister the last orchestration an
+  // agent wired and its stored allow-list matches nothing, silently granting everything.
+  it("grants no tools when a non-empty allow-list matches nothing", () => {
+    expect(resolveEnabledTools(TOOLS, ["only_bogus_names"])).toEqual([]);
+  });
+
+  it("never widens beyond the allow-list", () => {
+    // The property that matters: whatever comes back is a subset of both the agent's
+    // tools and the allow-list, for every input.
+    for (const enabled of [["draft_content"], ["draft_content", "bogus"], ["bogus"]]) {
+      const out = resolveEnabledTools(TOOLS, enabled);
+      expect(out.every((t) => enabled.includes(t.name))).toBe(true);
+      expect(out.every((t) => TOOLS.includes(t))).toBe(true);
+    }
   });
 });

@@ -12,7 +12,7 @@ interface VaultRun {
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   started_at: string;
-  completed_at: string | null;
+  ended_at: string | null;
   triggered_by: string;
 }
 
@@ -66,7 +66,7 @@ export default async function KnowledgePage({
       ? supabase
           .schema("orchestration")
           .from("runs")
-          .select("id, status, input, output, started_at, completed_at, triggered_by")
+          .select("id, status, input, output, started_at, ended_at, triggered_by")
           .eq("orchestration_id", orchRow.id)
           .order("started_at", { ascending: false })
           .limit(20)
