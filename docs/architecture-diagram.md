@@ -26,7 +26,7 @@ flowchart TB
       subgraph AngieAgent["Angie · HR & Recruiting"]
         CS["candidate-sourcing\nApollo + Claude + human approval"]
         RS["resume-scoring\nClaude (native)"]
-        RF["resume-formatting\nClaude"]
+        RF["resume-format\nClaude"]
       end
 
       subgraph BeadyAgent["Beady · GovCon BD: discovery · scoring · response drafting"]
@@ -172,10 +172,13 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 |---|---|---|---|
 | `angie/candidate-sourcing` | Angie | Worker | Apollo search → Claude scoring → approval gate → outreach drafts |
 | `angie/resume-scoring` | Angie | Worker | Native Claude resume scoring |
-| `angie/resume-formatting` | Angie | Worker | Reformat a resume to the house template |
+| `angie/recent-resume-jobs` | Angie | Worker | Top-scored candidates from recent scoring jobs, ranked by overall score (read-only) |
+| `angie/resume-redact` | Angie | Worker | Blind client-submission copy of a résumé: strips name and contact details, applies the Lumiture mark |
+| `angie/resume-format` | Angie | Worker | Reformat a resume to the house template |
 | `beady/opportunity-sweep` | Beady | Worker | Parallel SAM.gov + SBIR sweep |
 | `beady/govcon-assessment` | Beady | Worker | Native go/no-go assessment |
 | `beady/past-performance-seed` | Beady | Worker | Seed the past-performance corpus |
+| `beady/recent-opportunities` | Beady | Worker | Opportunities the sweep touched recently, ranked by fit score (read-only) |
 | `beady/rfi-draft` | Beady | Worker | Sources Sought / RFI response drafting (moved here from Cleo) |
 | `beady/industry-day-sweep` | Beady | Worker | Industry-day discovery |
 | `beady/opportunity-report` | Beady | Worker | Opportunity digest |
@@ -184,6 +187,9 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 | `cleo/content-plan` | Cleo | Worker | Content-calendar planning |
 | `cleo/content-draft` | Cleo | Worker | Draft calendar content |
 | `cleo/content-nudge` | Cleo | Worker | Content-calendar nudges |
+| `cleo/content-sync` | Cleo | Worker | Two-way sync of the content calendar with the Microsoft 365 Excel table (3-way merge) |
+| `cleo/recent-awards` | Cleo | Worker | Awards the sweep found recently, ranked by fit score (read-only) |
+| `cleo/recent-content` | Cleo | Worker | Content calendar items updated recently, most recent first (read-only) |
 | `dewey/knowledge-search` | Dewey | Worker | Corpus-scoped knowledge retrieval |
 | `dewey/retag-document` | Dewey | Worker | Re-tag a document's corpus / sensitivity |
 | `dewey/knowledge-inventory` | Dewey | Worker | Corpus inventory |
@@ -192,8 +198,8 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 | `patch/inbound-triage` | Patch | Worker | Jira inbound ticket triage |
 | `patch/ticket-ops` | Patch | Worker | Jira ticket operations |
 | `patch/staff-request` | Patch | Worker | Staff request → Jira issue |
-| `patch/document-ingest` | Patch | Worker | Ingest a document into vector RAG |
-| `patch/document-query` | Patch | Worker | RAG query against the knowledge base |
+| `patch/document-rag` | Patch | Worker | Ingest into, and query, the vector knowledge base (the former `document-ingest` + `document-query`, merged) |
+| `patch/ticket-search` | Patch | Worker | Search Jira with JQL. Read-only companion to `patch/ticket-ops` |
 | `patch/vault-sync` | Patch | Worker (DB-registered) | Obsidian vault → RAG (incremental or full) |
 | `system/memory-maintenance` | System | Runtime | Roll up conversation memory (summaries + facts) |
 

@@ -1,5 +1,8 @@
 # Tier 2 agent builder — codegen + PR gate (technical design)
 
+<!-- doc-facts: illustrative -->
+<!-- design doc: names proposed artifacts that intentionally do not exist yet; scripts/check-doc-facts.py skips existence checks here -->
+
 > Design pass for [#67](https://github.com/LumitureLabs/LumiAgents/issues/67), **Tier 2 only**. Status: proposal, no runtime code changed. This document **extends** `docs/agent-builder-design.md` — read that first (esp. §2 the manifest, §4 the deploy tiers, §5 Phase 3). It does not restate the manifest schema, the tier taxonomy, or the config-vs-code map; it makes Phase 3 (the deferred codegen tier) concrete against the real repo.
 >
 > Context: **Tiers 0 and 1 are built and merged** (Tier 0 = customize an existing agent's persona/model/tools as data, `#112`; Tier 1 = new config-only agents assembled from existing orchestrations, `#113`/`#115`). Both deploy by *writing rows* — no PR, no code. **Tier 2 is the escalation** the moment a manifest needs *new code*: a new orchestration/tool, a new integration, a new domain table, or a dedicated Worker. Per `agent-builder-design.md` §4, that class of change must land as a **PR an ops engineer reviews and merges** — never a direct push to prod. This doc specifies the codegen, the PR automation, the token, the governance gate, and the security posture for it.

@@ -60,11 +60,20 @@ This means: when deterministic code can do the job, it does. When we need judgme
 
 ## Agents as a thin layer over orchestrations
 
-The orchestrations stay deterministic; the **agent layer** is a conversational skin on top. There are six agents: **Angie** (HR/recruiting), **Beady** (GovCon BD), **Cleo** (eminence/awards/content), **Dewey** (knowledge librarian), **Money** (finance), **Patch** (IT ops/RAG). An agent is an LLM tool-loop whose tools are orchestrations; it does not reimplement workflow logic.
+The orchestrations stay deterministic; the **agent layer** is a conversational skin on top. An agent is an LLM tool-loop whose tools are orchestrations; it does not reimplement workflow logic.
+
+There are two **kinds** of agent, which matters more than the count:
+
+- **Code agents** — defined in `agents/<slug>/index.ts`, deployed as their own Worker. Six today: **Angie** (HR/recruiting), **Beady** (GovCon BD), **Cleo** (eminence/awards/content), **Dewey** (knowledge librarian), **Money** (finance), **Patch** (IT ops/RAG).
+- **Config agents** — assembled at runtime from rows in `orchestration.agents` + `orchestration.agent_tools`: a persona, a model, a picked set of existing orchestrations, and a knowledge scope. No code, no Worker, no deploy. Created from the dashboard by the agent builder (#67). Zero exist in production today; the capability shipped ahead of demand.
+
+A config agent is not a lesser agent — it runs the same chat loop over the same orchestrations. What it cannot do is introduce *new* capability: it wires orchestrations that already exist. Creating genuinely new capability still means new code, which is why the agent builder's Tier 2 emits a pull request for a human to review rather than deploying anything itself.
 
 Worker topology is now uniform: **all six agents run as their own Cloudflare Worker**, reached from the runtime over Service Bindings (`runtime/src/routes/agents.ts` maps slug → binding). Isolation is the point: per-agent metrics, logs, CPU budget, and deploys, so one agent's tool surface cannot destabilise another's. The runtime still keeps the inline `runAgentChat` loop, but only as a **degraded fallback**: if an agent's Worker is unreachable or returns an error, the runtime runs the chat loop itself rather than failing the user's request. That fallback is what makes standing up a new agent Worker safe, since a Worker deployed before its secrets are set simply degrades instead of breaking chat.
 
 **Knowledge access is enforced in the runtime, not the database.** Every agent executes as Postgres `service_role` and bypasses RLS, so we cannot lean on Postgres roles to scope retrieval. Instead `runtime/src/agents/knowledge-access.ts` defines the scope: each agent may read the `shared` corpus plus a private corpus keyed by its own slug, and never sees `restricted`-sensitivity documents (ops-only). `orchestration.match_document_chunks` takes `allowed_corpora` / `include_restricted` and filters accordingly. Dewey is the librarian that searches, re-tags, and inventories that corpus.
+
+Retrieval is scoped to the **caller**, not to the orchestration's author (#177). A retrieval orchestration used to hardcode `scopeForAgent("<its own slug>")`, so a config agent that wired `dewey/knowledge-search` inherited dewey's private corpus regardless of what it declared. The caller's identity now travels as an `agent_slug` claim on the internally-minted dispatch token — minted by the runtime, unforgeable by the agent Worker, which does not hold the JWT secret — and the route derives the scope server-side from the catalog row. The caller asserts identity; the server decides authority. The mechanism is narrowing-only: an absent or unresolvable slug falls back to the orchestration's own scope, never a wider one.
 
 ## Why Cloudflare Workers + Workflows
 
@@ -91,6 +100,26 @@ We never did a "big migration." Each flow was reimplemented on demand behind a s
 
 n8n interop is now dormant-but-retained: the `drainN8nCallQueue` function drains the `n8n_call_queue` table, gated behind `N8N_QUEUE_ENABLED` (disabled by default), with `N8N_WEBHOOK_SECRET` kept for header auth. This lets a niche flow be re-enabled without a code change, but nothing uses it in production.
 
+## Two environments, one manual gate
+
+There are two complete stacks — **production** and **staging** — each with its own Supabase project, its own runtime Worker, its own six agent Workers, and its own dashboard (#121).
+
+A merge to `main` deploys **staging** automatically. Production is a separate, manually dispatched promotion. The gate lives in the deploy pipeline rather than in GitHub branch protection, so the thing being promoted is a build that has already run somewhere real.
+
+Two properties are deliberate and easy to mistake for bugs:
+
+- **Staging holds no business data.** It is a schema twin, not a data twin. Auditing staging by clicking through it will show empty states and tell you nothing; compare code, not screens.
+- **Staging is deliberately missing most secrets.** Several integrations write to the real world and have no staging counterpart — the Knowledge Base editor commits to the production vault, the content calendar writes the real SharePoint workbook, Resend sends real email to real people, Jira creates real tickets. Those features fail closed in staging, and that broken tab is the safety mechanism working. `docs/environments.md` is authoritative on which secrets are withheld and why; do not "fix" one without reading it.
+
+## Two execution paths, and the rule that separates them
+
+An orchestration runs one of two ways:
+
+- **Durable** (`POST /api/orchestrations/:name/run`) — a Cloudflare Workflow instance. Checkpointed steps, retries, sleep-then-resume, and `await_approval` pauses. This is the default and the only path that may mutate anything.
+- **Inline** (`POST /api/orchestrations/:name/run-sync`) — executed in-process so the caller gets a real answer back instead of a run id. This is what makes an agent's question-answering tools feel like answers rather than tickets.
+
+The inline path has no durable execution and may retry a step in-process, which is harmless for a read and unsafe for a mutation. That rule used to exist only as a comment. It is now enforced at the route (#127): `/run-sync` is ops-only, and refuses any orchestration that does not declare `readOnly: true`. Endusers reach orchestrations through the durable path, which honours approvals and checkpointing.
+
 ## Two audiences, one dashboard
 
 Role-based views over the same data, RLS doing the authorization heavy lifting:
@@ -110,7 +139,7 @@ The unlock is **schema-driven forms**. Every orchestration declares its input sc
 
 These are not decided. Surface them when relevant:
 
-- Real-time vs. poll for run progress in the dashboard. Probably Supabase Realtime, but we haven't load-tested it.
+- ~~Real-time vs. poll for run progress in the dashboard.~~ **Decided: polling** (#142). `supabase_realtime` publishes zero tables and no migration ever added one, so a subscription connected and then never fired — a screen that looked alive and was frozen. The dashboard now polls openly and says so, and `runtime/../use-run-live.ts` stops the moment a run reaches a terminal status. One conditional poll per in-flight card beats N websockets at this scale. Revisit only if a genuine live stream is wanted, which is scoped work, not a toggle.
 - Multi-tenancy. Single company today, but if this becomes a product, RLS strategy changes. Worth flagging in any schema change.
 - Eval infrastructure for the LLM decision points. Necessary eventually. Not in scope for the first phase.
 - Observability stack. Workers Logs + Supabase logs for now. May want OpenTelemetry later.

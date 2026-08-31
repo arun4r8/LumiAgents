@@ -1,5 +1,8 @@
 # Databricks × LumiAgents — Assessment & Agentic-OS Plan
 
+<!-- doc-facts: illustrative -->
+<!-- design doc: names proposed artifacts that intentionally do not exist yet; scripts/check-doc-facts.py skips existence checks here -->
+
 > Consolidated from the Databricks advisor working session, 2026-07-24. Advisory only (no code was changed to produce this). Captures three write-ups, the layered reference diagram, and the agent plug-in contract spec.
 
 ---
