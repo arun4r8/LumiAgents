@@ -14,7 +14,7 @@ SOURCE OF TRUTH
   supabase/prod-columns.json -- a manifest of PRODUCTION's columns. Anchored to
   production because that is what the dashboard actually queries. Deliberately NOT a
   fresh rebuild: the bootstrap still creates stub shapes for the legacy tables (174
-  columns across 19 tables are missing from a rebuild, see #179), so checking against
+  columns across 19 tables are missing from a rebuild, see #180), so checking against
   one would flag correct dashboard code as broken.
 
   Regenerate with scripts/snapshot-prod-columns.sh when the production schema changes;

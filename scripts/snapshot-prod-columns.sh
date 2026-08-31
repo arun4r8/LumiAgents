@@ -28,7 +28,7 @@ out = {'_comment': ('Column manifest of the PRODUCTION database, per schema.tabl
                     'scripts/snapshot-prod-columns.sh. Used by scripts/check-dashboard-columns.py to '
                     'validate dashboard .select() strings, which TypeScript cannot check. Anchored to '
                     'production because that is what the dashboard actually queries -- NOT to a fresh '
-                    'rebuild, which still creates stub shapes for the legacy tables (see #179).'),
+                    'rebuild, which still creates stub shapes for the legacy tables (see #180).'),
        'tables': prod}
 json.dump(out, open('$ROOT/supabase/prod-columns.json', 'w'), indent=2, sort_keys=True)
 print(f\"  wrote supabase/prod-columns.json: {len(prod)} tables, {sum(len(v) for v in prod.values())} columns\")
