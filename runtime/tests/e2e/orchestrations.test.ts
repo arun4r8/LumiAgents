@@ -26,10 +26,21 @@ afterAll(async () => {
   const docs = await res.json() as Array<{ id: string; source_name: string }>;
   const testDocs = docs.filter((d) => d.source_name.startsWith("[E2E TEST]"));
 
+  // Deleted in bounded-concurrency batches, not one at a time. Serially, clearing the
+  // 75-document backlog this bug had built up took longer than vitest's 10s hook budget
+  // and the hook timed out after 18 deletes -- the fix working, but not finishing.
+  // Steady state is one document per run; the batching is what makes a backlog
+  // recoverable in a single run rather than eighteen at a time.
   const failed: string[] = [];
-  for (const doc of testDocs) {
-    const del = await fetch(`${RUNTIME_URL}/api/documents/${doc.id}`, { method: "DELETE", headers });
-    if (!del.ok) failed.push(`${doc.id} (HTTP ${del.status})`);
+  const BATCH = 10;
+  for (let i = 0; i < testDocs.length; i += BATCH) {
+    const results = await Promise.all(
+      testDocs.slice(i, i + BATCH).map(async (doc) => {
+        const del = await fetch(`${RUNTIME_URL}/api/documents/${doc.id}`, { method: "DELETE", headers });
+        return del.ok ? null : `${doc.id} (HTTP ${del.status})`;
+      }),
+    );
+    failed.push(...results.filter((r): r is string => r !== null));
   }
   if (failed.length > 0) {
     throw new Error(`[e2e cleanup] failed to delete ${failed.length} test document(s): ${failed.join(", ")}`);
@@ -47,7 +58,7 @@ afterAll(async () => {
   }
 
   if (testDocs.length > 0) console.log(`[e2e cleanup] removed ${testDocs.length} test document(s)`);
-});
+}, 120_000);
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
