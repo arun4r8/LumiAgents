@@ -47,17 +47,35 @@ interface Props {
   scoredTotal: number;
   /** The server's page cap. Hitting it means rows were left behind. */
   limit: number;
+  /** Which deadline bucket is being shown (#174 follow-up; see ./records/bd/opportunities.tsx). */
+  deadline: "open" | "past" | "all";
+  /** Rows whose deadline has not passed (or is unknown), counted server-side. */
+  openCount: number;
+  /** Rows whose deadline has passed, counted server-side. */
+  pastCount: number;
 }
 
-export function OpportunitiesClient({ opportunities, total, scoredTotal, limit }: Props) {
+export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, deadline, openCount, pastCount }: Props) {
   // The page is capped and ordered by fit, so unscored rows sort last and are
   // the first thing to fall off the end. Saying "200 tracked" when there are
   // 512 would make a freshly swept, not-yet-scored notice invisible AND make
   // the screen look complete, so the header states the cap outright.
-  const truncated = opportunities.length >= limit && total > opportunities.length;
+  // `total` is every row in the table, not the filtered bucket, so the header can say
+  // what is being hidden. A filtered view that only reports its own size is how a
+  // default filter gets mistaken for missing data.
+  const shown = deadline === "open" ? openCount : deadline === "past" ? pastCount : total;
+  const truncated = opportunities.length >= limit && shown > opportunities.length;
+  const scope =
+    deadline === "open" ? "still open" : deadline === "past" ? "past deadline" : "all";
   const sub = truncated
-    ? `Showing the top ${opportunities.length} by fit of ${total} tracked · ${scoredTotal} scored`
-    : `${total} tracked · ${scoredTotal} scored`;
+    ? `Showing the top ${opportunities.length} by fit of ${shown} ${scope} · ${total} tracked · ${scoredTotal} scored`
+    : `${shown} ${scope} of ${total} tracked · ${scoredTotal} scored`;
+
+  const FILTERS = [
+    { key: "open", label: "Open", count: openCount },
+    { key: "past", label: "Past deadline", count: pastCount },
+    { key: "all", label: "All", count: total },
+  ] as const;
 
   return (
     <div className="page view-fade" style={{ paddingTop: 0 }}>
@@ -65,7 +83,11 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit }
         <div>
           <h1>Opportunities</h1>
           <div className="sub">
-            {opportunities.length === 0 ? "No opportunities on the radar yet." : sub}
+            {opportunities.length === 0
+              ? deadline === "open"
+                ? "Nothing open right now. Try Past deadline or All."
+                : "No opportunities on the radar yet."
+              : sub}
           </div>
           {truncated && (
             <div className="sub" style={{ marginTop: 3 }}>
@@ -73,8 +95,24 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit }
             </div>
           )}
         </div>
-        {/* opportunity-sweep is Beady's; run it from her chat. */}
-        <Link href="/agents/beady" className="btn">Run a sweep</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Links, not buttons: the filter lives in the URL so a view is shareable,
+              and it matches the tab control directly above. */}
+          <div className="records-seg" role="group" aria-label="Filter by response deadline">
+            {FILTERS.map((f) => (
+              <Link
+                key={f.key}
+                href={`/records/bd?tab=opportunities&deadline=${f.key}`}
+                aria-current={deadline === f.key ? "true" : undefined}
+                className={`records-seg-opt${deadline === f.key ? " active" : ""}`}
+              >
+                {f.label} <span style={{ opacity: 0.6 }}>{f.count}</span>
+              </Link>
+            ))}
+          </div>
+          {/* opportunity-sweep is Beady's; run it from her chat. */}
+          <Link href="/agents/beady" className="btn">Run a sweep</Link>
+        </div>
       </div>
 
       {opportunities.length === 0 ? (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { OpportunitiesTab } from "./opportunities";
+import { OpportunitiesTab, deadlineFrom } from "./opportunities";
 import { AwardsTab } from "./awards";
 import { IndustryDaysTab } from "./industry-days";
 import { RfiDraftsTab } from "./rfi-drafts";
@@ -36,10 +36,13 @@ function tabFrom(raw: string | undefined): TabKey {
 export default async function BdPipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; deadline?: string }>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, deadline } = await searchParams;
   const active = tabFrom(tab);
+  // Kept in the URL alongside ?tab so a filtered view is shareable and survives a
+  // refresh, matching how tab state already works.
+  const deadlineFilter = deadlineFrom(deadline);
 
   return (
     <>
@@ -59,7 +62,7 @@ export default async function BdPipelinePage({
         </div>
       </div>
 
-      {active === "opportunities" && <OpportunitiesTab />}
+      {active === "opportunities" && <OpportunitiesTab deadline={deadlineFilter} />}
       {active === "opps" && <AwardsTab />}
       {active === "days" && <IndustryDaysTab />}
       {active === "rfi" && <RfiDraftsTab />}
