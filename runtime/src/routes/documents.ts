@@ -6,6 +6,7 @@ import { runDataAnalyst, storeCsvUpload } from "../agents/data-analyst";
 import { SupabaseClient } from "../db/client";
 import { json, parseCsvLine, requireOpsToken, requireUser, rateLimited } from "./helpers";
 import { MODELS } from "../config/models";
+import { sbHeaders } from "../utils/supabase";
 
 // ─── OCR helpers ──────────────────────────────────────────────────────────────
 
@@ -305,12 +306,14 @@ export async function handleDocuments(
     if (authResult instanceof Response) return authResult;
 
     const base = `${env.SUPABASE_URL}/rest/v1`;
-    const headers = {
-      "Content-Type": "application/json",
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Profile": "orchestration",
-    };
+    // sbHeaders sets BOTH Accept-Profile and Content-Profile. Hand-rolled headers here
+    // set only Content-Profile, which PostgREST honours for WRITES; a GET selects its
+    // schema from Accept-Profile. So this read resolved against `public`, where
+    // orch_documents does not exist, and the route returned 502 every time -- silently,
+    // because its only two callers both swallow the failure (the Knowledge page's rich
+    // view renders empty, and the E2E cleanup logs a warning and moves on, which is why
+    // 75 test documents accumulated in production).
+    const headers = sbHeaders(env, { profile: "orchestration" });
 
     const docsRes = await fetch(
       `${base}/orch_documents?select=id,source_name,source_kind,source_uri,metadata,char_count,created_at&order=created_at.desc&limit=500`,
@@ -373,13 +376,13 @@ export async function handleDocuments(
     const id = docMatch[1]!;
 
     const base = `${env.SUPABASE_URL}/rest/v1`;
-    const headers = {
-      "Content-Type": "application/json",
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Profile": "orchestration",
-      Prefer: "return=minimal",
-    };
+    // DELETE is a write, so Content-Profile alone would have been correct here -- but
+    // routing every PostgREST call through sbHeaders removes the chance of getting the
+    // read/write distinction wrong again.
+    const headers = sbHeaders(env, {
+      profile: "orchestration",
+      extra: { Prefer: "return=minimal" },
+    });
 
     const delRes = await fetch(
       `${base}/orch_documents?id=eq.${encodeURIComponent(id)}`,

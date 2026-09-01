@@ -1,21 +1,51 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { triggerRun, pollRun, authHeaders, RUNTIME_URL } from "./helpers";
 
-// Remove documents this suite ingested so the RAG corpus doesn't accumulate
-// test residue across CI runs.
+// Remove documents this suite ingested so the RAG corpus doesn't accumulate test
+// residue across CI runs.
+//
+// This THROWS rather than warns. It used to `console.warn` and return, which is how
+// 75 test documents accumulated in production between 2026-06-11 and 2026-09-01: the
+// list call had been returning 502 on every single run (GET /api/documents sent
+// PostgREST's write-side profile header, so it resolved against `public`), and the
+// warning scrolled past in a green job nobody read.
+//
+// A cleanup that swallows its own failure is not a cleanup. If this suite cannot prove
+// it left the corpus as it found it, the deploy should go red.
 afterAll(async () => {
   const headers = await authHeaders();
+
   const res = await fetch(`${RUNTIME_URL}/api/documents`, { headers });
   if (!res.ok) {
-    console.warn(`[e2e cleanup] list documents failed: ${res.status}`);
-    return;
+    throw new Error(
+      `[e2e cleanup] could not list documents (HTTP ${res.status}). Test documents may ` +
+      `now be orphaned in this environment's corpus. Body: ${await res.text()}`,
+    );
   }
+
   const docs = await res.json() as Array<{ id: string; source_name: string }>;
   const testDocs = docs.filter((d) => d.source_name.startsWith("[E2E TEST]"));
+
+  const failed: string[] = [];
   for (const doc of testDocs) {
     const del = await fetch(`${RUNTIME_URL}/api/documents/${doc.id}`, { method: "DELETE", headers });
-    if (!del.ok) console.warn(`[e2e cleanup] delete ${doc.id} failed: ${del.status}`);
+    if (!del.ok) failed.push(`${doc.id} (HTTP ${del.status})`);
   }
+  if (failed.length > 0) {
+    throw new Error(`[e2e cleanup] failed to delete ${failed.length} test document(s): ${failed.join(", ")}`);
+  }
+
+  // Verify against a fresh read rather than trusting the DELETEs: the whole point is
+  // to prove the corpus is clean, not that we asked nicely.
+  const after = await fetch(`${RUNTIME_URL}/api/documents`, { headers });
+  if (after.ok) {
+    const remaining = (await after.json() as Array<{ source_name: string }>)
+      .filter((d) => d.source_name.startsWith("[E2E TEST]"));
+    if (remaining.length > 0) {
+      throw new Error(`[e2e cleanup] ${remaining.length} test document(s) still present after cleanup`);
+    }
+  }
+
   if (testDocs.length > 0) console.log(`[e2e cleanup] removed ${testDocs.length} test document(s)`);
 });
 
