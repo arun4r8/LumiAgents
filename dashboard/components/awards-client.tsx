@@ -13,6 +13,14 @@ interface Props {
 
 type RecFilter = "all" | "apply" | "consider" | "skip";
 type TypeFilter = "all" | "industry" | "government";
+/**
+ * Primary axis, promoted into the page header as a segmented control to match the
+ * Opportunities tab. `cycle_status` is the right axis here: it is populated on every
+ * row, and it answers the only question that gates action -- can we still apply?
+ * The deadline columns are text and null on more than half the rows, so they cannot
+ * carry a filter the way `response_deadline` does on Opportunities.
+ */
+type CycleFilter = "open" | "closed" | "all";
 
 // The redesign flattens the old semantically-coloured badges onto the three
 // Nocturne `.tag` variants (accent = a live/positive signal, neutral = default,
@@ -33,15 +41,25 @@ function Tag({ text, variant }: { text: string; variant: TagVariant }) {
 export function AwardsClient({ awards, dismissAward }: Props) {
   const [rec, setRec] = useState<RecFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
-  const [openOnly, setOpenOnly] = useState(false);
+  // Replaces the old "Open only" toggle, which was the same axis expressed as a
+  // two-state button. One control, three explicit states, and the counts are visible
+  // without changing the filter to discover them.
+  const [cycle, setCycle] = useState<CycleFilter>("open");
 
   const filtered = awards.filter(
     (a) =>
       (rec === "all" || a.recommendation === rec) &&
       (type === "all" || a.award_type === type) &&
-      (!openOnly || a.cycle_status === "open"),
+      (cycle === "all" || a.cycle_status === cycle),
   );
   const applyCount = awards.filter((a) => a.recommendation === "apply").length;
+  const openCount = awards.filter((a) => a.cycle_status === "open").length;
+  const closedCount = awards.filter((a) => a.cycle_status === "closed").length;
+  const CYCLES: Array<{ key: CycleFilter; label: string; count: number }> = [
+    { key: "open", label: "Open", count: openCount },
+    { key: "closed", label: "Closed", count: closedCount },
+    { key: "all", label: "All", count: awards.length },
+  ];
 
   return (
     <div className="page view-fade" style={{ paddingTop: 0 }}>
@@ -51,11 +69,28 @@ export function AwardsClient({ awards, dismissAward }: Props) {
           <div className="sub">
             {awards.length === 0
               ? "No awards on the radar yet."
-              : `${awards.length} award${awards.length !== 1 ? "s" : ""} · ${applyCount} recommended to apply`}
+              : `${cycle === "all" ? awards.length : cycle === "open" ? openCount : closedCount} ${cycle === "all" ? "tracked" : cycle} of ${awards.length} tracked · ${applyCount} recommended to apply`}
           </div>
         </div>
-        {/* The award sweep is Cleo's; run it from her chat (matches the empty-state hint). */}
-        <Link href="/agents/cleo" className="btn">Run a sweep</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {awards.length > 0 && (
+            <div className="records-seg" role="group" aria-label="Filter by application cycle">
+              {CYCLES.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  aria-pressed={cycle === c.key}
+                  className={`records-seg-opt${cycle === c.key ? " active" : ""}`}
+                  onClick={() => setCycle(c.key)}
+                >
+                  {c.label} <span style={{ opacity: 0.6 }}>{c.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {/* The award sweep is Cleo's; run it from her chat (matches the empty-state hint). */}
+          <Link href="/agents/cleo" className="btn">Run a sweep</Link>
+        </div>
       </div>
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 760 }}>
@@ -76,7 +111,6 @@ export function AwardsClient({ awards, dismissAward }: Props) {
               <button key={t} className={`rec-filter${type === t ? " active" : ""}`} onClick={() => setType(t)}>{t}</button>
             ))}
           </div>
-          <button className={`rec-filter${openOnly ? " active" : ""}`} onClick={() => setOpenOnly((v) => !v)}>Open only</button>
         </div>
       )}
 

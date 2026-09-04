@@ -13,6 +13,19 @@ interface Props {
   findNow: () => Promise<void>;
 }
 
+/**
+ * Primary axis, in the page header as a segmented control to match Opportunities
+ * and Awards.
+ *
+ * Deliberately `recommendation` and NOT event date. `event_date` is a real DATE
+ * column, but it was null on 40 of 48 rows and zero were upcoming, so a
+ * Upcoming/Past/All control would have shown an empty default view and hidden 83%
+ * of the tab in both non-All buckets. The sweep fix in this same change starts
+ * populating the column from SAM.gov's structured date; once real dates accumulate,
+ * a date axis becomes worth revisiting.
+ */
+type RecFilter = "all" | "attend" | "consider" | "skip";
+
 const REC_COLOR: Record<string, string> = {
   attend: "oklch(58% 0.16 145)",
   consider: "oklch(62% 0.15 250)",
@@ -47,8 +60,18 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [justStarted, setJustStarted] = useState(false);
+  // Defaults to "all": unlike a deadline, a recommendation is advice rather than a
+  // gate, so opening on a narrowed view would hide rows for no safety reason.
+  const [rec, setRec] = useState<RecFilter>("all");
 
   const upcoming = events.filter((e) => !e.event_date || new Date(e.event_date + "T00:00:00").getTime() >= cutoffMs);
+  const shown = rec === "all" ? events : events.filter((e) => e.recommendation === rec);
+  const RECS: Array<{ key: RecFilter; label: string; count: number }> = [
+    { key: "all", label: "All", count: events.length },
+    { key: "attend", label: "Attend", count: events.filter((e) => e.recommendation === "attend").length },
+    { key: "consider", label: "Consider", count: events.filter((e) => e.recommendation === "consider").length },
+    { key: "skip", label: "Skip", count: events.filter((e) => e.recommendation === "skip").length },
+  ];
 
   function handleFind() {
     setError(null);
@@ -64,12 +87,31 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
         <div>
           <h1><CalendarClock size={20} style={{ verticalAlign: "-3px", marginRight: 8 }} />Industry Days</h1>
           <div className="sub">
-            {events.length === 0 ? "No industry days on the radar yet." : `${upcoming.length} upcoming · ${events.length} total`}
+            {events.length === 0
+              ? "No industry days on the radar yet."
+              : `${rec === "all" ? events.length : `${shown.length} ${rec} of ${events.length}`} tracked · ${upcoming.length} upcoming`}
           </div>
         </div>
-        <button className="btn" onClick={handleFind} disabled={pending}>
-          {pending ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Run a sweep
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {events.length > 0 && (
+            <div className="records-seg" role="group" aria-label="Filter by recommendation">
+              {RECS.map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  aria-pressed={rec === r.key}
+                  className={`records-seg-opt${rec === r.key ? " active" : ""}`}
+                  onClick={() => setRec(r.key)}
+                >
+                  {r.label} <span style={{ opacity: 0.6 }}>{r.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="btn" onClick={handleFind} disabled={pending}>
+            {pending ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />} Run a sweep
+          </button>
+        </div>
       </div>
 
       <p className="sub" style={{ marginBottom: 16, maxWidth: 780 }}>
@@ -87,9 +129,17 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
           <h4>Nothing yet.</h4>
           <p>Run a sweep with Beady to populate upcoming industry days.</p>
         </div>
+      ) : shown.length === 0 ? (
+        // Reachable: "attend" can be empty on a thin sweep. Name the filter that is
+        // hiding the rows, so an empty screen is not mistaken for an empty table.
+        <div className="empty">
+          <div className="ico"><CalendarClock /></div>
+          <h4>Nothing rated &ldquo;{rec}&rdquo;.</h4>
+          <p>{events.length} industry day{events.length !== 1 ? "s" : ""} tracked. Switch to All to see them.</p>
+        </div>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
-          {events.map((e) => {
+          {shown.map((e) => {
             const until = daysUntil(e.event_date);
             return (
               <div key={e.id} className="card" style={{ padding: 16, display: "grid", gap: 8, opacity: e.recommendation === "skip" ? 0.65 : 1 }}>

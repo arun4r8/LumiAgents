@@ -24,7 +24,49 @@ export const outputSchema = z.object({
 const fmt = (d: Date) => `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
 // A candidate event before scoring. `source` distinguishes the two feeds.
-interface Candidate { eventId: string; source: "sam_gov" | "web"; url: string; title: string; content: string; agency: string | null; }
+interface Candidate {
+  eventId: string;
+  source: "sam_gov" | "web";
+  url: string;
+  title: string;
+  content: string;
+  agency: string | null;
+  /**
+   * Structured date straight from SAM.gov (`responseDeadLine`, falling back to
+   * `postedDate`), ISO YYYY-MM-DD, when the API gave one.
+   *
+   * This used to be thrown away in the destructure below, so the model was asked to
+   * extract an event date from a 1200-character description that usually does not
+   * contain one -- 40 of 48 rows ended up with a null event_date while the API
+   * response had a date field sitting right there.
+   */
+  sourceDate: string | null;
+}
+
+/** SAM.gov returns ISO-8601 with a time part; the column is a DATE. */
+export function isoDay(raw: string | undefined | null): string | null {
+  if (!raw) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  return m ? m[1]! : null;
+}
+
+/**
+ * The date to store for an event: the model's answer when it is a well-formed date,
+ * otherwise SAM.gov's structured date.
+ *
+ * The strict regex is what keeps a malformed model answer out of a DATE column, so it
+ * stays. What changed is that failing it no longer means storing null -- that is how 40
+ * of 48 rows ended up dateless while the API response carried a date all along.
+ */
+export function resolveEventDate(modelAnswer: string | null, sourceDate: string | null): string | null {
+  // Both candidates are validated, not just the model's. sourceDate reaches this via
+  // isoDay() today so it is already well-formed, but a function whose whole job is to
+  // protect a DATE column should not depend on its caller having done that.
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  if (modelAnswer && DAY.test(modelAnswer)) return modelAnswer;
+  if (sourceDate && DAY.test(sourceDate)) return sourceDate;
+  return null;
+}
 
 const SAM_TITLE_KEYWORDS = ["industry day", "vendor outreach", "small business matchmaking"];
 const WEB_QUERIES = [
@@ -61,13 +103,16 @@ export default defineOrchestration({
           });
           const res = await ctx.fetch(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
           if (!res.ok) { console.warn(`[industry-day] SAM ${kw} → ${res.status}`); continue; }
-          const data = (await res.json()) as { opportunitiesData?: Array<{ noticeId?: string; title?: string; fullParentPathName?: string; description?: string; uiLink?: string }> };
+          const data = (await res.json()) as { opportunitiesData?: Array<{ noticeId?: string; title?: string; fullParentPathName?: string; description?: string; uiLink?: string; responseDeadLine?: string; postedDate?: string }> };
           for (const o of data.opportunitiesData ?? []) {
             if (!o.noticeId || !o.title) continue;
             out.push({
               eventId: o.noticeId, source: "sam_gov", url: o.uiLink ?? `https://sam.gov/opp/${o.noticeId}/view`,
               title: o.title, content: (o.description ?? "").slice(0, 1200),
               agency: (o.fullParentPathName ?? "").split(".")[0] || null,
+              // responseDeadLine is the registration/response date on a Special Notice,
+              // which is the closest structured proxy for when the event happens.
+              sourceDate: isoDay(o.responseDeadLine) ?? isoDay(o.postedDate),
             });
           }
         } catch (e) { console.warn(`[industry-day] SAM ${kw} error`, e); }
@@ -77,7 +122,7 @@ export default defineOrchestration({
       for (const q of WEB_QUERIES) {
         const hits = await tavilySearch(env, { query: q, maxResults: 6 });
         for (const h of hits) {
-          out.push({ eventId: fnv1a(h.url), source: "web", url: h.url, title: h.title, content: (h.content ?? "").slice(0, 1200), agency: null });
+          out.push({ eventId: fnv1a(h.url), source: "web", url: h.url, title: h.title, content: (h.content ?? "").slice(0, 1200), agency: null, sourceDate: null });
         }
       }
 
@@ -108,11 +153,13 @@ Lumiture: small US database-management + AI/ML firm, DC-area, federal focus. Val
 
 For each item decide if it is genuinely an industry-day-type EVENT (not a solicitation, award, or generic page). If it is NOT an event, give fitScore 1 and recommendation "skip".
 
+Each item may carry a "sourceDate" taken straight from SAM.gov. Prefer a date stated in the content when the content clearly gives the event date; otherwise fall back to sourceDate. Only return null if neither is available.
+
 Extract: title, agency (hosting agency, or null), eventDate (ISO YYYY-MM-DD if determinable, else null), location (city / "Virtual" / null), format ("in-person" | "virtual" | "hybrid" | null), registrationUrl (if present, else null), description (1-2 sentences), fitScore (1-10), fitReason (1 sentence), recommendation ("attend" fit>=7 | "consider" fit 4-6 | "skip" fit<=3).
 
 Only return items scoring >= ${input.minScore}.
       `.trim(),
-      input: { items: fresh.map((c, i) => ({ id: i, source: c.source, url: c.url, title: c.title, content: c.content, agency: c.agency })) },
+      input: { items: fresh.map((c, i) => ({ id: i, source: c.source, url: c.url, title: c.title, content: c.content, agency: c.agency, sourceDate: c.sourceDate })) },
       schema: z.object({
         events: z.array(z.object({
           id: z.number(),
@@ -137,7 +184,7 @@ Only return items scoring >= ${input.minScore}.
         .filter((x): x is { s: (typeof scored.events)[number]; raw: Candidate } => x !== null)
         .map(({ s, raw }) => ({
           event_id: raw.eventId, title: s.title, agency: s.agency,
-          event_date: s.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(s.eventDate) ? s.eventDate : null,
+          event_date: resolveEventDate(s.eventDate, raw.sourceDate),
           location: s.location, format: s.format, registration_url: s.registrationUrl,
           source: raw.source, source_url: raw.url, description: s.description,
           fit_score: s.fitScore, fit_reason: s.fitReason, recommendation: s.recommendation,
