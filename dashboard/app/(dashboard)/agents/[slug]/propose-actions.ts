@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireOps } from "@/lib/require-ops";
 import { revalidatePath } from "next/cache";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 // Tier 2 agent builder (#67). Ops-only server action: forward a capability proposal to the
 // runtime's ops-gated draft endpoint, which generates the file set and opens a human-merge-gated
@@ -12,7 +13,6 @@ import { revalidatePath } from "next/cache";
 // re-checks ops on its side (it holds the GitHub App credential); this requireOps() is the
 // caller-side gate, mirroring Tier 1's createAgent.
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export type ProposeFieldType = "string" | "number" | "boolean";
 
@@ -118,7 +118,7 @@ export async function proposeCapability(input: ProposeCapabilityInput): Promise<
 
   let res: Response;
   try {
-    res = await fetch(`${RUNTIME}/api/agent-builder/tier2/draft`, {
+    res = await fetchRuntime(`/api/agent-builder/tier2/draft`, {
       method: "POST",
       cache: "no-store",
       headers: {
@@ -172,8 +172,7 @@ export async function listProposals(agentSlug: string): Promise<ProposalListResu
 
   let res: Response;
   try {
-    res = await fetch(
-      `${RUNTIME}/api/agent-builder/tier2/proposals?agentSlug=${encodeURIComponent(agentSlug)}`,
+    res = await fetchRuntime(`/api/agent-builder/tier2/proposals?agentSlug=${encodeURIComponent(agentSlug)}`,
       { cache: "no-store", headers: { Authorization: `Bearer ${token}` } },
     );
   } catch (err) {
@@ -199,7 +198,7 @@ export async function cancelProposal(agentSlug: string, prNumber: number): Promi
 
   let res: Response;
   try {
-    res = await fetch(`${RUNTIME}/api/agent-builder/tier2/proposals/cancel`, {
+    res = await fetchRuntime(`/api/agent-builder/tier2/proposals/cancel`, {
       method: "POST",
       cache: "no-store",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

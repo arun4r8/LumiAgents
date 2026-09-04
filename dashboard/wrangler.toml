@@ -7,6 +7,16 @@ compatibility_flags = ["nodejs_compat"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
+# Service Binding to the runtime Worker.
+#
+# REQUIRED, not an optimisation. A Worker cannot fetch another Worker on the same
+# zone over plain HTTP -- Cloudflare refuses with error 1042 -- so every server-side
+# call from this app into the runtime was failing in production while working in
+# local dev, where the caller is Node rather than a Worker. See lib/runtime-fetch.ts.
+[[services]]
+binding = "RUNTIME_WORKER"
+service = "lumiagents-runtime"
+
 # ---------------------------------------------------------------------------
 # STAGING environment (issue #121). Deployed by
 # .github/workflows/deploy-staging.yml via
@@ -19,3 +29,9 @@ name = "lumiagents-dashboard-staging"
 [env.staging.assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
+
+# wrangler does NOT inherit `services` into a named environment, so staging needs its
+# own stanza pointing at the staging runtime (same rule as runtime/wrangler.toml).
+[[env.staging.services]]
+binding = "RUNTIME_WORKER"
+service = "lumiagents-runtime-staging"

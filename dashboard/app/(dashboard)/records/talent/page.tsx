@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { errorSummary, isTerminal } from "@/lib/run-view";
 import { TalentClient } from "@/components/talent-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 const REDACT_ORCHESTRATION = "angie/resume-redact";
 
@@ -111,8 +111,7 @@ export default async function TalentPage({
     const code = candidateCode.trim();
 
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent(REDACT_ORCHESTRATION)}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent(REDACT_ORCHESTRATION)}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

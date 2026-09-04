@@ -14,6 +14,7 @@ import { cardFromRow } from "@/lib/agent-catalog";
 import { agentOfOrchestration, bareOrchestration } from "@/lib/agent-style";
 import { costUsd } from "@/lib/llm-pricing";
 import { fmtUsd, type SpendRow } from "@/lib/spend";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -284,9 +285,7 @@ export default async function OverviewPage() {
     const sb = await createClient();
     const { data: { session } } = await sb.auth.getSession();
     if (!session) throw new Error("No active session");
-
-    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
-    const res = await fetch(`${runtimeUrl}/api/approvals/${approvalId}/respond`, {
+    const res = await fetchRuntime(`/api/approvals/${approvalId}/respond`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

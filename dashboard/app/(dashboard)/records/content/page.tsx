@@ -2,10 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ContentCalendarClient } from "@/components/content-calendar-client";
 import { mapContentCsv } from "@/lib/content-csv";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export interface CalendarEntry {
   id: string;
@@ -111,8 +111,7 @@ export default async function ContentCalendarPage() {
     "use server";
     const id = formData.get("id") as string;
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("cleo/content-draft")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("cleo/content-draft")}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -133,8 +132,7 @@ export default async function ContentCalendarPage() {
     if (!theme) throw new Error("A theme is required.");
     const count = Math.min(20, Math.max(1, Math.round(Number(formData.get("count")) || 5)));
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("cleo/content-plan")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("cleo/content-plan")}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -153,8 +151,7 @@ export default async function ContentCalendarPage() {
   async function syncNow(): Promise<{ started: boolean }> {
     "use server";
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("cleo/content-sync")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("cleo/content-sync")}/run`,
       { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
     );
     if (!res.ok) throw new Error(`Sync failed (${res.status}): ${await res.text()}`);

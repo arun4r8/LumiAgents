@@ -6,8 +6,8 @@
 // which passes the ops_all policy.
 
 import { readOnlyOrchestrations } from "../../runtime/src/agents/catalog-validation";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export interface AgentCard {
   slug: string;
@@ -64,7 +64,7 @@ export function cardFromRow(r: {
  *  list page degrades gracefully rather than erroring. */
 export async function getAgentCards(token?: string): Promise<AgentCard[]> {
   try {
-    const res = await fetch(`${RUNTIME}/api/agents`, {
+    const res = await fetchRuntime(`/api/agents`, {
       cache: "no-store",
       ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
     });
@@ -110,7 +110,7 @@ export async function getOrchestrationOptions(
   isActiveByName: Map<string, boolean>,
 ): Promise<OrchestrationOption[]> {
   try {
-    const res = await fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" });
+    const res = await fetchRuntime(`/api/orchestrations`, { cache: "no-store" });
     if (!res.ok) return [];
     const rows = (await res.json()) as RawOrchestration[];
     // #127: derive the sync-eligible set from the catalogue's own readOnly flags.

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ApprovalsClient, type ApprovalItem, type ApprovalStats } from "@/components/approvals-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +43,7 @@ export default async function ApprovalsPage() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No active session");
 
-    const runtimeUrl = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
-
-    const res = await fetch(`${runtimeUrl}/api/approvals/${approvalId}/respond`, {
+    const res = await fetchRuntime(`/api/approvals/${approvalId}/respond`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

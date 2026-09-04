@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 // Shared, kind-aware subscription actions. Used by the Settings → Subscriptions tab
 // (this folder keeps only the actions now that /subscriptions 308s into Settings)
@@ -9,7 +10,6 @@ import { revalidatePath } from "next/cache";
 // Every write goes to the unified orchestration.subscriptions table; `kind` comes
 // from the form.
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 // kind → which orchestration sends its digest on the manual "Send now" path.
 const REPORT_ORCH: Record<string, string> = {
@@ -172,7 +172,7 @@ export async function sendNow(formData: FormData) {
   const kind = normalizeKind(formData.get("kind"));
   const orch = REPORT_ORCH[kind];
   const token = await getToken();
-  const res = await fetch(`${RUNTIME}/api/orchestrations/${encodeURIComponent(orch)}/run`, {
+  const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent(orch)}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ subscriptionId: id }),

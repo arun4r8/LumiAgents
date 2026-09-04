@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { KnowledgeClient } from "@/components/knowledge-client";
 import { roleOf } from "@/lib/role";
 import type { OrcDocument, CorpusDoc } from "@/components/document-corpus";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,6 @@ interface VaultDoc {
   created_at: string;
 }
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 async function getToken(): Promise<string | null> {
   try {
@@ -96,7 +96,7 @@ export default async function KnowledgePage({
   try {
     const token = await getToken();
     if (token) {
-      const res = await fetch(`${RUNTIME}/api/documents`, {
+      const res = await fetchRuntime(`/api/documents`, {
         headers: { Authorization: `Bearer ${token}` },
         // Next.js server fetch: opt out of caching for fresh data
         cache: "no-store",
@@ -115,7 +115,7 @@ export default async function KnowledgePage({
     // Falls back to direct Supabase delete if token is unavailable.
     const token = await getToken();
     if (token) {
-      await fetch(`${RUNTIME}/api/documents/${encodeURIComponent(id)}`, {
+      await fetchRuntime(`/api/documents/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });

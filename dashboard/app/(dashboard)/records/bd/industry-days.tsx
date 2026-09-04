@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { IndustryDaysClient } from "@/components/industry-days-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export interface IndustryDay {
   id: string;
@@ -52,8 +52,7 @@ export async function IndustryDaysTab() {
   async function findNow(): Promise<void> {
     "use server";
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("beady/industry-day-sweep")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("beady/industry-day-sweep")}/run`,
       { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({}) },
     );
     if (!res.ok) throw new Error(`Sweep failed (${res.status}): ${await res.text()}`);

@@ -95,6 +95,13 @@ jobs:
       - name: Check documentation facts
         run: python3 scripts/check-doc-facts.py
 
+      # A Worker cannot fetch another Worker on the same zone (Cloudflare 1042), and
+      # local dev never shows it because there the caller is Node. That gap hid every
+      # broken server-side runtime call in production -- including responding to an
+      # approval -- until a log tail turned up the error code.
+      - name: Check server-side runtime calls use the Service Binding
+        run: python3 scripts/check-runtime-fetch.py
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest

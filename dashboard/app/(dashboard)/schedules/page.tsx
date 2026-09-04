@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { SchedulesClient } from "@/components/schedules-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 interface Schedule {
   id: string;
@@ -37,7 +37,7 @@ export default async function SchedulesPage() {
   async function createSchedule(formData: FormData) {
     "use server";
     const token = await getToken();
-    const res = await fetch(`${RUNTIME}/api/schedules`, {
+    const res = await fetchRuntime(`/api/schedules`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
@@ -55,7 +55,7 @@ export default async function SchedulesPage() {
     const token = await getToken();
     const id = formData.get("id") as string;
     const currentlyActive = formData.get("is_active") === "true";
-    const res = await fetch(`${RUNTIME}/api/schedules/${id}`, {
+    const res = await fetchRuntime(`/api/schedules/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ is_active: !currentlyActive }),
@@ -68,7 +68,7 @@ export default async function SchedulesPage() {
     "use server";
     const token = await getToken();
     const id = formData.get("id") as string;
-    const res = await fetch(`${RUNTIME}/api/schedules/${id}`, {
+    const res = await fetchRuntime(`/api/schedules/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -80,7 +80,7 @@ export default async function SchedulesPage() {
     "use server";
     const token = await getToken();
     const id = formData.get("id") as string;
-    const res = await fetch(`${RUNTIME}/api/schedules/${id}`, {
+    const res = await fetchRuntime(`/api/schedules/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({

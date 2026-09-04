@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { RfiDraftsClient } from "@/components/rfi-drafts-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export interface RfiDraft {
   id: string;
@@ -86,8 +86,7 @@ export async function RfiDraftsTab() {
     const samNoticeId = formData.get("samNoticeId") as string;
     if (!samNoticeId) throw new Error("Pick an opportunity first.");
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -109,8 +108,7 @@ export async function RfiDraftsTab() {
     const filled = Object.fromEntries(Object.entries(answers).filter(([, v]) => v && v.trim()));
     if (Object.keys(filled).length === 0) throw new Error("Answer at least one question before drafting.");
     const token = await getToken();
-    const res = await fetch(
-      `${RUNTIME}/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
+    const res = await fetchRuntime(`/api/orchestrations/${encodeURIComponent("beady/rfi-draft")}/run`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

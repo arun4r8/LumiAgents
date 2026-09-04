@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireOps } from "@/lib/require-ops";
 import { revalidatePath } from "next/cache";
 import type { AgentManifestDraft, SaveResult } from "@/lib/agent-manifest";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 import {
   validateConfigAgent,
   type ConfigAgentDraft,
@@ -15,7 +16,6 @@ import {
 // non-ops caller is refused even if this check were somehow bypassed. Config agents only —
 // the six code agents are edited through the Phase 1 Tier 0 customize panel, never here.
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 function toConfigDraft(m: AgentManifestDraft): ConfigAgentDraft {
   return {
@@ -46,7 +46,7 @@ async function loadValidationContext(
   excludeSlug: string | null,
 ): Promise<{ orchestrations: OrchestrationInfo[]; existingSlugs: string[] }> {
   const [catalogueRes, activeRows, agentRows] = await Promise.all([
-    fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" })
+    fetchRuntime(`/api/orchestrations`, { cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<{ name: string; readOnly?: boolean }[]>) : []))
       .catch(() => [] as { name: string; readOnly?: boolean }[]),
     sb.schema("orchestration").from("orchestrations").select("name, is_active"),

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { roleOf } from "@/lib/role";
 import { OrchestrationsClient } from "@/components/orchestrations-client";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,6 @@ export const dynamic = "force-dynamic";
 // would just be a confusing duplicate.
 const HIDDEN_FROM_CATALOGUE = ["beady/opportunity-report"];
 
-const RUNTIME = process.env.NEXT_PUBLIC_RUNTIME_URL ?? "http://localhost:8787";
 
 export default async function OrchestrationsPage() {
   const supabase = await createClient();
@@ -34,7 +34,7 @@ export default async function OrchestrationsPage() {
   // runtime is unreachable, so a transient outage never blanks the page.
   let registered: Set<string> | null = null;
   try {
-    const res = await fetch(`${RUNTIME}/api/orchestrations`, { cache: "no-store" });
+    const res = await fetchRuntime(`/api/orchestrations`, { cache: "no-store" });
     if (res.ok) {
       const catalogue = (await res.json()) as { name: string }[];
       registered = new Set(catalogue.map((c) => c.name));
