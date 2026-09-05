@@ -50,22 +50,30 @@ export function isoDay(raw: string | undefined | null): string | null {
   return m ? m[1]! : null;
 }
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * The date to store for an event: the model's answer when it is a well-formed date,
- * otherwise SAM.gov's structured date.
+ * The date the event happens. Model-extracted only.
  *
- * The strict regex is what keeps a malformed model answer out of a DATE column, so it
- * stays. What changed is that failing it no longer means storing null -- that is how 40
- * of 48 rows ended up dateless while the API response carried a date all along.
+ * This deliberately does NOT fall back to SAM.gov's `responseDeadLine`. It briefly did,
+ * to lift coverage, and that lifted coverage by writing a different fact: the first row
+ * it produced was an event dated 2026-06-10 swept on 2026-09-05. SAM.gov has no
+ * event-date field -- `postedDate`, `responseDeadLine` and `archiveDate` are all
+ * something else -- so when the content does not state a date, null is the true answer
+ * and a deadline standing in for it is worse than nothing.
+ *
+ * The structured date is kept, in `response_deadline`, where it means what it says.
  */
-export function resolveEventDate(modelAnswer: string | null, sourceDate: string | null): string | null {
-  // Both candidates are validated, not just the model's. sourceDate reaches this via
-  // isoDay() today so it is already well-formed, but a function whose whole job is to
-  // protect a DATE column should not depend on its caller having done that.
-  const DAY = /^\d{4}-\d{2}-\d{2}$/;
-  if (modelAnswer && DAY.test(modelAnswer)) return modelAnswer;
-  if (sourceDate && DAY.test(sourceDate)) return sourceDate;
-  return null;
+export function resolveEventDate(modelAnswer: string | null): string | null {
+  return modelAnswer && DAY.test(modelAnswer) ? modelAnswer : null;
+}
+
+/**
+ * The registration / response cutoff, straight from SAM.gov. Validated here rather than
+ * trusting the caller, since it lands in a DATE column.
+ */
+export function resolveResponseDeadline(sourceDate: string | null): string | null {
+  return sourceDate && DAY.test(sourceDate) ? sourceDate : null;
 }
 
 const SAM_TITLE_KEYWORDS = ["industry day", "vendor outreach", "small business matchmaking"];
@@ -153,7 +161,7 @@ Lumiture: small US database-management + AI/ML firm, DC-area, federal focus. Val
 
 For each item decide if it is genuinely an industry-day-type EVENT (not a solicitation, award, or generic page). If it is NOT an event, give fitScore 1 and recommendation "skip".
 
-Each item may carry a "sourceDate" taken straight from SAM.gov. Prefer a date stated in the content when the content clearly gives the event date; otherwise fall back to sourceDate. Only return null if neither is available.
+Each item may carry a "sourceDate" -- SAM.gov's response/registration deadline. It is NOT the event date and must never be returned as one; it is provided only as a hint about roughly when the event sits. If the content does not state when the event happens, return null for eventDate.
 
 Extract: title, agency (hosting agency, or null), eventDate (ISO YYYY-MM-DD if determinable, else null), location (city / "Virtual" / null), format ("in-person" | "virtual" | "hybrid" | null), registrationUrl (if present, else null), description (1-2 sentences), fitScore (1-10), fitReason (1 sentence), recommendation ("attend" fit>=7 | "consider" fit 4-6 | "skip" fit<=3).
 
@@ -184,7 +192,8 @@ Only return items scoring >= ${input.minScore}.
         .filter((x): x is { s: (typeof scored.events)[number]; raw: Candidate } => x !== null)
         .map(({ s, raw }) => ({
           event_id: raw.eventId, title: s.title, agency: s.agency,
-          event_date: resolveEventDate(s.eventDate, raw.sourceDate),
+          event_date: resolveEventDate(s.eventDate),
+          response_deadline: resolveResponseDeadline(raw.sourceDate),
           location: s.location, format: s.format, registration_url: s.registrationUrl,
           source: raw.source, source_url: raw.url, description: s.description,
           fit_score: s.fitScore, fit_reason: s.fitReason, recommendation: s.recommendation,

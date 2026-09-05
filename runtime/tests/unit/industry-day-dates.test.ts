@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isoDay, resolveEventDate } from "../../../orchestrations/beady/industry-day-sweep/definition";
+import { isoDay, resolveEventDate, resolveResponseDeadline } from "../../../orchestrations/beady/industry-day-sweep/definition";
 
 /**
  * 40 of 48 industry days had a null event_date. The model was not at fault: the sweep
@@ -22,35 +22,57 @@ describe("isoDay", () => {
 });
 
 describe("resolveEventDate", () => {
-  it("prefers a well-formed model answer", () => {
-    expect(resolveEventDate("2026-09-15", "2026-01-01")).toBe("2026-09-15");
+  it("takes a well-formed model answer", () => {
+    expect(resolveEventDate("2026-09-15")).toBe("2026-09-15");
   });
 
-  it("falls back to the SAM.gov date when the model returns null", () => {
-    // The regression: this used to be null, discarding a date the API had supplied.
-    expect(resolveEventDate(null, "2026-09-15")).toBe("2026-09-15");
+  it("returns null when the model could not determine a date", () => {
+    // Null is the TRUE answer when the notice does not state when the event happens.
+    // SAM.gov has no event-date field, so there is nothing honest to fall back to.
+    expect(resolveEventDate(null)).toBeNull();
   });
 
-  it("falls back when the model answers in a format the column cannot take", () => {
-    // The strict regex still rejects these -- it is what keeps a DATE column clean --
-    // but rejection now means "use the structured date", not "store null".
-    for (const malformed of ["September 15, 2026", "2026-09-15T00:00:00Z", "09/15/2026", "TBD"]) {
-      expect(resolveEventDate(malformed, "2026-09-15")).toBe("2026-09-15");
+  it("rejects a format the DATE column would not take", () => {
+    for (const bad of ["September 15, 2026", "2026-09-15T00:00:00Z", "09/15/2026", "TBD", ""]) {
+      expect(resolveEventDate(bad)).toBeNull();
     }
   });
 
-  it("is null only when neither source has a date", () => {
-    expect(resolveEventDate(null, null)).toBeNull();
-    expect(resolveEventDate("TBD", null)).toBeNull();
+  it("never absorbs the response deadline", () => {
+    // The regression this replaced: responseDeadLine standing in for the event date
+    // produced an event dated 2026-06-10 on a notice swept 2026-09-05. resolveEventDate
+    // has no access to that value any more, by signature -- it takes one argument.
+    expect(resolveEventDate.length).toBe(1);
+  });
+});
+
+describe("resolveResponseDeadline", () => {
+  it("keeps a well-formed SAM.gov date", () => {
+    expect(resolveResponseDeadline("2026-06-10")).toBe("2026-06-10");
   });
 
-  it("never returns a value the DATE column would reject", () => {
-    const cases: Array<[string | null, string | null]> = [
-      ["TBD", "2026-09-15"], [null, "2026-09-15"], ["2026-09-15", null], ["bad", "also bad"],
-    ];
-    for (const [model, source] of cases) {
-      const out = resolveEventDate(model, source);
-      if (out !== null) expect(out).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  it("is null for web rows, which have no structured date", () => {
+    expect(resolveResponseDeadline(null)).toBeNull();
+  });
+
+  it("validates rather than trusting its caller", () => {
+    for (const bad of ["not-a-date", "2026-6-1", ""]) {
+      expect(resolveResponseDeadline(bad)).toBeNull();
     }
+  });
+});
+
+describe("the two dates stay independent", () => {
+  it("a notice with only a deadline yields no event date", () => {
+    // The DCSA case: SAM.gov gave a responseDeadLine, the content gave no event date.
+    // The row should record the deadline and admit the event date is unknown.
+    expect(resolveEventDate(null)).toBeNull();
+    expect(resolveResponseDeadline(isoDay("2026-06-10T17:00:00-04:00"))).toBe("2026-06-10");
+  });
+
+  it("a notice stating its date yields both, unmixed", () => {
+    // "HAESI 2.0 INDUSTRY DAY 05 AUG 2026" -- the model reads the title correctly.
+    expect(resolveEventDate("2026-08-05")).toBe("2026-08-05");
+    expect(resolveResponseDeadline("2026-07-29")).toBe("2026-07-29");
   });
 });

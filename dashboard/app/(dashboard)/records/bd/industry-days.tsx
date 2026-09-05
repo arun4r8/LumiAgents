@@ -11,6 +11,8 @@ export interface IndustryDay {
   title: string;
   agency: string | null;
   event_date: string | null;
+  /** Registration / response cutoff from SAM.gov. NOT the event date. */
+  response_deadline: string | null;
   location: string | null;
   format: string | null;
   registration_url: string | null;

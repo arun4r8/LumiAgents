@@ -64,7 +64,13 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
   // gate, so opening on a narrowed view would hide rows for no safety reason.
   const [rec, setRec] = useState<RecFilter>("all");
 
-  const upcoming = events.filter((e) => !e.event_date || new Date(e.event_date + "T00:00:00").getTime() >= cutoffMs);
+  // Undated rows are NOT upcoming. This used to count them as upcoming (`!e.event_date ||`),
+  // which is how the header read "40 upcoming" when 40 of 48 rows simply had no date --
+  // an unknown presented as a promise. SAM.gov has no event-date field, so undated is a
+  // real and common state and deserves its own number.
+  const dated = events.filter((e) => e.event_date !== null);
+  const upcoming = dated.filter((e) => new Date(e.event_date + "T00:00:00").getTime() >= cutoffMs);
+  const undated = events.length - dated.length;
   const shown = rec === "all" ? events : events.filter((e) => e.recommendation === rec);
   const RECS: Array<{ key: RecFilter; label: string; count: number }> = [
     { key: "all", label: "All", count: events.length },
@@ -89,7 +95,7 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
           <div className="sub">
             {events.length === 0
               ? "No industry days on the radar yet."
-              : `${rec === "all" ? events.length : `${shown.length} ${rec} of ${events.length}`} tracked · ${upcoming.length} upcoming`}
+              : `${rec === "all" ? events.length : `${shown.length} ${rec} of ${events.length}`} tracked · ${upcoming.length} upcoming${undated > 0 ? ` · ${undated} undated` : ""}`}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -159,7 +165,20 @@ export function IndustryDaysClient({ events, cutoffMs, dismiss, findNow }: Props
                 </div>
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 13, color: "var(--ink-2)" }}>
-                  <span><CalendarClock size={13} style={{ verticalAlign: "-2px" }} /> {fmtDate(e.event_date)}{until && until !== "past" ? ` (${until})` : ""}</span>
+                  {/* The two dates are shown separately and labelled, because they are
+                      different facts. An undated event says so rather than borrowing the
+                      deadline and presenting it as the event date. */}
+                  <span>
+                    <CalendarClock size={13} style={{ verticalAlign: "-2px" }} />{" "}
+                    {e.event_date ? (
+                      <>{fmtDate(e.event_date)}{until && until !== "past" ? ` (${until})` : ""}</>
+                    ) : (
+                      <span style={{ fontStyle: "italic" }}>Date not stated</span>
+                    )}
+                  </span>
+                  {e.response_deadline && (
+                    <span>Register by {fmtDate(e.response_deadline)}</span>
+                  )}
                   {e.location && <span><MapPin size={13} style={{ verticalAlign: "-2px" }} /> {e.location}</span>}
                   {e.format && <span className="chip" style={{ fontSize: 11 }}>{e.format}</span>}
                 </div>

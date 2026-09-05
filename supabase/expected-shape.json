@@ -36,7 +36,7 @@
         "orchestration.agent_configs": 6,
         "orchestration.run_steps": 16,
         "public.indirect_rates": 2,
-        "public.industry_days": 16,
+        "public.industry_days": 17,
         "orchestration.agent_proposals": 11,
         "public.prompt_bank": 2,
         "public.resume_jobs": 6,
