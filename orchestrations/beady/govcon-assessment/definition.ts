@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { scopeForRun } from "@/runtime/agents/knowledge-access";
+import { fetchOpportunityAttachmentText } from "../../../integrations/sam-gov/attachments";
 import type { KnowledgeScope } from "@/runtime/agents/knowledge-access";
 import {
   pdfToText,
@@ -135,6 +136,14 @@ export default defineOrchestration({
 
     // ── 1. Resolve / create the opportunity, ingest documents ──────────────────
     const { opportunityId } = await step(ctx, "resolve-opportunity", async () => {
+      // Resolve the opportunity FIRST: what we can fetch depends on knowing its
+      // sam_notice_id, and until #<this change> the order was the other way round.
+      let opp: any = null;
+      if (input.opportunityId) {
+        const rows = await sbSelect(env, `opportunities?id=eq.${input.opportunityId}&select=*&limit=1`);
+        opp = rows[0] ?? null;
+      }
+
       const docs: Array<{ doc_type: string; text: string }> = [];
       if (input.solicitationPdfBase64) {
         const pdfText = await pdfToText(env, input.solicitationPdfBase64);
@@ -142,13 +151,35 @@ export default defineOrchestration({
       }
       if (input.summaryText?.trim()) docs.push({ doc_type: "summary", text: input.summaryText.trim() });
       if (input.notes?.trim()) docs.push({ doc_type: "capture_brief", text: input.notes.trim() });
-      const combinedText = docs.map((d) => `[${d.doc_type.toUpperCase()}]\n${d.text}`).join("\n\n---\n\n");
 
-      let opp: any = null;
-      if (input.opportunityId) {
-        const rows = await sbSelect(env, `opportunities?id=eq.${input.opportunityId}&select=*&limit=1`);
-        opp = rows[0] ?? null;
+      // Pull the actual solicitation from SAM.gov when nothing was supplied by hand.
+      //
+      // Without this, running the assessment on an existing opportunity gave the model
+      // a title, an agency and a 224-character fit rationale -- so extractOpportunityFacts
+      // was never even called (it is gated on there being text), every extraction field
+      // stayed null, and the memo correctly reported the opportunity as "a black box".
+      // The capability existed: fetchOpportunityAttachmentText resolves the notice
+      // description and its resourceLinks, and was wired into beady/rfi-draft only.
+      //
+      // Best-effort by design. A solicitation we cannot fetch should degrade to the old
+      // metadata-only assessment, not fail the run -- the memo already says how confident
+      // it is, and "Very Low" on thin input is the right answer rather than an error.
+      if (!docs.some((d) => d.doc_type === "rfp_pdf") && opp?.sam_notice_id) {
+        const noticeId = String(opp.sam_notice_id);
+        if (!noticeId.startsWith("sbir_")) {
+          const attachment = await fetchOpportunityAttachmentText(
+            env,
+            noticeId,
+            (opp.posted_date as string | null) ?? null,
+          ).catch((e: unknown) => ({ text: "", note: `error: ${e instanceof Error ? e.message : String(e)}` }));
+          if (attachment.text.trim()) {
+            docs.push({ doc_type: "solicitation", text: attachment.text.trim() });
+          }
+          console.log(`[govcon-assessment] solicitation fetch for ${noticeId}: ${attachment.note}`);
+        }
       }
+
+      const combinedText = docs.map((d) => `[${d.doc_type.toUpperCase()}]\n${d.text}`).join("\n\n---\n\n");
 
       let facts: any = null;
       if (combinedText) facts = await extractOpportunityFacts(env, combinedText, model);
@@ -161,6 +192,13 @@ export default defineOrchestration({
           }
           if ((!opp.key_requirements || opp.key_requirements.length === 0) && facts.key_requirements?.length) patch.key_requirements = facts.key_requirements;
           if (!opp.due_date && facts.due_date && facts.due_date !== "Unknown") patch.due_date = facts.due_date;
+          // The sweep stores the deadline as `response_deadline`; the assessment reads
+          // `due_date`. The SSA memo listed the due date as unknown while
+          // response_deadline sat populated in the same row. Carry it across rather
+          // than asking the model to rediscover a fact we already have.
+          if (!patch.due_date && !opp.due_date && opp.response_deadline) {
+            patch.due_date = String(opp.response_deadline).slice(0, 10);
+          }
           patch.extracted_facts = { ...(opp.extracted_facts || {}), ...facts };
           if (Object.keys(patch).length) {
             await sbUpdate(env, "opportunities", opp.id, patch);
