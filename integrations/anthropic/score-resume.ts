@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./client";
 import { z } from "zod";
 import type { Env } from "../../runtime/src/types";
 import { MODELS } from "../../runtime/src/config/models";
@@ -155,7 +156,7 @@ export interface ScoreResumeInput {
 // structured-output call (forced tool use), so there is no fence-stripping or
 // decimal-coercion hack and tokens are attributable to the run.
 export async function scoreResume(env: Env, input: ScoreResumeInput): Promise<ScoredResume> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
 
   const userText =
     `Role Specified: ${input.rolekey}\n\n` +

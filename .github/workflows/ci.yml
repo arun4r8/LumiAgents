@@ -102,6 +102,12 @@ jobs:
       - name: Check server-side runtime calls use the Service Binding
         run: python3 scripts/check-runtime-fetch.py
 
+      # An Anthropic client built without a timeout can hold a step for ~30 minutes and
+      # then be retried by the Workflow on top. A silent hang is worse than a failure:
+      # nothing alerts and the UI still says "running".
+      - name: Check Anthropic clients are bounded
+        run: python3 scripts/check-anthropic-client.py
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest

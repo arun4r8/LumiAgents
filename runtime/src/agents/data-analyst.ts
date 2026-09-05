@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import type { Env } from "../types";
 import { MODELS } from "../config/models";
 
@@ -162,7 +162,7 @@ async function runAnalystQuery(env: Env, sql: string): Promise<unknown[]> {
 // ─── Main analyst function ────────────────────────────────────────────────────
 
 export async function runDataAnalyst(env: Env, req: AnalystRequest): Promise<AnalystResult> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
 
   const allowedTables = req.tables
     ? QUERYABLE_TABLES.filter((t) => req.tables!.includes(t))

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import { z } from "zod";
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
@@ -7,7 +8,7 @@ import { MODELS } from "../config/models";
 const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function makeClient(ctx: RunContext): Anthropic {
-  return new Anthropic({ apiKey: ctx.env.ANTHROPIC_API_KEY });
+  return anthropicClient(ctx.env.ANTHROPIC_API_KEY);
 }
 
 function resolveModel(ctx: RunContext): string {

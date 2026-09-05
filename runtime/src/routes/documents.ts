@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import type { Env } from "../types";
 import { ingestDocument, queryDocuments } from "../agents/document-rag";
 import { ENDUSER_CORPUS, scopeForRole } from "../agents/knowledge-access";
@@ -34,7 +35,7 @@ function guessMime(filename: string): string {
 }
 
 async function ocrWithClaude(env: Env, base64: string, mimeType: string): Promise<string> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
 
   type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./client";
 import type { Env } from "../../runtime/src/types";
 import { MODELS } from "../../runtime/src/config/models";
 
@@ -10,7 +11,7 @@ import { MODELS } from "../../runtime/src/config/models";
 const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function client(env: Env): Anthropic {
-  return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  return anthropicClient(env.ANTHROPIC_API_KEY);
 }
 
 function firstText(resp: Anthropic.Message): string {

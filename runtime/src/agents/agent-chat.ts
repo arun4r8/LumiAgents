@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import { AGENTS } from "../../../agents";
 import type { AgentDefinition, AgentTool, ToolMapping } from "../../../agents";
 import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, PDF_FIELD_BY_TOOL, ensurePdfBase64 } from "../utils/pdf";
@@ -312,7 +313,7 @@ export async function runAgentChat(
   const agent = request.agentDef ?? AGENTS[request.agentSlug];
   if (!agent) throw new Error(`Unknown agent slug: ${request.agentSlug}`);
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
   // `runs` is the real accumulator; `runIds` is its deprecated projection, kept
   // in lockstep so existing callers (Teams, e2e) keep working unchanged.
   const runs: AgentRunRef[] = [];

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./client";
 import type { Env } from "../../runtime/src/types";
 import { MODELS } from "../../runtime/src/config/models";
 
@@ -70,7 +71,7 @@ export interface ContentPostInput {
 export async function draftContentPost(env: Env, input: ContentPostInput, model = DEFAULT_MODEL): Promise<string> {
   const channel: ContentChannel = input.channel ?? "linkedin";
   const label = channel === "instagram" ? "Instagram" : "LinkedIn";
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
   const payload = { calendar_entry: input.entry, company_profile: input.companyProfile };
   const resp = await client.messages.create({
     model,
@@ -95,7 +96,7 @@ export async function planContentIdeas(
   opts: { theme: string; count: number; companyProfile: unknown },
   model = DEFAULT_MODEL,
 ): Promise<ContentIdea[]> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
   const payload = { theme: opts.theme, count: opts.count, company_profile: opts.companyProfile };
   const resp = await client.messages.create({
     model,

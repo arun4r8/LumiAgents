@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import type { Env } from "../types";
 import { chunkText } from "../utils/chunker";
 import { MODELS } from "../config/models";
@@ -184,7 +184,7 @@ export async function queryDocuments(env: Env, req: QueryRequest): Promise<Query
     .join("\n\n---\n\n");
 
   // 4. Ask Claude to synthesize an answer
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
 
   const response = await client.messages.create({
     model: MODEL,

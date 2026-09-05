@@ -8,6 +8,7 @@
 // agent.manifest.yaml. No tools.ts, no new integration (that is Build 2).
 
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../../integrations/anthropic/client";
 import type { Env } from "../../types";
 import { MODELS } from "../../config/models";
 import { orchestrations } from "../../registry";
@@ -238,7 +239,7 @@ export async function draftDefinition(
 ): Promise<string> {
   if (!env.ANTHROPIC_API_KEY) return renderDefinitionFallback(spec);
   try {
-    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const client = anthropicClient(env.ANTHROPIC_API_KEY);
     const userPrompt =
       `DONOR orchestration (pattern to follow):\n\`\`\`ts\n${donorSource}\n\`\`\`\n\n` +
       `SPEC for the new capability:\n${JSON.stringify(

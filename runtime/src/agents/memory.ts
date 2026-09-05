@@ -2,7 +2,7 @@
 // All helpers fail open: a memory problem must never break the chat itself.
 // Runs in the runtime worker (has Supabase creds); the route orchestrates recall
 // and persistence around the agent Service-Binding forward.
-import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "../../../integrations/anthropic/client";
 import type { Env } from "../types";
 import type { ChatMessage } from "./agent-chat";
 import { MODELS } from "../config/models";
@@ -215,7 +215,7 @@ export async function maybeSummarize(
     if (!transcript.length) return;
     const convoText = transcript.map((m) => `${m.role}: ${m.content}`).join("\n").slice(0, 12000);
 
-    const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+    const client = anthropicClient(env.ANTHROPIC_API_KEY);
     const resp = await client.messages.create({
       model: SUMMARY_MODEL,
       max_tokens: 600,

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicClient } from "./client";
 import type { Env } from "../../runtime/src/types";
 import { MODELS } from "../../runtime/src/config/models";
 
@@ -28,7 +29,7 @@ function parseJson<T>(text: string, fallback: T): T {
 }
 
 async function ask(env: Env, model: string, system: string, user: string, maxTokens: number): Promise<string> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const client = anthropicClient(env.ANTHROPIC_API_KEY);
   const resp = await client.messages.create({
     model,
     max_tokens: maxTokens,
