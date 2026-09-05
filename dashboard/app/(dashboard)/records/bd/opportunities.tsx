@@ -81,17 +81,26 @@ export async function OpportunitiesTab({
     const { data: { user } } = await sb.auth.getUser();
 
     const { data: current } = await sb
-      .from("opportunities").select("disposition").eq("id", id).single();
+      .from("opportunities").select("disposition, pipeline_stage").eq("id", id).single();
     const next = current?.disposition === raw ? null : raw;
 
-    const { error } = await sb
-      .from("opportunities")
-      .update({
-        disposition: next,
-        disposition_at: next ? new Date().toISOString() : null,
-        disposition_by: next ? (user?.id ?? null) : null,
-      })
-      .eq("id", id);
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      disposition: next,
+      disposition_at: next ? now : null,
+      disposition_by: next ? (user?.id ?? null) : null,
+    };
+
+    // Marking Pursue puts the card on the board, in the first column. Done here rather
+    // than left to the board's null-means-first-stage fallback so that
+    // `pipeline_stage_at` is real from the outset -- the board sorts stalled cards to
+    // the top, and a card that has never carried a timestamp cannot go stale.
+    if (next === "pursue" && !current?.pipeline_stage) {
+      patch["pipeline_stage"] = "response_outline";
+      patch["pipeline_stage_at"] = now;
+    }
+
+    const { error } = await sb.from("opportunities").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
     revalidatePath("/records/bd");
   }

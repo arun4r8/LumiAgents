@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OpportunitiesTab, deadlineFrom } from "./opportunities";
+import { PipelineBoardTab } from "./board";
 import { AwardsTab } from "./awards";
 import { IndustryDaysTab } from "./industry-days";
 import { RfiDraftsTab } from "./rfi-drafts";
@@ -22,6 +23,10 @@ export const dynamic = "force-dynamic";
 //                        that is the table ./awards.tsx queries.
 const TABS = [
   { key: "opportunities", label: "Opportunities" },
+  // The board sits next to the list it draws from: an opportunity marked Pursue on the
+  // Opportunities tab appears here, so keeping them adjacent makes that relationship
+  // visible rather than something to be explained.
+  { key: "board", label: "Pipeline" },
   { key: "opps", label: "Awards" },
   { key: "days", label: "Industry days" },
   { key: "rfi", label: "RFI drafts" },
@@ -30,7 +35,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 function tabFrom(raw: string | undefined): TabKey {
-  return raw === "opportunities" || raw === "days" || raw === "rfi" ? raw : "opps";
+  return raw === "opportunities" || raw === "days" || raw === "rfi" || raw === "board" ? raw : "opps";
 }
 
 export default async function BdPipelinePage({
@@ -63,6 +68,7 @@ export default async function BdPipelinePage({
       </div>
 
       {active === "opportunities" && <OpportunitiesTab deadline={deadlineFilter} showIgnored={ignored === "1"} />}
+      {active === "board" && <PipelineBoardTab />}
       {active === "opps" && <AwardsTab />}
       {active === "days" && <IndustryDaysTab />}
       {active === "rfi" && <RfiDraftsTab />}
