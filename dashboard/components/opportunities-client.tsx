@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useFormStatus } from "react-dom";
+import { useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink, Radar } from "lucide-react";
 import { ScoreCell } from "@/components/records-score";
 import { LocalTime } from "@/components/lumi";
@@ -35,6 +36,48 @@ export interface Opportunity {
 // Beady's recommendation vocabulary is pursue | monitor | pass (see the column
 // comment in migration 20260506000006). Mapped onto the three Nocturne .tag
 // variants so no new colour literal is introduced.
+/**
+ * Submit button that disables itself only WHILE its own form is submitting.
+ *
+ * The first version called `startTransition` in onClick and read `disabled` from that
+ * transition's pending flag. React re-rendered with disabled=true before the browser
+ * processed the click's default action, and a disabled button does not submit its
+ * form -- so every click silently cancelled itself and none of the buttons worked.
+ *
+ * `useFormStatus` reports the enclosing form's status instead, which is false at click
+ * time and true only once submission is under way. It must live in a CHILD of the
+ * form; called in the same component that renders <form>, it always returns false.
+ */
+function DispositionButton({
+  value,
+  active,
+  label,
+}: {
+  value: string;
+  active: boolean;
+  label: string;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      aria-pressed={active}
+      title={active ? `Clear "${value}"` : label}
+      className={`rec-filter${active ? " active" : ""}`}
+      style={{
+        textTransform: "capitalize",
+        fontSize: 11,
+        padding: "2px 7px",
+        width: "100%",
+        opacity: pending ? 0.5 : 1,
+      }}
+    >
+      {value}
+    </button>
+  );
+}
+
 const DISPOSITION_HINT: Record<"pursue" | "watch" | "ignore", string> = {
   pursue: "Pursue: enters the proposal workflow",
   watch: "Watch: stays on the list, no workflow",
@@ -181,7 +224,6 @@ function OpportunityRow({
   setDisposition: (formData: FormData) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
   const rec = o.recommendation?.toLowerCase() ?? null;
   const hasDetail = !!(o.fit_reason || o.red_flags || o.solicitation_number || o.last_scored_at);
 
@@ -210,22 +252,18 @@ function OpportunityRow({
         <td onClick={(e) => e.stopPropagation()}>
           {/* stopPropagation: these are decisions, and a click that both triages an
               opportunity and expands the row would make a mis-click ambiguous. */}
-          <div style={{ display: "flex", gap: 4 }}>
+          {/* Stacked, not in a row: three verbs side by side widened the column enough
+              to squeeze the agency and title cells, which are what a reader scans. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 74 }}>
             {(["pursue", "watch", "ignore"] as const).map((d) => (
-              <form key={d} action={setDisposition} style={{ display: "inline" }}>
+              <form key={d} action={setDisposition}>
                 <input type="hidden" name="id" value={o.id} />
                 <input type="hidden" name="disposition" value={d} />
-                <button
-                  type="submit"
-                  disabled={pending}
-                  onClick={() => startTransition(() => {})}
-                  aria-pressed={o.disposition === d}
-                  title={o.disposition === d ? `Clear "${d}"` : DISPOSITION_HINT[d]}
-                  className={`rec-filter${o.disposition === d ? " active" : ""}`}
-                  style={{ textTransform: "capitalize", fontSize: 11, padding: "2px 7px" }}
-                >
-                  {d}
-                </button>
+                <DispositionButton
+                  value={d}
+                  active={o.disposition === d}
+                  label={DISPOSITION_HINT[d]}
+                />
               </form>
             ))}
           </div>
