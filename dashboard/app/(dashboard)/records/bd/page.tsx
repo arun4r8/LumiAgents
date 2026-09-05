@@ -36,9 +36,9 @@ function tabFrom(raw: string | undefined): TabKey {
 export default async function BdPipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; deadline?: string }>;
+  searchParams: Promise<{ tab?: string; deadline?: string; ignored?: string }>;
 }) {
-  const { tab, deadline } = await searchParams;
+  const { tab, deadline, ignored } = await searchParams;
   const active = tabFrom(tab);
   // Kept in the URL alongside ?tab so a filtered view is shareable and survives a
   // refresh, matching how tab state already works.
@@ -62,7 +62,7 @@ export default async function BdPipelinePage({
         </div>
       </div>
 
-      {active === "opportunities" && <OpportunitiesTab deadline={deadlineFilter} />}
+      {active === "opportunities" && <OpportunitiesTab deadline={deadlineFilter} showIgnored={ignored === "1"} />}
       {active === "opps" && <AwardsTab />}
       {active === "days" && <IndustryDaysTab />}
       {active === "rfi" && <RfiDraftsTab />}

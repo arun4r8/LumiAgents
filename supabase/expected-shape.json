@@ -48,7 +48,7 @@
         "public.rate_limit": 4,
         "public.resume_queue": 6,
         "orchestration.agent_config_overrides": 8,
-        "public.opportunities": 20,
+        "public.opportunities": 23,
         "public.budget_lines": 2,
         "orchestration.subscriptions": 20,
         "public.content_calendar": 16,

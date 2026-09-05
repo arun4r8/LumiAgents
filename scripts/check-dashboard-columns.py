@@ -38,6 +38,26 @@ bare = [k.split(".", 1)[1] for k in raw]
 assert len(bare) == len(set(bare)), "same table name in two schemas; this checker needs qualifying"
 schema = {k.split(".", 1)[1]: set(v) for k, v in raw.items()}
 
+# The manifest is a snapshot of PRODUCTION, so a column added by a migration in this
+# same branch is not in it yet -- and adding a column and using it in one change is the
+# normal workflow, not an error. Union in whatever the repo's own migrations add, so the
+# check means "exists in production, or will once this branch is deployed".
+#
+# Deliberately additive only: this can make the check more permissive, never stricter,
+# so a genuinely missing column is still caught.
+ADD_COLUMN = re.compile(
+    r"ALTER\s+TABLE\s+(?:public\.)?(\w+)(.*?);",
+    re.I | re.S,
+)
+COLUMN_NAME = re.compile(r"ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)", re.I)
+for sql_file in sorted((ROOT / "supabase" / "migrations").glob("*.sql")):
+    text = sql_file.read_text()
+    for m in ADD_COLUMN.finditer(text):
+        table, body = m.group(1), m.group(2)
+        cols = COLUMN_NAME.findall(body)
+        if cols:
+            schema.setdefault(table, set()).update(cols)
+
 # `.from("t").select("a, b, rel(x, y), alias:c")`
 CALL = re.compile(r'\.from\(\s*["\']([a-z_]+)["\']\s*\)\s*(?:\.\w+\([^)]*\)\s*)*?\.select\(\s*["\']([^"\']+)["\']')
 

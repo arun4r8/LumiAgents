@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Radar } from "lucide-react";
+import { useState, useTransition } from "react";
+import { ChevronDown, ChevronUp, ExternalLink, Radar } from "lucide-react";
 import { ScoreCell } from "@/components/records-score";
 import { LocalTime } from "@/components/lumi";
 
@@ -26,6 +26,8 @@ export interface Opportunity {
   response_deadline: string | null;
   status: string | null;
   solicitation_number: string | null;
+  source_url: string | null;
+  disposition: "pursue" | "watch" | "ignore" | null;
   naics_code: string | null;
   last_scored_at: string | null;
 }
@@ -33,6 +35,12 @@ export interface Opportunity {
 // Beady's recommendation vocabulary is pursue | monitor | pass (see the column
 // comment in migration 20260506000006). Mapped onto the three Nocturne .tag
 // variants so no new colour literal is introduced.
+const DISPOSITION_HINT: Record<"pursue" | "watch" | "ignore", string> = {
+  pursue: "Pursue: enters the proposal workflow",
+  watch: "Watch: stays on the list, no workflow",
+  ignore: "Ignore: hidden from this list (reversible)",
+};
+
 const REC_TAG: Record<string, "tag-accent" | "tag-neutral" | "tag-outline"> = {
   pursue: "tag-accent",
   monitor: "tag-neutral",
@@ -53,9 +61,14 @@ interface Props {
   openCount: number;
   /** Rows whose deadline has passed, counted server-side. */
   pastCount: number;
+  /** Rows a human has ignored -- counted WITHOUT the ignore filter, since this is
+   *  what the "show ignored" affordance reports. */
+  ignoredCount: number;
+  showIgnored: boolean;
+  setDisposition: (formData: FormData) => Promise<void>;
 }
 
-export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, deadline, openCount, pastCount }: Props) {
+export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, deadline, openCount, pastCount, ignoredCount, showIgnored, setDisposition }: Props) {
   // The page is capped and ordered by fit, so unscored rows sort last and are
   // the first thing to fall off the end. Saying "200 tracked" when there are
   // 512 would make a freshly swept, not-yet-scored notice invisible AND make
@@ -110,6 +123,17 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, 
               </Link>
             ))}
           </div>
+          {ignoredCount > 0 && (
+            // Ignoring is a soft hide, so there has to be a way back to what was
+            // hidden -- otherwise a mis-click is indistinguishable from a deletion.
+            <Link
+              href={`/records/bd?tab=opportunities&deadline=${deadline}${showIgnored ? "" : "&ignored=1"}`}
+              className={`rec-filter${showIgnored ? " active" : ""}`}
+              style={{ fontSize: 12 }}
+            >
+              {showIgnored ? "Hide ignored" : `Show ignored (${ignoredCount})`}
+            </Link>
+          )}
           {/* opportunity-sweep is Beady's; run it from her chat. */}
           <Link href="/agents/beady" className="btn">Run a sweep</Link>
         </div>
@@ -133,12 +157,13 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, 
                 <th>Rec.</th>
                 <th>Deadline</th>
                 <th>Status</th>
+                <th>Decision</th>
                 <th aria-label="Expand" />
               </tr>
             </thead>
             <tbody>
               {opportunities.map((o) => (
-                <OpportunityRow key={o.id} opp={o} />
+                <OpportunityRow key={o.id} opp={o} setDisposition={setDisposition} />
               ))}
             </tbody>
           </table>
@@ -148,14 +173,32 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, 
   );
 }
 
-function OpportunityRow({ opp: o }: { opp: Opportunity }) {
+function OpportunityRow({
+  opp: o,
+  setDisposition,
+}: {
+  opp: Opportunity;
+  setDisposition: (formData: FormData) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
   const rec = o.recommendation?.toLowerCase() ?? null;
   const hasDetail = !!(o.fit_reason || o.red_flags || o.solicitation_number || o.last_scored_at);
 
   return (
     <>
-      <tr onClick={() => hasDetail && setOpen((v) => !v)} style={{ cursor: hasDetail ? "pointer" : "default" }}>
+      {/* Tommy: "make opportunity text highlightable for copy/paste". Nothing was
+          setting user-select: none -- the row itself toggles on click, so a
+          drag-to-select ended as a toggle and the selection was lost. Bail out when
+          the user has actually selected something, which keeps the click affordance
+          and makes the text selectable. */}
+      <tr
+        onClick={() => {
+          if ((window.getSelection()?.toString().length ?? 0) > 0) return;
+          if (hasDetail) setOpen((v) => !v);
+        }}
+        style={{ cursor: hasDetail ? "pointer" : "default" }}
+      >
         <td style={{ fontWeight: 500, color: "var(--ink)" }}>{o.title ?? "Untitled"}</td>
         <td style={{ color: "var(--ink-2)" }}>{o.agency ?? "-"}</td>
         <td>{o.set_aside ? <span className="tag tag-neutral">{o.set_aside}</span> : <span style={{ color: "var(--ink-3)" }}>-</span>}</td>
@@ -164,7 +207,29 @@ function OpportunityRow({ opp: o }: { opp: Opportunity }) {
         <td style={{ textAlign: "right" }}><ScoreCell score={o.fit_score} max={10} /></td>
         <td>{rec ? <span className={`tag ${REC_TAG[rec] ?? "tag-outline"}`} style={{ textTransform: "capitalize" }}>{rec}</span> : "-"}</td>
         <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)", whiteSpace: "nowrap" }}><LocalTime iso={o.response_deadline} format="date" placeholder="-" /></td>
-        <td style={{ color: "var(--ink-2)", textTransform: "capitalize" }}>{o.status ?? "-"}</td>
+        <td onClick={(e) => e.stopPropagation()}>
+          {/* stopPropagation: these are decisions, and a click that both triages an
+              opportunity and expands the row would make a mis-click ambiguous. */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["pursue", "watch", "ignore"] as const).map((d) => (
+              <form key={d} action={setDisposition} style={{ display: "inline" }}>
+                <input type="hidden" name="id" value={o.id} />
+                <input type="hidden" name="disposition" value={d} />
+                <button
+                  type="submit"
+                  disabled={pending}
+                  onClick={() => startTransition(() => {})}
+                  aria-pressed={o.disposition === d}
+                  title={o.disposition === d ? `Clear "${d}"` : DISPOSITION_HINT[d]}
+                  className={`rec-filter${o.disposition === d ? " active" : ""}`}
+                  style={{ textTransform: "capitalize", fontSize: 11, padding: "2px 7px" }}
+                >
+                  {d}
+                </button>
+              </form>
+            ))}
+          </div>
+        </td>
         <td style={{ textAlign: "right", color: "var(--ink-3)" }}>
           {hasDetail ? (open ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />) : null}
         </td>
@@ -186,6 +251,13 @@ function OpportunityRow({ opp: o }: { opp: Opportunity }) {
                 </div>
               )}
               <div className="rec-detail-meta">
+                {o.source_url && (
+                  <span>
+                    <a href={o.source_url} target="_blank" rel="noopener noreferrer">
+                      View on SAM.gov <ExternalLink size={12} style={{ verticalAlign: "-1px" }} />
+                    </a>
+                  </span>
+                )}
                 {o.solicitation_number && <span>Solicitation <code className="mono">{o.solicitation_number}</code></span>}
                 {o.naics_code && <span>NAICS <code className="mono">{o.naics_code}</code></span>}
                 {o.last_scored_at && <span>Scored <LocalTime iso={o.last_scored_at} format="date" placeholder="-" /></span>}
