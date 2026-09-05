@@ -68,6 +68,42 @@ jobs:
         working-directory: dashboard
         run: pnpm exec eslint . --max-warnings 0
 
+  dashboard-build:
+    name: Dashboard Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typecheck cannot see a client component importing from a module that contains a
+      # "use server" action -- the types are fine either way. Only the bundler catches
+      # it, and without this job the first sign was a failed PRODUCTION deploy: CI green,
+      # merge, promote, Turbopack error. A build here is ~1 minute and moves that
+      # discovery to the pull request.
+      #
+      # The NEXT_PUBLIC_* values are needed because the build prerenders /login, which
+      # constructs a Supabase client at build time.
+      - name: Build dashboard
+        working-directory: dashboard
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_RUNTIME_URL: ${{ secrets.NEXT_PUBLIC_RUNTIME_URL }}
+        run: pnpm exec next build
+
   stale-references:
     name: Stale References
     runs-on: ubuntu-latest

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { PipelineBoardClient, type BoardCard } from "@/components/pipeline-board-client";
+import { STAGES, FIRST_STAGE, isStage, type StageKey } from "@/lib/pipeline-stages";
 
 export const dynamic = "force-dynamic";
 
@@ -13,23 +14,6 @@ export const dynamic = "force-dynamic";
  * Opportunities list and `ignore` is hidden, which is what makes the board a
  * commitment rather than another inbox.
  */
-
-export const STAGES = [
-  { key: "response_outline",   label: "Response outline",   action: "Draft and review the response outline" },
-  { key: "past_performance",   label: "Past performance",   action: "Map and add colour to PP" },
-  { key: "reqs_reps_certs",    label: "Reqs / Reps / Certs", action: "Determine and create Reqs/Reps/Certs" },
-  { key: "pricing",            label: "Pricing",            action: "Pricing guidance, then manual updates" },
-  { key: "negotiate_mobilize", label: "Negotiate & mobilize", action: "Negotiate, then mobilize" },
-] as const;
-
-export type StageKey = (typeof STAGES)[number]["key"];
-
-export function isStage(v: unknown): v is StageKey {
-  return STAGES.some((s) => s.key === v);
-}
-
-/** A pursued opportunity that has never been placed belongs in the first column. */
-const FIRST_STAGE: StageKey = STAGES[0].key;
 
 export async function PipelineBoardTab() {
   const supabase = await createClient();

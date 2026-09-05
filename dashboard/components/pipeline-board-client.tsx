@@ -3,7 +3,7 @@
 import { useFormStatus } from "react-dom";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { LocalTime, UrgencyTag } from "@/components/lumi";
-import { STAGES, type StageKey } from "@/app/(dashboard)/records/bd/board";
+import { STAGES, type StageKey } from "@/lib/pipeline-stages";
 
 export interface BoardCard {
   id: string;
