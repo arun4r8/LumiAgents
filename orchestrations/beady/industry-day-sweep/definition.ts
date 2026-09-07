@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { tavilySearch } from "../../../integrations/tavily/search";
+import { splitAgencyPath, isDescriptionUrl } from "../../../integrations/sam-gov/opportunity-search";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { fnv1a } from "@/runtime/utils/hash";
 import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "@/runtime/utils/scored-sweep";
@@ -117,13 +118,22 @@ export default defineOrchestration({
           });
           const res = await ctx.fetch(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });
           if (!res.ok) { console.warn(`[industry-day] SAM ${kw} → ${res.status}`); continue; }
-          const data = (await res.json()) as { opportunitiesData?: Array<{ noticeId?: string; title?: string; fullParentPathName?: string; description?: string; uiLink?: string; responseDeadLine?: string; postedDate?: string }> };
+          const data = (await res.json()) as { opportunitiesData?: Array<{ noticeId?: string; title?: string; fullParentPathName?: string; fullParentPathCode?: string; description?: string; uiLink?: string; responseDeadLine?: string; postedDate?: string }> };
           for (const o of data.opportunitiesData ?? []) {
             if (!o.noticeId || !o.title) continue;
             out.push({
               eventId: o.noticeId, source: "sam_gov", url: o.uiLink ?? `https://sam.gov/opp/${o.noticeId}/view`,
-              title: o.title, content: (o.description ?? "").slice(0, 1200),
-              agency: (o.fullParentPathName ?? "").split(".")[0] || null,
+              // SAM v2's `description` is a LINK to the body, not the body (#219).
+              // Passing the URL as "content" gave the relevance scorer a string that
+              // looks like data and carries none, so industry-day scoring has been
+              // running on the title alone. Null is the honest value until the body
+              // is fetched; the model is told to work from the title.
+              title: o.title,
+              content: isDescriptionUrl(o.description) ? "" : (o.description ?? "").slice(0, 1200),
+              // Same period-delimited hierarchy the opportunity sweep parses (#216);
+              // splitAgencyPath also guards the case where an agency's own name
+              // contains a period, which a bare split(".")[0] gets wrong.
+              agency: splitAgencyPath(o.fullParentPathName, o.fullParentPathCode)[0] ?? null,
               // responseDeadLine is the registration/response date on a Special Notice,
               // which is the closest structured proxy for when the event happens.
               sourceDate: isoDay(o.responseDeadLine) ?? isoDay(o.postedDate),

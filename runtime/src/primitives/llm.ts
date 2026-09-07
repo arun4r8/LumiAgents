@@ -37,8 +37,8 @@ export function assertNotTruncated(stopReason: string | null, name: string, maxT
 
 const DEFAULT_MODEL: string = MODELS.sonnet;
 
-function makeClient(ctx: RunContext): Anthropic {
-  return anthropicClient(ctx.env.ANTHROPIC_API_KEY);
+function makeClient(ctx: RunContext, timeoutMs?: number): Anthropic {
+  return anthropicClient(ctx.env.ANTHROPIC_API_KEY, timeoutMs ? { timeoutMs } : undefined);
 }
 
 function resolveModel(ctx: RunContext): string {
@@ -217,6 +217,18 @@ export async function llm_extract<T extends z.ZodTypeAny>(
      * batch of notices and returns one entry per notice).
      */
     maxTokens?: number;
+    /**
+     * Per-request timeout. Defaults to ANTHROPIC_DEFAULT_TIMEOUT_MS (300s), which
+     * exists to stop a STALLED request holding a step open (#193).
+     *
+     * A call that is legitimately long is a different thing, and the default cannot
+     * tell them apart. Scoring cost grows worse than linearly in batch size -- 20
+     * notices took 66s, 60 took over 263s -- so a batch sized for the subrequest
+     * budget can outrun a timeout sized for a stall. Raise this rather than shrink
+     * the batch, because smaller batches cost more subrequests, which is the scarcer
+     * resource (see runtime/src/config/limits.ts).
+     */
+    timeoutMs?: number;
   },
 ): Promise<z.infer<T>> {
   const db = new SupabaseClient(ctx.env);
@@ -275,7 +287,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
       const result = await wf.do(`llm-extract-${idx}`, {
         retries: { limit: 2, delay: "10 seconds", backoff: "linear" },
       }, async () => {
-        const client = makeClient(ctx);
+        const client = makeClient(ctx, options.timeoutMs);
         const response = await client.messages.create({
           model: resolveModel(ctx),
           max_tokens: maxTokens,
@@ -346,7 +358,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
   });
 
   try {
-    const client = makeClient(ctx);
+    const client = makeClient(ctx, options.timeoutMs);
 
     const response = await client.messages.create({
       model: resolveModel(ctx),

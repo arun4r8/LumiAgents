@@ -13,6 +13,12 @@ import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "
 // was materially amended and is scored again (so monitor → pursue can happen when
 // the government actually changes the solicitation). FNV-1a is plenty for change
 // detection; this isn't security-sensitive.
+// `description` here is the notice BODY, and is null until something fetches it.
+// It must NEVER be the description URL: SAM v2's `description` field is a link, and
+// that link is stable across amendments -- so including it made the hash look
+// unchanged when a solicitation's text had been materially rewritten, which is
+// exactly the case the re-score exists to catch. SamOpportunity now keeps
+// `descriptionUrl` and `description` apart so this cannot silently regress (#219).
 function samContentHash(o: { title: string; naicsCode: string | null; setAside: string | null; responseDeadline: string | null; description: string | null }): string {
   return fnv1a([o.title, o.naicsCode, o.setAside, o.responseDeadline, o.description].join(""));
 }
@@ -68,6 +74,22 @@ export const SBIR_SOURCE_AVAILABLE = false;
 
 export const SCORE_BATCH_SIZE = 60;
 export const SCORE_MAX_TOKENS = 16384;
+
+/**
+ * Scoring gets a longer per-request timeout than the 300s default.
+ *
+ * The default exists to stop a STALLED request holding a step open (#193), and it
+ * cannot tell a stall from a call that is legitimately long. Scoring is the latter,
+ * and its cost grows worse than linearly in batch size: 20 notices took 66s (3.3s
+ * each), 60 ran past 308s (>5.1s each) because the model attends over a longer
+ * context as well as writing more.
+ *
+ * Raising the timeout is the right lever rather than shrinking the batch. Smaller
+ * batches mean more llm_extract calls, and each one costs 3 subrequests against a
+ * ceiling of 50 -- the scarcer resource, and the one that has actually killed runs.
+ * 600s is ~1.7x the projected 350s for a full batch.
+ */
+export const SCORE_TIMEOUT_MS = 600_000;
 
 const scoreSchema = z.object({
   scored: z.array(
@@ -366,6 +388,7 @@ you score 1. Do not filter, rank or omit anything: what to keep is decided downs
         input: { opportunities: batch },
         schema: scoreSchema,
         maxTokens: SCORE_MAX_TOKENS,
+        timeoutMs: SCORE_TIMEOUT_MS,
       });
       scoredRows.push(...result.scored);
     }

@@ -40,7 +40,8 @@ export const samOpportunitySchema = z.object({
   setAside: z.string().nullable(),
   responseDeadline: z.string().nullable().describe("ISO date string"),
   postedDate: z.string().nullable().describe("ISO date string"),
-  description: z.string().nullable().describe("Truncated opportunity description"),
+  descriptionUrl: z.string().nullable().describe("SAM's link to the notice body. In v2 the API's `description` field is a URL, NOT the text -- fetch it with the API key appended to get the body."),
+  description: z.string().nullable().describe("The notice body, when it has been fetched. Null when only the link is known -- see descriptionUrl."),
   sourceUrl: z.string().describe("SAM.gov browse URL for this notice"),
   noticeType: z.string().nullable().describe("SAM notice type, e.g. 'Solicitation', 'Sources Sought', 'Presolicitation'"),
 });
@@ -177,6 +178,17 @@ export function splitAgencyPath(pathName?: string, pathCode?: string): string[] 
   return [...parts.slice(0, depth - 1), parts.slice(depth - 1).join(".")];
 }
 
+/**
+ * SAM v2 returns a link in `description`; other payloads occasionally return text.
+ *
+ * Matches the scheme, not the prefix "http". A notice body genuinely can open with
+ * "http-based integration is in scope", and treating that as a link would discard
+ * the one thing we are trying to keep.
+ */
+export function isDescriptionUrl(description?: string | null): boolean {
+  return typeof description === "string" && /^https?:\/\//i.test(description);
+}
+
 function normalise(o: RawSamOpportunity): SamOpportunity {
   const pathParts = splitAgencyPath(o.fullParentPathName, o.fullParentPathCode);
 
@@ -190,7 +202,16 @@ function normalise(o: RawSamOpportunity): SamOpportunity {
     setAside: o.typeOfSetAside ?? null,
     responseDeadline: o.responseDeadLine ?? null,
     postedDate: o.postedDate ?? null,
-    description: o.description ? o.description.slice(0, 800) : null,
+    // SAM v2's `description` is a LINK to the body, not the body:
+    //   "description": "https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid=..."
+    //   "A link to an opportunity description. Note: To download the description,
+    //    user should append the public API Key."
+    // It was read as prose and handed to the scoring model for every notice, so the
+    // model has never seen a notice body -- it scored titles (#219). Keeping the two
+    // apart means a caller cannot mistake one for the other again, and a caller that
+    // has not fetched the text gets null rather than a plausible-looking string.
+    descriptionUrl: isDescriptionUrl(o.description) ? o.description! : null,
+    description: isDescriptionUrl(o.description) ? null : (o.description ? o.description.slice(0, 800) : null),
     sourceUrl: o.uiLink ?? `https://sam.gov/opp/${o.noticeId ?? ""}/view`,
     noticeType: o.type ?? null,
   };

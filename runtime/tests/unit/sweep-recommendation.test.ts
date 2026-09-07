@@ -4,6 +4,7 @@ import {
   selectDemotions,
   SCORE_BATCH_SIZE,
   SCORE_MAX_TOKENS,
+  SCORE_TIMEOUT_MS,
 } from "../../../orchestrations/beady/opportunity-sweep/definition";
 import { LLM_EXTRACT_DEFAULT_MAX_TOKENS } from "../../src/primitives/llm";
 import { ANTHROPIC_DEFAULT_TIMEOUT_MS } from "../../../integrations/anthropic/client";
@@ -69,15 +70,25 @@ describe("scoring batch sizing", () => {
   });
 
   /**
-   * The output cap is only half of it. The same 40-notice batch also spent 316
-   * seconds before failing, against a 300s Anthropic timeout (#193) -- so even with
-   * room to answer, a batch that size is racing the clock. The observed cost was
-   * ~8s per notice, so the batch has to fit the timeout with margin.
+   * The output cap is only half of it; the batch also has to finish inside the
+   * request timeout. Two measurements, and note they are not proportional:
+   *
+   *   20 notices ->  66s   (3.3s each)
+   *   60 notices -> >308s  (>5.1s each, and it blew the 300s default)
+   *
+   * Cost grows worse than linearly, because the model attends over a longer context
+   * as well as writing more output. So the guard must use the LARGE-batch rate, not
+   * the small-batch one -- extrapolating 3.3s is what put a 60-notice batch under a
+   * 300s timeout on paper while it ran past it in production.
    */
-  it("keeps a batch inside the Anthropic timeout, not just inside the token cap", () => {
-    const OBSERVED_SECONDS_PER_NOTICE = 3.3; // measured: 66s per 20-notice batch
-    const projectedMs = SCORE_BATCH_SIZE * OBSERVED_SECONDS_PER_NOTICE * 1000;
-    expect(projectedMs).toBeLessThan(ANTHROPIC_DEFAULT_TIMEOUT_MS * 0.75);
+  it("keeps a batch inside its own timeout, using the large-batch rate", () => {
+    const SECONDS_PER_NOTICE_AT_SCALE = 5.5; // measured at 60; deliberately pessimistic
+    const projectedMs = SCORE_BATCH_SIZE * SECONDS_PER_NOTICE_AT_SCALE * 1000;
+    expect(projectedMs).toBeLessThan(SCORE_TIMEOUT_MS * 0.75);
+  });
+
+  it("raises the timeout rather than relying on the default that this outgrew", () => {
+    expect(SCORE_TIMEOUT_MS).toBeGreaterThan(ANTHROPIC_DEFAULT_TIMEOUT_MS);
   });
 });
 
