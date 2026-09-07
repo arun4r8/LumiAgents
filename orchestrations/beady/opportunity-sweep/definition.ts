@@ -32,10 +32,24 @@ const scoreSchema = z.object({
       fitScore: z.number().int().min(1).max(10),
       fitReason: z.string(),
       redFlags: z.string().nullable(),
-      recommendation: z.enum(["pursue", "monitor", "pass"]),
     }),
   ),
 });
+
+// `recommendation` was asked of the model alongside the score, under a rule that
+// made it a restatement of the score: pursue >= 7, monitor 5-6, pass <= 4. It came
+// back obeying that rule on every row, so the column presented itself on the card as
+// a second, independent judgement while carrying nothing the score did not. Deriving
+// it here says the same thing honestly, costs no output tokens, and removes the case
+// where a model returns 'pursue' on a fit of 3.
+//
+// This stays a band of the score until #197 gives it a real second axis (Tommy's
+// bid/no-bid gates: past-performance count, demo requirement, LPTA).
+export function recommendationFor(fitScore: number): "pursue" | "monitor" | "pass" {
+  if (fitScore >= 7) return "pursue";
+  if (fitScore >= 5) return "monitor";
+  return "pass";
+}
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -96,6 +110,11 @@ export const outputSchema = z.object({
   samPulled: z.number().describe("Notices actually pulled from SAM, after `samLimit`."),
   samNew: z.number().describe("Of those, the ones not already scored (or amended since)."),
   samTruncated: z.boolean().describe("True when the match set was larger than `samLimit` allowed us to pull."),
+  // The full 1-10 histogram, INCLUDING scores below minScore, which are scored and
+  // counted but not stored as opportunities. Without this there is no way to ask
+  // whether the floor is set right: the sub-floor scores exist nowhere else (#206).
+  scoreDistribution: z.record(z.number()).optional().describe("Count of notices at each fit score 1-10, before the minScore cut."),
+  belowFloor: z.number().describe("Scored notices that fell below minScore and were not stored."),
   sbirFound: z.number(),
   shortlistCount: z.number(),
   opportunities: z.array(scoredOpportunitySchema),
@@ -218,6 +237,8 @@ export default defineOrchestration({
         samPulled,
         samNew: 0,
         samTruncated: samResults.truncated,
+        scoreDistribution: {},
+        belowFloor: 0,
         sbirFound: sbirResults.totalElements,
         shortlistCount: 0,
         opportunities: [],
@@ -280,12 +301,8 @@ Scoring (1-10):
 - 4-5: stretch, surface for leadership to decide
 - 1-3: out of scope
 
-recommendation:
-  "pursue"  → score ≥ 7
-  "monitor" → score 5-6
-  "pass"    → score ≤ 4
-
-Only include items with fitScore ≥ ${input.minScore} in the output.
+Score EVERY opportunity in the input and return one entry for each, including the ones
+you score 1. Do not filter, rank or omit anything: what to keep is decided downstream.
         `.trim(),
         input: { opportunities: batch },
         schema: scoreSchema,
@@ -295,20 +312,23 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
 
     const scoreMap = new Map(scoredRows.map((s) => [s.id, s]));
 
-    // Record every notice we just scored (pass or pursue) in the dedup ledger so it
-    // is never re-scored on a later run. Items below minScore aren't in scoreMap
-    // (the model only returns the shortlist), so they're logged as recommendation
-    // 'pass' with a null score, but they were still evaluated.
+    // Record every notice we just scored in the dedup ledger so it is never
+    // re-scored on a later run. The model now returns a score for every input, so
+    // this records the real number even for notices that fall below the save floor.
+    // That is the point: the ledger is the only place the sub-floor scores exist,
+    // and without them there is no way to ask whether the floor is set right (#206).
+    // A null fit_score here means the model omitted the item despite being told not
+    // to, not that it scored low.
     await step(ctx, "record-scored-notices", async () => {
       const scoredAt = new Date().toISOString();
       const rows = [
         ...samResults.opportunities.map((o) => {
           const s = scoreMap.get(`sam_${o.noticeId}`);
-          return { notice_id: o.noticeId, source: "sam_gov", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", content_hash: samContentHash(o), scored_at: scoredAt };
+          return { notice_id: o.noticeId, source: "sam_gov", fit_score: s?.fitScore ?? null, recommendation: s ? recommendationFor(s.fitScore) : "pass", content_hash: samContentHash(o), scored_at: scoredAt };
         }),
         ...sbirResults.topics.map((t) => {
           const s = scoreMap.get(`sbir_${t.topicNumber}`);
-          return { notice_id: `sbir_${t.topicNumber}`, source: "sbir", fit_score: s?.fitScore ?? null, recommendation: s?.recommendation ?? "pass", content_hash: sbirContentHash(t), scored_at: scoredAt };
+          return { notice_id: `sbir_${t.topicNumber}`, source: "sbir", fit_score: s?.fitScore ?? null, recommendation: s ? recommendationFor(s.fitScore) : "pass", content_hash: sbirContentHash(t), scored_at: scoredAt };
         }),
       ];
       if (rows.length === 0) return;
@@ -339,6 +359,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
         responseDeadline: opp.responseDeadline,
         sourceUrl: opp.sourceUrl,
         noticeType: opp.noticeType,
+        recommendation: recommendationFor(score.fitScore),
         ...score,
       });
     }
@@ -355,6 +376,7 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
         responseDeadline: topic.closeDate,
         sourceUrl: topic.sourceUrl,
         noticeType: "SBIR/STTR Topic",
+        recommendation: recommendationFor(score.fitScore),
         ...score,
       });
     }
@@ -430,32 +452,56 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
       });
     }
 
-    // Step 4: Demote anything that was re-scored down to pass. Re-scored notices not
-    // in scoreMap fell below the save floor (the model only returns fitScore >= minScore).
-    // For any that already exist in opportunities (a prior pursue/monitor whose
-    // amendment narrowed its fit), flip them to recommendation='pass' so reports drop
-    // them, symmetric to a monitor climbing to pursue. New sub-floor notices that were
-    // never saved simply match nothing here. We mark rather than delete: assessments,
-    // incumbent_research and documents FK to opportunities (ON DELETE CASCADE), so a
-    // delete would wipe analyst work; a demoted row is preserved but excluded from reports.
-    const demotedIds = [
-      ...samResults.opportunities.filter((o) => !scoreMap.has(`sam_${o.noticeId}`)).map((o) => o.noticeId),
-      ...sbirResults.topics.filter((t) => !scoreMap.has(`sbir_${t.topicNumber}`)).map((t) => `sbir_${t.topicNumber}`),
+    // Step 4: Demote anything that was re-scored below the save floor. This is an
+    // amended solicitation whose fit narrowed -- symmetric to a monitor climbing to
+    // pursue. New sub-floor notices were never saved, so they match nothing here.
+    //
+    // We mark rather than delete: assessments, incumbent_research and documents FK to
+    // opportunities (ON DELETE CASCADE), so a delete would wipe analyst work. A
+    // demoted row is preserved but excluded from reports.
+    //
+    // The demoted rows now carry their REAL new score. Previously the model returned
+    // only the shortlist, so a demotion knew the notice had fallen below the floor but
+    // not to what, and left a stale fit_score sitting next to recommendation='pass' --
+    // a row disagreeing with itself, and part of why two rows exist below minScore.
+    const demoted = [
+      ...samResults.opportunities
+        .map((o) => ({ id: o.noticeId, score: scoreMap.get(`sam_${o.noticeId}`) }))
+        .filter((r) => r.score !== undefined && r.score.fitScore < input.minScore),
+      ...sbirResults.topics
+        .map((t) => ({ id: `sbir_${t.topicNumber}`, score: scoreMap.get(`sbir_${t.topicNumber}`) }))
+        .filter((r) => r.score !== undefined && r.score.fitScore < input.minScore),
     ];
-    if (demotedIds.length > 0) {
+    if (demoted.length > 0) {
       await step(ctx, "demote-rescored-to-pass", async () => {
-        const inList = demotedIds.map((id) => `"${id}"`).join(",");
-        const res = await ctx.fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=in.(${inList})`,
-          {
-            method: "PATCH",
-            headers: sbHeaders(ctx.env, { extra: { Prefer: "return=minimal" } }),
-            body: JSON.stringify({ recommendation: "pass", last_scored_at: new Date().toISOString() }),
-          },
-        );
-        if (!res.ok) console.warn(`[sweep] demote re-scored → ${res.status}: ${await res.text()}`);
+        const demotedAt = new Date().toISOString();
+        // One PATCH per row, because each carries its own new score. Sub-floor
+        // re-scores are rare (an amendment has to narrow the fit), so this is a
+        // handful of requests, not a fan-out.
+        for (const { id, score } of demoted) {
+          const res = await ctx.fetch(
+            `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=eq.${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              headers: sbHeaders(ctx.env, { extra: { Prefer: "return=minimal" } }),
+              body: JSON.stringify({
+                recommendation: "pass",
+                fit_score: score!.fitScore,
+                fit_reason: score!.fitReason,
+                red_flags: score!.redFlags,
+                last_scored_at: demotedAt,
+              }),
+            },
+          );
+          if (!res.ok) console.warn(`[sweep] demote ${id} → ${res.status}: ${await res.text()}`);
+        }
       });
     }
+
+    const scoreDistribution = scoredRows.reduce<Record<string, number>>((acc, r) => {
+      acc[String(r.fitScore)] = (acc[String(r.fitScore)] ?? 0) + 1;
+      return acc;
+    }, {});
 
     return {
       samFound: samResults.totalRecords,
@@ -463,6 +509,8 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
       samPulled,
       samNew: samResults.opportunities.length,
       samTruncated: samResults.truncated,
+      scoreDistribution,
+      belowFloor: scoredRows.filter((r) => r.fitScore < input.minScore).length,
       sbirFound: sbirResults.totalElements,
       shortlistCount: shortlisted.length,
       opportunities: shortlisted,
