@@ -35,6 +35,7 @@ import patchTicketSearch      from "../../orchestrations/patch/ticket-search/def
 import patchStaffRequest      from "../../orchestrations/patch/staff-request/definition";
 import * as patchDocumentRag  from "../../orchestrations/patch/document-rag/definition";
 import systemMemoryMaintenance from "../../orchestrations/system/memory-maintenance/definition";
+import systemRunWatchdog from "../../orchestrations/system/run-watchdog/definition";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -75,4 +76,5 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(patchDocumentRag.documentIngest as unknown as AnyOrch),
   reg(patchDocumentRag.documentQuery  as unknown as AnyOrch),
   reg(systemMemoryMaintenance as unknown as AnyOrch),
+  reg(systemRunWatchdog as unknown as AnyOrch),
 ]);
