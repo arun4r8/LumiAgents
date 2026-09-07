@@ -6,6 +6,7 @@ import {
   SUBREQUESTS_PER_TOOL_CALL,
 } from "../../src/config/limits";
 import { SCORE_BATCH_SIZE, SBIR_SOURCE_AVAILABLE } from "../../../orchestrations/beady/opportunity-sweep/definition";
+import { inputSchema as hydrateInput } from "../../../orchestrations/beady/opportunity-hydrate/definition";
 import { SAM_PAGE_SIZE } from "../../../integrations/sam-gov/opportunity-search";
 
 /**
@@ -73,5 +74,37 @@ describe("opportunity-sweep subrequest budget", () => {
       (SUBREQUESTS_PER_TOOL_CALL + 2) + // SBIR, which was still being called
       perPageClaims;                    // budget claimed per page, not once
     expect(asItWas).toBeGreaterThan(WORKER_SUBREQUEST_LIMIT);
+  });
+});
+
+
+/**
+ * The hydrator exists BECAUSE of this budget: fetching a notice body costs a
+ * subrequest per notice, and the sweep cannot afford 161 of them. Splitting the work
+ * into its own invocation only helps if the hydrator itself stays inside the same
+ * ceiling — otherwise the fan-out has just been moved somewhere it fails less
+ * visibly.
+ */
+describe("opportunity-hydrate subrequest budget", () => {
+  const maxBatch = (hydrateInput.shape.batchSize as { _def: { innerType: { maxValue: number } } })._def.innerType.maxValue;
+
+  function projected(batch: number): number {
+    return (
+      3 +                              // workflow entry
+      SUBREQUESTS_PER_STEP + 1 +       // find-unhydrated: step + the query
+      SUBREQUESTS_PER_STEP + batch +   // fetch-notice-text: ONE description fetch per notice
+      SUBREQUESTS_PER_STEP + batch +   // store-notice-text: one PATCH each
+      SUBREQUESTS_PER_LLM_EXTRACT +    // the re-score
+      SUBREQUESTS_PER_STEP + batch     // apply-rescore: one PATCH each
+    );
+  }
+
+  it("fits inside the ceiling at its maximum batch size", () => {
+    expect(projected(maxBatch)).toBeLessThan(WORKER_SUBREQUEST_LIMIT);
+  });
+
+  it("keeps headroom at the default batch size", () => {
+    const def = (hydrateInput.shape.batchSize as { _def: { defaultValue: () => number } })._def.defaultValue();
+    expect(WORKER_SUBREQUEST_LIMIT - projected(def)).toBeGreaterThanOrEqual(5);
   });
 });

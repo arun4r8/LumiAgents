@@ -7,6 +7,38 @@ import { pdfToText } from "../anthropic/govcon";
 // Best-effort: returns "" if nothing is retrievable; non-PDF attachments (e.g. docx)
 // are skipped for now.
 
+/**
+ * Fetch just the notice body, in ONE request.
+ *
+ * `fetchOpportunityAttachmentText` is the thorough version: it searches for the
+ * notice, then pulls the description and up to four attachments, so it costs 2-6
+ * subrequests. That is right for drafting an RFI response and wrong for scoring,
+ * where the budget is one Worker invocation's 50 subrequests shared across a batch.
+ *
+ * The description endpoint's shape is documented and stable
+ * (https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid=...), so the URL
+ * can be derived from the notice id rather than looked up -- which is what removes
+ * the search request. Returns "" when SAM has no body, which is a real outcome and
+ * distinct from a failure.
+ */
+export async function fetchNoticeDescription(
+  env: { SAM_GOV_API_KEY: string },
+  noticeId: string,
+  maxChars = 20_000,
+): Promise<{ text: string; note: string }> {
+  try {
+    const url = `https://api.sam.gov/prod/opportunities/v1/noticedesc?noticeid=${encodeURIComponent(noticeId)}&api_key=${env.SAM_GOV_API_KEY}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return { text: "", note: `description HTTP ${res.status}` };
+    const body = (await res.json()) as { description?: string };
+    if (!body.description) return { text: "", note: "SAM returned no description body" };
+    const text = stripHtml(body.description).slice(0, maxChars);
+    return { text, note: `description ${text.length} chars` };
+  } catch (err) {
+    return { text: "", note: `description fetch failed: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
 function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 }

@@ -202,6 +202,7 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 | `patch/ticket-search` | Patch | Worker | Search Jira with JQL. Read-only companion to `patch/ticket-ops` |
 | `patch/vault-sync` | Patch | Worker (DB-registered) | Obsidian vault → RAG (incremental or full) |
 | `system/memory-maintenance` | System | Runtime | Roll up conversation memory (summaries + facts) |
+| `beady/opportunity-hydrate` | Beady | Worker | Fetch the SAM notice body for shortlisted opportunities and re-score on it |
 | `system/run-watchdog` | System | Runtime | Hourly check for runs that failed without failing: stuck rows the platform killed, schedules that stopped firing, completed-but-empty runs |
 
 ### Supabase schema ownership
