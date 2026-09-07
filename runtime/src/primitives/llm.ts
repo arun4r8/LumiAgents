@@ -5,6 +5,14 @@ import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
 import { MODELS } from "../config/models";
 
+/**
+ * Default output cap for llm_extract. Fine for a handful of fields; too small for
+ * an array whose length tracks the input. A truncated response is not reported as
+ * truncation -- the JSON is cut mid-object and Zod rejects it, so it arrives as a
+ * bare ZodError. Callers returning a list should raise this deliberately.
+ */
+export const LLM_EXTRACT_DEFAULT_MAX_TOKENS = 4096;
+
 const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function makeClient(ctx: RunContext): Anthropic {
@@ -179,10 +187,19 @@ export async function llm_extract<T extends z.ZodTypeAny>(
     schema: T;
     /** Files the model should read directly. Omit for the ordinary text path. */
     documents?: LlmDocument[];
+    /**
+     * Output cap. Defaults to 4096, which is right for a handful of fields but too
+     * small for a long array: the response is cut mid-JSON and surfaces as a
+     * ZodError with no hint that length was the cause. Raise it when the schema is
+     * a list whose length scales with the input (beady/opportunity-sweep scores a
+     * batch of notices and returns one entry per notice).
+     */
+    maxTokens?: number;
   },
 ): Promise<z.infer<T>> {
   const db = new SupabaseClient(ctx.env);
   const idx = ctx.stepIndex();
+  const maxTokens = options.maxTokens ?? LLM_EXTRACT_DEFAULT_MAX_TOKENS;
 
   // Replay short-circuit
   const cached = await db.getCompletedStep(ctx.runId, idx);
@@ -225,7 +242,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
         const client = makeClient(ctx);
         const response = await client.messages.create({
           model: resolveModel(ctx),
-          max_tokens: 4096,
+          max_tokens: maxTokens,
           tools: [
             {
               name: "extract",
@@ -277,7 +294,7 @@ export async function llm_extract<T extends z.ZodTypeAny>(
 
     const response = await client.messages.create({
       model: resolveModel(ctx),
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       tools: [
         {
           name: "extract",

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { recommendationFor } from "../../../orchestrations/beady/opportunity-sweep/definition";
+import {
+  recommendationFor,
+  SCORE_BATCH_SIZE,
+  SCORE_MAX_TOKENS,
+} from "../../../orchestrations/beady/opportunity-sweep/definition";
+import { LLM_EXTRACT_DEFAULT_MAX_TOKENS } from "../../src/primitives/llm";
+import { ANTHROPIC_DEFAULT_TIMEOUT_MS } from "../../../integrations/anthropic/client";
 
 /**
  * `recommendation` was asked of the model alongside `fit_score`, under a prompt rule
@@ -30,5 +36,40 @@ describe("recommendationFor", () => {
     for (let n = 1; n <= 10; n++) {
       expect(["pursue", "monitor", "pass"]).toContain(recommendationFor(n));
     }
+  });
+});
+
+/**
+ * The scoring batch is sized against llm_extract's output cap, not against taste.
+ * On the first live run a 40-notice batch at the default 4096 tokens truncated
+ * mid-array after five minutes and surfaced as a bare `ZodError` -- a truncated
+ * tool-use response is not reported as truncation anywhere.
+ *
+ * The relationship these pin: each scored notice costs roughly 80 output tokens
+ * (id, integer, a sentence of reason, a nullable flag), so the batch must fit
+ * inside the cap with real headroom.
+ */
+describe("scoring batch sizing", () => {
+  const BYTES_PER_SCORED_NOTICE = 80;
+
+  it("keeps a full batch well inside the output cap", () => {
+    const worstCase = SCORE_BATCH_SIZE * BYTES_PER_SCORED_NOTICE;
+    expect(worstCase).toBeLessThan(SCORE_MAX_TOKENS / 2);
+  });
+
+  it("raises the cap above llm_extract's default, which is what truncated", () => {
+    expect(SCORE_MAX_TOKENS).toBeGreaterThan(LLM_EXTRACT_DEFAULT_MAX_TOKENS);
+  });
+
+  /**
+   * The output cap is only half of it. The same 40-notice batch also spent 316
+   * seconds before failing, against a 300s Anthropic timeout (#193) -- so even with
+   * room to answer, a batch that size is racing the clock. The observed cost was
+   * ~8s per notice, so the batch has to fit the timeout with margin.
+   */
+  it("keeps a batch inside the Anthropic timeout, not just inside the token cap", () => {
+    const OBSERVED_SECONDS_PER_NOTICE = 8;
+    const projectedMs = SCORE_BATCH_SIZE * OBSERVED_SECONDS_PER_NOTICE * 1000;
+    expect(projectedMs).toBeLessThan(ANTHROPIC_DEFAULT_TIMEOUT_MS * 0.75);
   });
 });

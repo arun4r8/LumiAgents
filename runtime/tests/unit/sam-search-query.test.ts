@@ -189,3 +189,63 @@ describe("collectSamOpportunities", () => {
     expect(r.requests).toBe(SAM_MAX_PAGES);
   });
 });
+
+describe("collectSamOpportunities — leftover capacity", () => {
+  /**
+   * The first live run against the fixed query: 161 matches across four codes,
+   * split 91 / 37 / 19 / 14. An equal share of ceil(250/4) = 63 clipped 541330's 91
+   * to 63 while the other three left 91 of their share unspent. 133 of 161 pulled,
+   * and `truncated` reported true, for no reason but the fairness rule.
+   */
+  it("takes the whole match set when the limit is big enough, however unevenly it is split", async () => {
+    const r = await collectSamOpportunities(
+      parse({ naicsCodes: ["541330", "541519", "541512", "541511"], limit: 250 }),
+      fakeSam({ "541330": 91, "541519": 37, "541512": 19, "541511": 14 }),
+    );
+    expect(r.totalRecords).toBe(161);
+    expect(r.opportunities).toHaveLength(161);
+    expect(r.truncated).toBe(false);
+  });
+
+  it("still shares fairly when the limit genuinely binds", async () => {
+    const r = await collectSamOpportunities(
+      parse({ naicsCodes: ["A", "B"], limit: 40 }),
+      fakeSam({ A: 5000, B: 5000 }),
+    );
+    const byCode = r.opportunities.reduce<Record<string, number>>((acc, o) => {
+      const code = o.noticeId.split("-")[0]!;
+      acc[code] = (acc[code] ?? 0) + 1;
+      return acc;
+    }, {});
+    // Neither code is starved by the other, even though both could fill the limit.
+    expect(byCode).toEqual({ A: 20, B: 20 });
+  });
+
+  it("gives a large code the spare share of small ones, not an equal cut", async () => {
+    const r = await collectSamOpportunities(
+      parse({ naicsCodes: ["big", "small"], limit: 100 }),
+      fakeSam({ big: 500, small: 4 }),
+    );
+    const byCode = r.opportunities.reduce<Record<string, number>>((acc, o) => {
+      const code = o.noticeId.split("-")[0]!;
+      acc[code] = (acc[code] ?? 0) + 1;
+      return acc;
+    }, {});
+    // Equal shares alone would stop at 50 + 4 = 54 and leave 46 unspent.
+    expect(byCode).toEqual({ big: 96, small: 4 });
+    expect(r.opportunities).toHaveLength(100);
+    // The second pass RESUMES each code's walk. Restarting it from offset 0 would
+    // still reach 100 -- the dedupe would hide it -- while re-fetching everything
+    // pass 1 already had, spending SAM calls on rows we then throw away.
+    expect(r.fetched).toBe(100);
+  });
+
+  it("does not loop forever when every code is exhausted below the limit", async () => {
+    const r = await collectSamOpportunities(
+      parse({ naicsCodes: ["A", "B"], limit: 1000 }),
+      fakeSam({ A: 3, B: 2 }),
+    );
+    expect(r.opportunities).toHaveLength(5);
+    expect(r.truncated).toBe(false);
+  });
+});

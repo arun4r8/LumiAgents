@@ -20,10 +20,19 @@ function sbirContentHash(t: { title: string; program: string; phase: string; clo
   return fnv1a([t.title, t.program, t.phase, t.closeDate, t.abstract].join(""));
 }
 
-// How many notices go into one scoring prompt. Small enough that the response
-// can't be truncated mid-array and the call comfortably beats the Anthropic
-// timeout; large enough that a normal sweep is one or two calls.
-const SCORE_BATCH_SIZE = 40;
+// How many notices go into one scoring prompt, and how much room the answer gets.
+//
+// Both were wrong on the first live run. 40 notices at the default 4096-token cap
+// truncated the response mid-array after five minutes of work, and a truncated
+// tool-use response is not reported as truncation: the JSON is cut off, Zod
+// rejects it, and the step fails with a bare `ZodError`.
+//
+// The cap had been fine while the model returned only the shortlist. Asking it to
+// score every notice (so the sub-floor scores exist at all, #206) roughly doubled
+// the output, and nothing moved to accommodate that. 20 notices at 8192 tokens
+// leaves several times the headroom a batch actually needs.
+export const SCORE_BATCH_SIZE = 20;
+export const SCORE_MAX_TOKENS = 8192;
 
 const scoreSchema = z.object({
   scored: z.array(
@@ -306,6 +315,7 @@ you score 1. Do not filter, rank or omit anything: what to keep is decided downs
         `.trim(),
         input: { opportunities: batch },
         schema: scoreSchema,
+        maxTokens: SCORE_MAX_TOKENS,
       });
       scoredRows.push(...result.scored);
     }

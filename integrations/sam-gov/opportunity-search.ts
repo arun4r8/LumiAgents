@@ -181,6 +181,17 @@ export interface SamCollectResult {
  * Walk the match set: one paged query per NAICS code (SAM's `ncode` takes a single
  * code), merged and deduped, stopping at `limit`.
  *
+ * Two passes. The first gives every code an equal share, so a big code cannot drain
+ * the limit and turn the result into "whichever code was listed first" -- the same
+ * arbitrariness this replaced, one level up. The second spends whatever the first
+ * pass left unused on the codes that still have matches, so an uneven match set is
+ * not clipped for the sake of a fairness rule nobody needed.
+ *
+ * The first live run showed why the second pass is required: 161 matches split
+ * 91/37/19/14 across four codes, an even share of 63 each, and 541330's 91 got cut
+ * to 63 while three codes left 91 of their share unspent. 133 of 161 pulled, and
+ * `truncated` true, for no reason at all.
+ *
  * Pure apart from `fetchPage`, so the fairness and stop conditions are testable
  * without a SAM key.
  */
@@ -191,26 +202,30 @@ export async function collectSamOpportunities(
   const codes: (string | undefined)[] =
     input.naicsCodes && input.naicsCodes.length > 0 ? [...input.naicsCodes] : [undefined];
 
-  // Each code gets an equal share of `limit`. Draining the limit into whichever
-  // code is searched first would just move the arbitrariness one level up: the
-  // sliver that arrives would be decided by array order instead of by SAM's
-  // result ordering, which is the bug this replaced.
   const perCode = Math.max(1, Math.ceil(input.limit / codes.length));
   const hasAgencyFilter = Boolean(input.agencies && input.agencies.length > 0);
 
   const matchedByNaics: Record<string, number> = {};
   const seen = new Set<string>();
   const opportunities: SamOpportunity[] = [];
+  // Where each code's walk got to, so the second pass resumes rather than restarts.
+  const offsets = new Map<string | undefined, number>();
+  // Pages spent per code, counted ACROSS passes: SAM_MAX_PAGES is a budget for the
+  // whole walk of a code, not per call, or a second pass would silently double it.
+  const pagesUsed = new Map<string | undefined, number>();
+  const exhausted = new Set<string | undefined>();
   let fetched = 0;
   let requests = 0;
 
-  for (const ncode of codes) {
+  /** Walk one code until `ceiling` total opportunities are held, or it runs dry. */
+  async function walk(ncode: string | undefined, ceiling: number): Promise<void> {
+    if (exhausted.has(ncode)) return;
     const key = ncode ?? "(any)";
-    const ceiling = Math.min(input.limit, opportunities.length + perCode);
-    let offset = 0;
+    let offset = offsets.get(ncode) ?? 0;
 
-    for (let page = 0; page < SAM_MAX_PAGES; page++) {
+    while ((pagesUsed.get(ncode) ?? 0) < SAM_MAX_PAGES) {
       if (opportunities.length >= ceiling) break;
+      pagesUsed.set(ncode, (pagesUsed.get(ncode) ?? 0) + 1);
 
       // Ask for no more than we can keep, except when an agency filter is on:
       // that one is applied client-side, so a tight page would mostly be discarded.
@@ -223,7 +238,7 @@ export async function collectSamOpportunities(
 
       const rows = raw.opportunitiesData ?? [];
       // totalRecords describes the whole match set, not the page, so take it once.
-      if (page === 0) matchedByNaics[key] = raw.totalRecords ?? rows.length;
+      if (!(key in matchedByNaics)) matchedByNaics[key] = raw.totalRecords ?? rows.length;
       fetched += rows.length;
 
       for (const row of rows) {
@@ -237,9 +252,29 @@ export async function collectSamOpportunities(
       }
 
       offset += rows.length;
+      offsets.set(ncode, offset);
       // Short page or nothing left to walk: this code is exhausted.
-      if (rows.length < pageSize || offset >= (raw.totalRecords ?? 0)) break;
+      if (rows.length < pageSize || offset >= (raw.totalRecords ?? 0)) {
+        exhausted.add(ncode);
+        break;
+      }
     }
+  }
+
+  // Pass 1: equal shares.
+  for (const ncode of codes) {
+    await walk(ncode, Math.min(input.limit, opportunities.length + perCode));
+  }
+
+  // Pass 2: spend what pass 1 left over, on whatever still has matches. Repeats
+  // while progress is being made, so leftover capacity can move more than once.
+  while (opportunities.length < input.limit) {
+    const before = opportunities.length;
+    for (const ncode of codes) {
+      if (opportunities.length >= input.limit) break;
+      await walk(ncode, input.limit);
+    }
+    if (opportunities.length === before) break;
   }
 
   const totalRecords = Object.values(matchedByNaics).reduce((a, b) => a + b, 0);
