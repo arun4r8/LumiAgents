@@ -41,7 +41,7 @@ export async function upsertVaultDocument(
 
   // Check if a matching row already exists with the same blob SHA
   const existing = await fetch(
-    `${base}/orchestration.orch_documents?source_uri=eq.${encodeURIComponent(opts.sourceUri)}&select=id,metadata`,
+    `${base}/orch_documents?source_uri=eq.${encodeURIComponent(opts.sourceUri)}&select=id,metadata`,
     { headers: sbHeaders(env) },
   );
   if (!existing.ok) throw new Error(`Supabase lookup failed: ${existing.status}`);
@@ -56,14 +56,14 @@ export async function upsertVaultDocument(
   // Delete existing row if present (cascades to document_chunks via FK)
   if (existingRow) {
     const del = await fetch(
-      `${base}/orchestration.orch_documents?source_uri=eq.${encodeURIComponent(opts.sourceUri)}`,
+      `${base}/orch_documents?source_uri=eq.${encodeURIComponent(opts.sourceUri)}`,
       { method: "DELETE", headers: sbHeaders(env) },
     );
     if (!del.ok) throw new Error(`Supabase delete failed: ${del.status}`);
   }
 
   // Insert new document row
-  const insertRes = await fetch(`${base}/orchestration.orch_documents`, {
+  const insertRes = await fetch(`${base}/orch_documents`, {
     method: "POST",
     headers: sbHeaders(env),
     body: JSON.stringify({
@@ -113,7 +113,7 @@ export async function upsertVaultDocument(
 
 export async function removeVaultDocument(env: Env, sourceUri: string): Promise<boolean> {
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/orchestration.orch_documents?source_uri=eq.${encodeURIComponent(sourceUri)}`,
+    `${env.SUPABASE_URL}/rest/v1/orch_documents?source_uri=eq.${encodeURIComponent(sourceUri)}`,
     { method: "DELETE", headers: sbHeaders(env) },
   );
   if (!res.ok) throw new Error(`Supabase delete vault doc failed: ${res.status}`);

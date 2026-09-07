@@ -1,6 +1,7 @@
 import type { RunContext } from "../types";
 import { SupabaseClient } from "../db/client";
 import { PauseSignal } from "./pause";
+import { sbHeaders } from "../utils/supabase";
 
 const DEFAULT_EXPIRY_HOURS = 48;
 // How often the Workflow polls for a decision (seconds). 5 min keeps it responsive
@@ -59,15 +60,10 @@ export async function await_approval(
       });
 
       const approvalRows = await fetch(
-        `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals`,
+        `${ctx.env.SUPABASE_URL}/rest/v1/approvals`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-            Prefer: "return=representation",
-          },
+          headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "return=representation" } }),
           body: JSON.stringify({
             run_id: ctx.runId,
             run_step_id: rs.id,
@@ -98,19 +94,20 @@ export async function await_approval(
 
       const decision = await wf.do(`approval-${idx}-poll-${i}`, async () => {
         const rows = await fetch(
-          `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals?run_step_id=eq.${runStepId}&select=status,decision_notes,decided_by&limit=1`,
+          `${ctx.env.SUPABASE_URL}/rest/v1/approvals?run_step_id=eq.${runStepId}&select=status,decision_notes,decided_by&limit=1`,
           {
-            headers: {
-              apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-              Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-            },
+            headers: sbHeaders(ctx.env, { profile: "orchestration" }),
           },
-        ).then(
-          (r) =>
-            r.json() as Promise<
-              { status: string; decision_notes: string | null; decided_by: string | null }[]
-            >,
-        );
+        ).then(async (r) => {
+          // A 404 body parses fine as an object, rows[0] is undefined, and the loop
+          // reads that as "nobody has decided yet" -- so a broken read is
+          // indistinguishable from a slow human and the run sits paused for the full
+          // 48h expiry. That is how the schema-qualified URL stayed invisible.
+          if (!r.ok) throw new Error(`approval poll -> ${r.status}: ${await r.text()}`);
+          return r.json() as Promise<
+            { status: string; decision_notes: string | null; decided_by: string | null }[]
+          >;
+        });
         return rows[0] ?? { status: "pending", decision_notes: null, decided_by: null };
       });
 
@@ -212,15 +209,10 @@ export async function await_approval(
   });
 
   const approvalRows = await fetch(
-    `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals`,
+    `${ctx.env.SUPABASE_URL}/rest/v1/approvals`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        Prefer: "return=representation",
-      },
+      headers: sbHeaders(ctx.env, { profile: "orchestration", extra: { Prefer: "return=representation" } }),
       body: JSON.stringify({
         run_id: ctx.runId,
         run_step_id: runStep.id,
@@ -255,12 +247,9 @@ async function findPendingApproval(
 ): Promise<ExistingApproval | null> {
   // Look for a run_step at this index (any status)
   const rows = await fetch(
-    `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.run_steps?run_id=eq.${ctx.runId}&step_index=eq.${stepIndex}&step_type=eq.await_approval&select=id&limit=1`,
+    `${ctx.env.SUPABASE_URL}/rest/v1/run_steps?run_id=eq.${ctx.runId}&step_index=eq.${stepIndex}&step_type=eq.await_approval&select=id&limit=1`,
     {
-      headers: {
-        apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
+      headers: sbHeaders(ctx.env, { profile: "orchestration" }),
     },
   ).then((r) => r.json() as Promise<{ id: string }[]>);
 
@@ -268,12 +257,9 @@ async function findPendingApproval(
   if (!runStepId) return null;
 
   const approvalRows = await fetch(
-    `${ctx.env.SUPABASE_URL}/rest/v1/orchestration.approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
+    `${ctx.env.SUPABASE_URL}/rest/v1/approvals?run_step_id=eq.${runStepId}&select=id,status,decision_notes,decided_by&limit=1`,
     {
-      headers: {
-        apikey: ctx.env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${ctx.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
+      headers: sbHeaders(ctx.env, { profile: "orchestration" }),
     },
   ).then(
     (r) =>

@@ -138,6 +138,13 @@ jobs:
       - name: Check server-side runtime calls use the Service Binding
         run: python3 scripts/check-runtime-fetch.py
 
+      # PostgREST selects a schema by HEADER, never by a dotted path. Both forms look
+      # plausible and the wrong one 404s rather than erroring usefully: a caller that
+      # skips res.ok reads the error body as an empty result, so an approval poll sat
+      # on a 404 for its full 48h expiry looking like a slow human.
+      - name: Check PostgREST schema selection
+        run: python3 scripts/check-postgrest-schema.py
+
       # An Anthropic client built without a timeout can hold a step for ~30 minutes and
       # then be retried by the Workflow on top. A silent hang is worse than a failure:
       # nothing alerts and the UI still says "running".

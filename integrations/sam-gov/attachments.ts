@@ -107,13 +107,25 @@ export async function fetchOpportunityAttachmentText(
   const parts: string[] = [];
   const notes: string[] = [];
   try {
-    // SAM v2 search REQUIRES a postedFrom/postedTo window (<= 1 year). Center it on
-    // the notice's posted date when known, else use the last ~year.
-    const anchor = postedDate ? new Date(postedDate) : new Date();
-    const from = new Date(isNaN(anchor.getTime()) ? Date.now() : anchor.getTime());
-    from.setDate(from.getDate() - 5);
-    const to = new Date(from);
-    to.setDate(to.getDate() + 360);
+    // SAM v2 search REQUIRES a postedFrom/postedTo window (<= 1 year), so the window
+    // has to CONTAIN the notice's posted date.
+    //
+    // It used to derive `to` from `from`, giving anchor-5d ... anchor+355d -- a
+    // window looking almost entirely into the future. Harmless while postedDate is
+    // known, because the window still contains it. But when postedDate is null the
+    // anchor falls back to today, the window becomes today-5d ... today+355d, and
+    // anything posted more than five days ago is outside it. The notice is then
+    // reported "not found in SAM (may have aged out of the 1-year window)", which is
+    // the opposite of what happened: the notice is there, we asked for the wrong
+    // window, and rfi-draft drafts with no notice text and no attachments.
+    //
+    // Bracketing the anchor makes the window right in both cases.
+    const parsed = postedDate ? new Date(postedDate) : new Date();
+    const anchor = isNaN(parsed.getTime()) ? new Date() : parsed;
+    const from = new Date(anchor.getTime());
+    from.setDate(from.getDate() - 180);
+    const to = new Date(anchor.getTime());
+    to.setDate(to.getDate() + 180);
 
     // 1. Look the opportunity up to get its description link + resourceLinks.
     const params = new URLSearchParams({
@@ -129,7 +141,14 @@ export async function fetchOpportunityAttachmentText(
     }
     const data = (await res.json()) as { opportunitiesData?: Array<{ description?: string; resourceLinks?: string[] }> };
     const opp = data.opportunitiesData?.[0];
-    if (!opp) return { text: "", note: "notice not found in SAM (may have aged out of the 1-year window)" };
+    // Say which window we asked for. The old message asserted the notice had aged
+    // out, which was a guess, and a wrong one whenever the window itself was wrong.
+    if (!opp) {
+      return {
+        text: "",
+        note: `notice not found in SAM within ${fmtDate(from)}-${fmtDate(to)}${postedDate ? "" : " (no posted_date on the opportunity, so the window is centred on today)"}`,
+      };
+    }
 
     // 2. Notice description (in SAM v2 `description` is usually a URL to the text).
     if (opp.description?.startsWith("http")) {
