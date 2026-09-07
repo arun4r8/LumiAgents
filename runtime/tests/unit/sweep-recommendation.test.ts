@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   recommendationFor,
+  selectDemotions,
   SCORE_BATCH_SIZE,
   SCORE_MAX_TOKENS,
 } from "../../../orchestrations/beady/opportunity-sweep/definition";
@@ -71,5 +72,30 @@ describe("scoring batch sizing", () => {
     const OBSERVED_SECONDS_PER_NOTICE = 8;
     const projectedMs = SCORE_BATCH_SIZE * OBSERVED_SECONDS_PER_NOTICE * 1000;
     expect(projectedMs).toBeLessThan(ANTHROPIC_DEFAULT_TIMEOUT_MS * 0.75);
+  });
+});
+
+/**
+ * The demote step patches rows whose fit narrowed on re-score. It must touch only
+ * rows that ALREADY EXIST: on a first sweep most notices score below the floor and
+ * none of them are stored, so patching them all is ~100 requests that cannot match
+ * a row. That is what killed the 2026-09-07 18:39 run — Cloudflare's per-invocation
+ * subrequest limit, hit after all seven scoring batches had succeeded.
+ */
+describe("selectDemotions", () => {
+  const subFloor = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+
+  it("demotes only notices that are already stored", () => {
+    expect(selectDemotions(subFloor, new Set(["b", "d"]))).toEqual([{ id: "b" }, { id: "d" }]);
+  });
+
+  it("does nothing on a sweep where nothing sub-floor was ever stored", () => {
+    expect(selectDemotions(subFloor, new Set())).toEqual([]);
+  });
+
+  it("ignores stored rows that did not score below the floor", () => {
+    // The stored set is the intersection lookup's answer, not the whole table, but
+    // a superset must not widen what gets patched.
+    expect(selectDemotions([{ id: "a" }], new Set(["a", "zzz"]))).toEqual([{ id: "a" }]);
   });
 });

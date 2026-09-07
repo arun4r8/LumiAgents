@@ -54,6 +54,19 @@ const scoreSchema = z.object({
 //
 // This stays a band of the score until #197 gives it a real second axis (Tommy's
 // bid/no-bid gates: past-performance count, demo requirement, LPTA).
+/**
+ * Which sub-floor notices are worth a demotion PATCH: only the ones already in
+ * `opportunities`. A notice that scored below the floor and was never stored has
+ * nothing to demote, and patching it is a request that cannot match a row.
+ *
+ * Trivial as logic, expensive as a mistake -- #211 skipped the intersection and
+ * patched all ~100 sub-floor notices of a first sweep, blowing Cloudflare's
+ * per-invocation subrequest limit after every batch had already been scored.
+ */
+export function selectDemotions<T extends { id: string }>(subFloor: T[], stored: Set<string>): T[] {
+  return subFloor.filter((r) => stored.has(r.id));
+}
+
 export function recommendationFor(fitScore: number): "pursue" | "monitor" | "pass" {
   if (fitScore >= 7) return "pursue";
   if (fitScore >= 5) return "monitor";
@@ -462,33 +475,53 @@ you score 1. Do not filter, rank or omit anything: what to keep is decided downs
       });
     }
 
-    // Step 4: Demote anything that was re-scored below the save floor. This is an
-    // amended solicitation whose fit narrowed -- symmetric to a monitor climbing to
-    // pursue. New sub-floor notices were never saved, so they match nothing here.
+    // Step 4: Demote anything ALREADY STORED that was re-scored below the save floor.
+    // This is an amended solicitation whose fit narrowed -- symmetric to a monitor
+    // climbing to pursue.
     //
     // We mark rather than delete: assessments, incumbent_research and documents FK to
     // opportunities (ON DELETE CASCADE), so a delete would wipe analyst work. A
     // demoted row is preserved but excluded from reports.
     //
-    // The demoted rows now carry their REAL new score. Previously the model returned
-    // only the shortlist, so a demotion knew the notice had fallen below the floor but
-    // not to what, and left a stale fit_score sitting next to recommendation='pass' --
-    // a row disagreeing with itself, and part of why two rows exist below minScore.
-    const demoted = [
+    // Demoted rows carry their REAL new score. Before #206 the model returned only the
+    // shortlist, so a demotion knew a notice had fallen below the floor but not to
+    // what, and left a stale fit_score next to recommendation='pass' -- a row
+    // disagreeing with itself.
+    //
+    // "Already stored" is the load-bearing word, and getting it wrong cost a
+    // production run. #211 patched every sub-floor notice, one request each, on the
+    // theory that a sub-floor re-score is rare. It is rare among STORED rows. Among
+    // freshly scored ones it is most of the sweep -- 100-odd notices, none of which
+    // exist in the table, each getting its own PATCH that could not match anything.
+    // That blew Cloudflare's per-invocation subrequest limit and killed the run after
+    // every batch had been scored. One SELECT to find the intersection first, then a
+    // PATCH only for rows that are genuinely there.
+    const subFloor = [
       ...samResults.opportunities
-        .map((o) => ({ id: o.noticeId, score: scoreMap.get(`sam_${o.noticeId}`) }))
+        .map((op) => ({ id: op.noticeId, score: scoreMap.get(`sam_${op.noticeId}`) }))
         .filter((r) => r.score !== undefined && r.score.fitScore < input.minScore),
       ...sbirResults.topics
         .map((t) => ({ id: `sbir_${t.topicNumber}`, score: scoreMap.get(`sbir_${t.topicNumber}`) }))
         .filter((r) => r.score !== undefined && r.score.fitScore < input.minScore),
     ];
-    if (demoted.length > 0) {
+    if (subFloor.length > 0) {
       await step(ctx, "demote-rescored-to-pass", async () => {
+        const inList = subFloor.map((r) => `"${r.id}"`).join(",");
+        const found = await ctx.fetch(
+          `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=in.(${inList})&select=sam_notice_id`,
+          { headers: sbHeaders(ctx.env) },
+        );
+        if (!found.ok) {
+          console.warn(`[sweep] demote lookup → ${found.status}: ${await found.text()}`);
+          return { demoted: 0, subFloor: subFloor.length };
+        }
+        const stored = new Set(((await found.json()) as { sam_notice_id: string }[]).map((r) => r.sam_notice_id));
+        const toDemote = selectDemotions(subFloor, stored);
+
         const demotedAt = new Date().toISOString();
-        // One PATCH per row, because each carries its own new score. Sub-floor
-        // re-scores are rare (an amendment has to narrow the fit), so this is a
-        // handful of requests, not a fan-out.
-        for (const { id, score } of demoted) {
+        // One PATCH per row, because each carries its own new score -- but now only
+        // over rows that exist, which is genuinely the handful the comment claims.
+        for (const { id, score } of toDemote) {
           const res = await ctx.fetch(
             `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?sam_notice_id=eq.${encodeURIComponent(id)}`,
             {
@@ -505,6 +538,7 @@ you score 1. Do not filter, rank or omit anything: what to keep is decided downs
           );
           if (!res.ok) console.warn(`[sweep] demote ${id} → ${res.status}: ${await res.text()}`);
         }
+        return { demoted: toDemote.length, subFloor: subFloor.length };
       });
     }
 
