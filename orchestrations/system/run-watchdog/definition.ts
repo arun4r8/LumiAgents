@@ -75,6 +75,7 @@ interface ScheduleRow {
   cron_expression: string;
   is_active: boolean;
   last_run_at: string | null;
+  created_at: string | null;
 }
 
 /**
@@ -118,22 +119,27 @@ export function findOverdueSchedules(
     if (!s.is_active) continue;
     const interval = cronIntervalMinutes(s.cron_expression);
     if (interval === null) continue;
-    if (!s.last_run_at) {
-      out.push({
-        kind: "overdue",
-        subject: s.orchestration_name,
-        detail: `schedule '${s.cron_expression}' is active but has never run.`,
-      });
-      continue;
-    }
-    const lateBy = (now.getTime() - new Date(s.last_run_at).getTime()) / 60_000;
+    // A schedule that has never run is only late once it has EXISTED long enough to
+    // have fired. Without this, registering a new daily schedule alerts immediately
+    // -- which is what the watchdog's own first production run did, about the
+    // hydrator that had been created thirty minutes earlier and was not due until
+    // 08:20. An alert that fires on a correctly-configured new schedule is the noise
+    // this orchestration exists to avoid producing.
+    //
+    // `created_at` is the reference when there is no `last_run_at`: "how long has
+    // this been able to run and hasn't", rather than "has it ever run".
+    const reference = s.last_run_at ?? s.created_at;
+    if (!reference) continue; // no basis to judge; silence beats a guess
+    const lateBy = (now.getTime() - new Date(reference).getTime()) / 60_000;
     if (lateBy > interval * multiplier) {
       out.push({
         kind: "overdue",
         subject: s.orchestration_name,
-        detail:
-          `schedule '${s.cron_expression}' last ran ${Math.round(lateBy / 60)}h ago, ` +
-          `which is more than ${multiplier}x its ~${Math.round(interval / 60)}h interval.`,
+        detail: s.last_run_at
+          ? `schedule '${s.cron_expression}' last ran ${Math.round(lateBy / 60)}h ago, ` +
+            `which is more than ${multiplier}x its ~${Math.round(interval / 60)}h interval.`
+          : `schedule '${s.cron_expression}' has never run, and was created ` +
+            `${Math.round(lateBy / 60)}h ago -- more than ${multiplier}x its ~${Math.round(interval / 60)}h interval.`,
       });
     }
   }
@@ -225,7 +231,7 @@ export default defineOrchestration({
       );
       const schedules = await loadJson<ScheduleRow[]>(
         ctx.env,
-        "schedules?select=orchestration_name,cron_expression,is_active,last_run_at",
+        "schedules?select=orchestration_name,cron_expression,is_active,last_run_at,created_at",
       );
 
       return {

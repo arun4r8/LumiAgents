@@ -60,6 +60,7 @@ describe("findOverdueSchedules", () => {
       cron_expression: "0 8 * * *",
       is_active: true,
       last_run_at: NOW.toISOString(),
+      created_at: "2026-01-01T00:00:00Z",
       ...o,
     }) as Parameters<typeof findOverdueSchedules>[0][number];
 
@@ -73,8 +74,24 @@ describe("findOverdueSchedules", () => {
     expect(findOverdueSchedules([sched({ last_run_at: "2026-09-07T08:00:00Z" })], NOW, 2.5)).toEqual([]);
   });
 
-  it("flags an active schedule that has never run at all", () => {
-    expect(findOverdueSchedules([sched({ last_run_at: null })], NOW, 2.5)).toHaveLength(1);
+  it("flags a schedule that has never run and has been around long enough to have", () => {
+    expect(findOverdueSchedules([sched({ last_run_at: null, created_at: "2026-01-01T00:00:00Z" })], NOW, 2.5)).toHaveLength(1);
+  });
+
+  it("gives a NEWLY REGISTERED schedule until its first firing before complaining", () => {
+    // The watchdog's own first production run alerted about beady/opportunity-hydrate
+    // -- registered thirty minutes earlier, next due at 08:20, entirely healthy. An
+    // alert that fires on a correctly-configured new schedule is precisely the noise
+    // this orchestration exists to avoid producing, and it went to a real person.
+    const justCreated = new Date(NOW.getTime() - 30 * 60_000).toISOString();
+    expect(findOverdueSchedules([sched({ last_run_at: null, created_at: justCreated })], NOW, 2.5)).toEqual([]);
+  });
+
+  it("says which case it is, so the reader is not left guessing", () => {
+    const [found] = findOverdueSchedules([sched({ last_run_at: null, created_at: "2026-01-01T00:00:00Z" })], NOW, 2.5);
+    expect(found!.detail).toMatch(/has never run/);
+    const [ran] = findOverdueSchedules([sched({ last_run_at: "2026-09-04T08:00:00Z" })], NOW, 2.5);
+    expect(ran!.detail).toMatch(/last ran/);
   });
 
   it("says nothing about a deliberately disabled schedule", () => {
