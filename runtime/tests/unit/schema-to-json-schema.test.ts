@@ -216,11 +216,20 @@ describe("schemaToJsonSchema — real orchestration definitions", () => {
   });
 
   it("carries beady/opportunity-sweep array defaults and angie/candidate-sourcing bounds", () => {
-    const sweep = toSchema(orchestrations.get("beady/opportunity-sweep")!.inputSchema);
+    // Asserts the CONVERSION carries an array default, not which codes are in it.
+    // The NAICS list is a business tuning knob (#205 dropped 541330 and added
+    // 518210/541611); pinning its contents here made an unrelated test fail on a
+    // schedule change and taught nothing about schema conversion.
+    const sweepDef = orchestrations.get("beady/opportunity-sweep")!;
+    const sweep = toSchema(sweepDef.inputSchema);
+    const declaredDefault = (sweepDef.inputSchema as z.ZodObject<z.ZodRawShape>).shape["naicsCodes"]
+      ?._def.defaultValue() as string[];
     expect(sweep.properties?.["naicsCodes"]).toMatchObject({
       type: "array",
-      default: ["541512", "541511", "541519", "541330"],
+      default: declaredDefault,
     });
+    expect(declaredDefault.length).toBeGreaterThan(0);
+    expect(declaredDefault.every((c) => /^\d{6}$/.test(c))).toBe(true);
 
     const sourcing = toSchema(orchestrations.get("angie/candidate-sourcing")!.inputSchema);
     expect(sourcing.properties?.["maxCandidates"]).toMatchObject({ minimum: 1, maximum: 25, default: 10 });

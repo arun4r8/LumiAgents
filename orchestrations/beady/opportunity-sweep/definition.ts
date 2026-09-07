@@ -144,8 +144,8 @@ export const inputSchema = z.object({
     .describe("Keywords applied to both SAM.gov and SBIR searches"),
   naicsCodes: z
     .array(z.string())
-    .default(["541512", "541511", "541519", "541330"])
-    .describe("NAICS codes for SAM.gov filter (SBIR topics don't use NAICS)"),
+    .default(["541512", "541511", "541519", "518210", "541611"])
+    .describe("NAICS codes for SAM.gov filter, one paged query each (SBIR topics don't use NAICS)"),
   agencies: z
     .array(z.string())
     .optional()
