@@ -6,7 +6,7 @@
  * (orchestrations/cleo/content-sync).
  */
 
-import { graphGet, graphPatch, graphPost, type MsGraphEnv } from "./base";
+import { graphGet, graphPatch, graphPost, graphBatch, type MsGraphEnv } from "./base";
 
 interface WorksheetList {
   value?: Array<{ name?: string; position?: number }>;
@@ -153,8 +153,50 @@ export async function addTableRow(
   env: MsGraphEnv,
   opts: { driveId: string; itemId: string; table: string; values: string[] },
 ): Promise<void> {
-  const { driveId, itemId, table, values } = opts;
+  await addTableRows(env, { ...opts, rows: [opts.values] });
+}
+
+/**
+ * Append several rows to an Excel Table in ONE Graph call.
+ *
+ * The rows endpoint already takes an array of rows -- the single-row version was
+ * simply passing an array of one. Appending 40 rows was therefore 40 subrequests
+ * where 1 would do, against a 50-per-invocation Worker ceiling.
+ */
+export async function addTableRows(
+  env: MsGraphEnv,
+  opts: { driveId: string; itemId: string; table: string; rows: string[][] },
+): Promise<void> {
+  if (opts.rows.length === 0) return;
+  const { driveId, itemId, table, rows } = opts;
   const path =
     `/drives/${driveId}/items/${itemId}/workbook/tables('${encodeURIComponent(table)}')/rows`;
-  await graphPost<unknown>(env, path, { values: [values] });
+  await graphPost<unknown>(env, path, { values: rows });
+}
+
+/**
+ * Update many individual cells using Graph's JSON batch endpoint.
+ *
+ * Cell addresses in a sync are scattered (one per changed field), so they cannot be
+ * collapsed into a single range write. Batching is the next best thing: 20 per
+ * request instead of one each.
+ */
+export async function updateCells(
+  env: MsGraphEnv,
+  opts: { driveId: string; itemId: string; sheetName: string; updates: { address: string; value: string }[] },
+): Promise<void> {
+  if (opts.updates.length === 0) return;
+  const { driveId, itemId, sheetName, updates } = opts;
+  await graphBatch(
+    env,
+    updates.map((u, i) => ({
+      id: String(i),
+      method: "PATCH" as const,
+      // Batch request URLs are relative to /v1.0 and must not be absolute.
+      url:
+        `/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(sheetName)}')` +
+        `/range(address='${encodeURIComponent(u.address)}')`,
+      body: { values: [[u.value]] },
+    })),
+  );
 }

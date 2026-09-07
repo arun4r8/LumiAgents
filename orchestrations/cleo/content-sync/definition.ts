@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import { sbHeaders } from "@/runtime/utils/supabase";
-import { readTable, updateCell, addTableRow, colLetter } from "../../../integrations/msgraph/workbook";
+import { readTable, updateCells, addTableRows, colLetter } from "../../../integrations/msgraph/workbook";
 import { planSync, type DbRow, type SheetRow, type SheetLayout } from "./merge";
 
 // Two-way content-calendar sync between public.content_calendar and the Microsoft
@@ -17,6 +17,16 @@ import { planSync, type DbRow, type SheetRow, type SheetLayout } from "./merge";
 // by a sheet read. Legacy one-way rows are adopted by their old `csv:` source_key so
 // re-running doesn't duplicate them. Deletions are never propagated in either
 // direction. `dryRun` computes and returns the plan without performing any write.
+
+/**
+ * Most content_calendar rows this sync will read in one go.
+ *
+ * The read returns its rows as a Workflow step value, and Cloudflare caps a step
+ * return at 1 MiB. These rows carry free text and a sync_base blob, so the byte
+ * limit binds well before any sensible row count. Exceeding this raises rather than
+ * truncating: a half-read calendar syncs as "these rows were deleted from the app".
+ */
+const MAX_CALENDAR_ROWS = 2000;
 
 export const inputSchema = z.object({
   driveId: z.string().optional().describe("Graph drive ID hosting the workbook (default: CONTENT_CALENDAR_DRIVE_ID)."),
@@ -42,7 +52,12 @@ export const outputSchema = z.object({
   newSheetRows: z.number(),
   newAppRows: z.number(),
   skipped: z.number(),
-  plan: z.array(planEntrySchema).optional(),
+  // A SAMPLE, capped at PLAN_PREVIEW_LIMIT. Read planTotal for the real number --
+  // this list used to be silently sliced to 100, so a dry run against a 400-row
+  // sheet promised 100 actions and the real run issued 400.
+  plan: z.array(planEntrySchema).optional().describe("Sample of the planned actions, at most PLAN_PREVIEW_LIMIT entries."),
+  planTotal: z.number().optional().describe("How many actions the real run would take. Always the full count."),
+  planTruncated: z.boolean().optional().describe("True when `plan` is a sample rather than the whole list."),
 });
 
 // Header → column matcher (same flexible, case-insensitive style the one-way CSV
@@ -127,12 +142,30 @@ export default defineOrchestration({
 
     // ── Step 2: read all content_calendar rows ────────────────────────────────────
     const dbRows = await step(ctx, "read-db", async () => {
+      // Bounded, and it FAILS at the bound rather than silently syncing a subset.
+      //
+      // This used to read limit=10000 and return the rows as a step value. A
+      // Cloudflare Workflow step return is capped at 1 MiB, and these rows carry
+      // topic, description, asset_ref and a sync_base blob -- a few thousand of them
+      // exceed that long before the row cap does, and the failure would arrive as a
+      // step error with nothing pointing at size.
+      //
+      // A content calendar is a planning sheet. If it ever holds more rows than this,
+      // the right answer is paging with a cursor, not a bigger number -- so this
+      // stops and says so instead of quietly dropping the tail.
       const res = await ctx.fetch(
-        `${env.SUPABASE_URL}/rest/v1/content_calendar?select=id,sheet_id,source_key,topic,description,asset_ref,sync_base&limit=10000`,
+        `${env.SUPABASE_URL}/rest/v1/content_calendar?select=id,sheet_id,source_key,topic,description,asset_ref,sync_base&limit=${MAX_CALENDAR_ROWS + 1}`,
         { headers: sbHeaders(env) },
       );
       if (!res.ok) throw new Error(`content_calendar read → ${res.status}: ${await res.text()}`);
-      return (await res.json()) as DbRow[];
+      const rows = (await res.json()) as DbRow[];
+      if (rows.length > MAX_CALENDAR_ROWS) {
+        throw new Error(
+          `content_calendar has more than ${MAX_CALENDAR_ROWS} rows. This sync reads them all into one ` +
+            `Workflow step, whose return value Cloudflare caps at 1 MiB. Page this read before raising the cap.`,
+        );
+      }
+      return rows;
     });
 
     // ── Step 3: plan (pure). Generate ids here so they're memoized across replays. ─
@@ -142,48 +175,56 @@ export default defineOrchestration({
 
     // ── Step 4: apply (skipped entirely on a dry run) ─────────────────────────────
     if (!dryRun) {
+      // Cell writes go through Graph's $batch (20 per request) rather than one call
+      // each. On a first sync against the legacy sheet every row needs an id
+      // backfill, so this was one subrequest per row -- two, before the token cache
+      // -- against a 50-per-invocation Worker ceiling.
       await step(ctx, "backfill-ids", async () => {
-        for (const u of plan.idBackfills) {
-          await updateCell(env, { driveId, itemId, sheetName: read.sheetName, address: u.address, value: u.value });
-        }
+        await updateCells(env, { driveId, itemId, sheetName: read.sheetName, updates: plan.idBackfills });
         return plan.idBackfills.length;
       });
 
       await step(ctx, "write-sheet-cells", async () => {
-        for (const u of plan.sheetCellUpdates) {
-          await updateCell(env, { driveId, itemId, sheetName: read.sheetName, address: u.address, value: u.value });
-        }
+        await updateCells(env, { driveId, itemId, sheetName: read.sheetName, updates: plan.sheetCellUpdates });
         return plan.sheetCellUpdates.length;
       });
 
+      // The rows endpoint always took an array; the single-row helper was passing an
+      // array of one. All appends are now a single call.
       await step(ctx, "add-sheet-rows", async () => {
-        for (const r of plan.sheetRowAdds) {
-          await addTableRow(env, { driveId, itemId, table, values: r.values });
-        }
+        await addTableRows(env, { driveId, itemId, table, rows: plan.sheetRowAdds.map((r) => r.values) });
         return plan.sheetRowAdds.length;
       });
 
+      // Two requests total rather than one per row. PostgREST takes an array on
+      // POST, and an upsert on the primary key expresses "update these rows, each
+      // with its own patch" in a single call -- which a PATCH cannot, because each
+      // row's patch differs.
       await step(ctx, "write-db", async () => {
-        for (const ins of plan.dbInserts) {
+        if (plan.dbInserts.length > 0) {
           const res = await ctx.fetch(`${env.SUPABASE_URL}/rest/v1/content_calendar`, {
             method: "POST",
             headers: sbHeaders(env, { extra: { Prefer: "return=minimal" } }),
-            body: JSON.stringify(ins.row),
+            body: JSON.stringify(plan.dbInserts.map((i) => i.row)),
           });
-          if (!res.ok) throw new Error(`content_calendar insert → ${res.status}: ${await res.text()}`);
+          if (!res.ok) throw new Error(`content_calendar insert x${plan.dbInserts.length} → ${res.status}: ${await res.text()}`);
         }
-        const now = new Date().toISOString();
-        for (const upd of plan.dbUpdates) {
+
+        if (plan.dbUpdates.length > 0) {
+          const now = new Date().toISOString();
           const res = await ctx.fetch(
-            `${env.SUPABASE_URL}/rest/v1/content_calendar?id=eq.${upd.id}`,
+            `${env.SUPABASE_URL}/rest/v1/content_calendar?on_conflict=id`,
             {
-              method: "PATCH",
-              headers: sbHeaders(env, { extra: { Prefer: "return=minimal" } }),
-              body: JSON.stringify({ ...upd.patch, updated_at: now }),
+              method: "POST",
+              headers: sbHeaders(env, {
+                extra: { Prefer: "resolution=merge-duplicates,return=minimal" },
+              }),
+              body: JSON.stringify(plan.dbUpdates.map((u) => ({ id: u.id, ...u.patch, updated_at: now }))),
             },
           );
-          if (!res.ok) throw new Error(`content_calendar update ${upd.id} → ${res.status}: ${await res.text()}`);
+          if (!res.ok) throw new Error(`content_calendar update x${plan.dbUpdates.length} → ${res.status}: ${await res.text()}`);
         }
+
         return plan.dbInserts.length + plan.dbUpdates.length;
       });
     }
@@ -191,7 +232,12 @@ export default defineOrchestration({
     return {
       dryRun,
       ...plan.counts,
-      ...(dryRun ? { plan: plan.plan } : {}),
+      // planTotal travels with the sample ALWAYS, so a dry run can never be read as
+      // "there are 100 actions" when there are 400. The counts above are already the
+      // true totals; this makes the list agree with them.
+      ...(dryRun
+        ? { plan: plan.plan, planTotal: plan.planTotal, planTruncated: plan.planTruncated }
+        : {}),
     };
   },
 });

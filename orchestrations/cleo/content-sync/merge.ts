@@ -101,6 +101,20 @@ export interface SyncCounts {
   skipped: number;         // rows skipped because the merged topic went empty
 }
 
+/**
+ * How many entries of the human-readable plan a dry run shows.
+ *
+ * This is a DISPLAY cap and nothing else. The arrays above it -- the ones that
+ * actually drive writes -- are deliberately uncapped, because truncating the work
+ * would silently half-sync a sheet.
+ *
+ * That distinction used to be invisible: `plan` was sliced to 100 with no note, so
+ * a dry run against a 400-row sheet reported 100 actions and the real run issued
+ * 400. A preview that understates the work is worse than no preview, because it is
+ * believed. `planTotal` and `planTruncated` now travel with it.
+ */
+export const PLAN_PREVIEW_LIMIT = 100;
+
 export interface SyncPlan {
   idBackfills: SheetCellUpdate[];
   sheetCellUpdates: SheetCellUpdate[];
@@ -108,7 +122,12 @@ export interface SyncPlan {
   dbInserts: DbInsert[];
   dbUpdates: DbUpdate[];
   counts: SyncCounts;
+  /** A SAMPLE of the actions, at most PLAN_PREVIEW_LIMIT. See planTotal. */
   plan: PlanEntry[];
+  /** How many actions there really are. Always the full number. */
+  planTotal: number;
+  /** True when `plan` is a sample rather than the whole list. */
+  planTruncated: boolean;
 }
 
 const norm = (v: string | null | undefined): string => v ?? "";
@@ -143,6 +162,8 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
     dbUpdates: [],
     counts,
     plan: [],
+    planTotal: 0,
+    planTruncated: false,
   };
 
   const bySheetId = new Map<string, DbRow>();
@@ -317,6 +338,10 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
     plan.plan.push({ action: "new-sheet-row", sheetId: newId, topic: base.topic });
   }
 
-  plan.plan = plan.plan.slice(0, 100);
+  // Record the true size BEFORE trimming the preview, so the caller can never
+  // mistake the sample for the whole.
+  plan.planTotal = plan.plan.length;
+  plan.planTruncated = plan.plan.length > PLAN_PREVIEW_LIMIT;
+  plan.plan = plan.plan.slice(0, PLAN_PREVIEW_LIMIT);
   return plan;
 }

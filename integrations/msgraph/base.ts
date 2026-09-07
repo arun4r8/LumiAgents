@@ -157,3 +157,73 @@ export async function graphPost<T>(env: MsGraphEnv, path: string, body: unknown)
     { label: `Microsoft Graph POST ${path}` },
   );
 }
+
+
+/**
+ * Microsoft Graph's JSON batch endpoint: up to 20 requests in one HTTP call.
+ *
+ * https://learn.microsoft.com/graph/json-batching
+ *
+ * Written for the same reason as the token cache: a Cloudflare Worker gets 50
+ * subrequests per invocation, and a loop issuing one Graph call per spreadsheet
+ * cell spends that budget on framing rather than work. Twenty cells per request
+ * turns a 60-cell sync from 60 subrequests into 3.
+ *
+ * Graph returns HTTP 200 for the batch itself even when individual requests inside
+ * it failed, so per-request statuses MUST be inspected -- a caller that checks only
+ * the outer response will report success for a batch that wrote nothing. That is
+ * the whole trap of this endpoint and why this helper raises rather than returning
+ * the raw envelope.
+ */
+export const GRAPH_BATCH_MAX = 20;
+
+export interface GraphBatchRequest {
+  id: string;
+  method: "GET" | "POST" | "PATCH" | "DELETE";
+  url: string;
+  body?: unknown;
+}
+
+interface GraphBatchResponse {
+  responses: { id: string; status: number; body?: unknown }[];
+}
+
+export async function graphBatch(env: MsGraphEnv, requests: GraphBatchRequest[]): Promise<void> {
+  for (let i = 0; i < requests.length; i += GRAPH_BATCH_MAX) {
+    const chunk = requests.slice(i, i + GRAPH_BATCH_MAX);
+    const token = await getGraphToken(env);
+    const res = await callJson<GraphBatchResponse>(
+      fetch,
+      "https://graph.microsoft.com/v1.0/$batch",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requests: chunk.map((r) => ({
+            id: r.id,
+            method: r.method,
+            url: r.url,
+            ...(r.body === undefined ? {} : { body: r.body, headers: { "Content-Type": "application/json" } }),
+          })),
+        }),
+      },
+      { label: "Microsoft Graph $batch" },
+    );
+
+    // The outer 200 says nothing about the inner requests.
+    const failed = (res.responses ?? []).filter((r) => r.status >= 300);
+    if (failed.length > 0) {
+      const detail = failed
+        .slice(0, 3)
+        .map((f) => `${f.id} → ${f.status}: ${JSON.stringify(f.body).slice(0, 200)}`)
+        .join("; ");
+      throw new Error(
+        `Microsoft Graph $batch: ${failed.length} of ${chunk.length} request(s) failed. ${detail}`,
+      );
+    }
+  }
+}
