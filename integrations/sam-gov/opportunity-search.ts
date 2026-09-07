@@ -62,7 +62,10 @@ interface RawSamOpportunity {
   noticeId?: string;
   solicitationNumber?: string;
   title?: string;
-  fullParentPathName?: string;      // "DEPT OF DEFENSE > ARMY > ..."
+  // Period-delimited, NOT ">"-delimited. Docs example:
+  //   "GENERAL SERVICES ADMINISTRATION.FEDERAL ACQUISITION SERVICE.GSA/FAS CENTER..."
+  fullParentPathName?: string;
+  fullParentPathCode?: string;      // "047.4732.47QTCA" -- same depth, numeric
   naicsCode?: string;
   typeOfSetAside?: string;
   responseDeadLine?: string;
@@ -135,12 +138,34 @@ export function buildSamSearchUrl(
   return `https://api.sam.gov/opportunities/v2/search?${params.toString()}`;
 }
 
+/**
+ * Split SAM's agency hierarchy.
+ *
+ * `fullParentPathName` is PERIOD-delimited: "COMMERCE, DEPARTMENT OF.NATIONAL
+ * OCEANIC AND ATMOSPHERIC ADMINISTRATION.DEPT OF COMMERCE NOAA". This used to split
+ * on ">", which never matches, so `agency` held the entire undivided path and
+ * `subAgency` was null -- on all 155 rows in production, and on every notice handed
+ * to the scoring model.
+ *
+ * `fullParentPathCode` is the same hierarchy as dotted numeric codes ("047.4732.
+ * 47QTCA") and therefore says how many segments there really are. We use it to
+ * guard against a period inside an agency's own name: when the two disagree, trust
+ * the code's segment count and rejoin any over-split name parts from the right, so
+ * a name containing "U.S." cannot silently shift the hierarchy.
+ */
+export function splitAgencyPath(pathName?: string, pathCode?: string): string[] {
+  const parts = (pathName ?? "").split(".").map((s) => s.trim()).filter(Boolean);
+  const depth = (pathCode ?? "").split(".").filter(Boolean).length;
+  if (depth === 0 || parts.length <= depth) return parts;
+
+  // Over-split: a name contained a period. Keep the first `depth - 1` segments and
+  // fold the surplus back into the last one, which is the deepest office name and
+  // the likeliest place for punctuation.
+  return [...parts.slice(0, depth - 1), parts.slice(depth - 1).join(".")];
+}
+
 function normalise(o: RawSamOpportunity): SamOpportunity {
-  // Parse agency hierarchy: take last meaningful segment
-  const pathParts = (o.fullParentPathName ?? "")
-    .split(">")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const pathParts = splitAgencyPath(o.fullParentPathName, o.fullParentPathCode);
 
   return {
     noticeId: o.noticeId ?? "",
