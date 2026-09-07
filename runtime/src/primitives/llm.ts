@@ -223,19 +223,8 @@ export async function llm_extract<T extends z.ZodTypeAny>(
   const idx = ctx.stepIndex();
   const maxTokens = options.maxTokens ?? LLM_EXTRACT_DEFAULT_MAX_TOKENS;
 
-  // Replay short-circuit
-  const cached = await db.getCompletedStep(ctx.runId, idx);
-  if (cached !== null) {
-    return cached.output as z.infer<T>;
-  }
-
-  const runStep = await db.createRunStep({
-    run_id: ctx.runId,
-    step_index: idx,
-    step_name: options.name,
-    step_type: "llm_extract",
-    status: "running",
-    input: {
+  // The row this call records. Built once; written by whichever path runs below.
+  const runStepInput = {
       prompt: options.prompt,
       context: options.input,
       // Metadata only. Persisting base64 here would put a multi-megabyte file in
@@ -248,17 +237,42 @@ export async function llm_extract<T extends z.ZodTypeAny>(
             })),
           }
         : {}),
-    },
-  });
+  };
 
   const userPrompt = `${options.prompt}\n\nContext:\n${JSON.stringify(options.input, null, 2)}`;
   const userContent = buildUserContent(userPrompt, options.documents);
   const toolSchema = zodToJsonSchema(options.schema);
 
-  // In Workflow mode, wrap the LLM call in step.do() for durability + retry
+  // In Workflow mode every Supabase write goes inside `wf.do`, exactly as step.ts
+  // does it. Two reasons, and the second is the one that bit us.
+  //
+  // Correctness: `createRunStep` and `updateRunStep` used to sit OUTSIDE the durable
+  // step, so a replay wrote a SECOND run_step row for the same (run_id, step_index)
+  // and completed that one, orphaning the first as permanently "running".
+  //
+  // Budget: Workers allows 50 subrequests per invocation. Unmemoised, this function
+  // cost 4 of them per call -- getCompletedStep, createRunStep, the Anthropic call,
+  // updateRunStep -- and beady/opportunity-sweep makes one call per scoring batch.
+  // Seven batches was 28 subrequests of a 50 budget, and the run died entering the
+  // last one. Inside `wf.do` the bookkeeping is 3 on the first pass and 0 on replay,
+  // and the app-level `getCompletedStep` guard is redundant with Workflows' own
+  // memoisation, so it goes.
   if (ctx.workflowStep) {
+    const wf = ctx.workflowStep;
+    const runStepId = await wf.do(`llm-extract-${idx}-open`, async () => {
+      const rs = await db.createRunStep({
+        run_id: ctx.runId,
+        step_index: idx,
+        step_name: options.name,
+        step_type: "llm_extract",
+        status: "running",
+        input: runStepInput,
+      });
+      return rs.id;
+    });
+
     try {
-      const result = await ctx.workflowStep.do(`llm-extract-${idx}`, {
+      const result = await wf.do(`llm-extract-${idx}`, {
         retries: { limit: 2, delay: "10 seconds", backoff: "linear" },
       }, async () => {
         const client = makeClient(ctx);
@@ -292,26 +306,44 @@ export async function llm_extract<T extends z.ZodTypeAny>(
         };
       });
 
-      await db.updateRunStep(runStep.id, {
-        status: "completed",
-        output: result.parsed,
-        llm_model: resolveModel(ctx),
-        llm_prompt: options.prompt,
-        llm_response: result.raw,
-        llm_input_tokens: result.inputTokens,
-        llm_output_tokens: result.outputTokens,
-        ended_at: new Date().toISOString(),
+      await wf.do(`llm-extract-${idx}-close`, async () => {
+        await db.updateRunStep(runStepId, {
+          status: "completed",
+          output: result.parsed,
+          llm_model: resolveModel(ctx),
+          llm_prompt: options.prompt,
+          llm_response: result.raw,
+          llm_input_tokens: result.inputTokens,
+          llm_output_tokens: result.outputTokens,
+          ended_at: new Date().toISOString(),
+        });
       });
       return result.parsed as z.infer<T>;
     } catch (err) {
-      await db.updateRunStep(runStep.id, {
-        status: "failed",
-        error: { message: err instanceof Error ? err.message : String(err) },
-        ended_at: new Date().toISOString(),
+      await wf.do(`llm-extract-${idx}-fail`, async () => {
+        await db.updateRunStep(runStepId, {
+          status: "failed",
+          error: { message: err instanceof Error ? err.message : String(err) },
+          ended_at: new Date().toISOString(),
+        });
       });
       throw err;
     }
   }
+
+  // Inline path (no Workflow): keep the app-level replay guard and the plain writes.
+  const cached = await db.getCompletedStep(ctx.runId, idx);
+  if (cached !== null) {
+    return cached.output as z.infer<T>;
+  }
+  const runStep = await db.createRunStep({
+    run_id: ctx.runId,
+    step_index: idx,
+    step_name: options.name,
+    step_type: "llm_extract",
+    status: "running",
+    input: runStepInput,
+  });
 
   try {
     const client = makeClient(ctx);

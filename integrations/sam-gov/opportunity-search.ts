@@ -341,12 +341,17 @@ export const samGovOpportunitySearch = defineTool({
   inputSchema: samSearchInputSchema,
   outputSchema: samSearchOutputSchema,
   async run(ctx, input) {
+    // One budget claim for the whole walk, for the most pages it could possibly
+    // make: one per NAICS code, plus enough pages to satisfy `limit`. Claiming per
+    // page was accurate accounting bought with 7 subrequests of a 50-per-invocation
+    // Worker budget, which is the resource that actually runs out.
+    const codeCount = input.naicsCodes && input.naicsCodes.length > 0 ? input.naicsCodes.length : 1;
+    const maxPages = codeCount + Math.ceil(input.limit / SAM_PAGE_SIZE);
+    if (!(await claimBudget(ctx.env, "sam_gov", DAILY_BUDGET.sam_gov, maxPages))) {
+      throw new Error(`SAM.gov daily budget reached (${DAILY_BUDGET.sam_gov}/day). Try again tomorrow or raise the cap in DAILY_BUDGET.`);
+    }
+
     return collectSamOpportunities(input, async (page) => {
-      // Budget is claimed per request, not per search: a paged sweep really does
-      // spend one call per page against SAM's daily allowance.
-      if (!(await claimBudget(ctx.env, "sam_gov", DAILY_BUDGET.sam_gov))) {
-        throw new Error(`SAM.gov daily budget reached (${DAILY_BUDGET.sam_gov}/day). Try again tomorrow or raise the cap in DAILY_BUDGET.`);
-      }
       return callJson<RawSamResponse>(
         ctx.fetch,
         buildSamSearchUrl(ctx.env.SAM_GOV_API_KEY, input, page),

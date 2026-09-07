@@ -22,17 +22,52 @@ function sbirContentHash(t: { title: string; program: string; phase: string; clo
 
 // How many notices go into one scoring prompt, and how much room the answer gets.
 //
-// Both were wrong on the first live run. 40 notices at the default 4096-token cap
-// truncated the response mid-array after five minutes of work, and a truncated
-// tool-use response is not reported as truncation: the JSON is cut off, Zod
-// rejects it, and the step fails with a bare `ZodError`.
+// Both numbers are now MEASURED rather than guessed, from six production batches:
 //
-// The cap had been fine while the model returned only the shortlist. Asking it to
-// score every notice (so the sub-floor scores exist at all, #206) roughly doubled
-// the output, and nothing moved to accommodate that. 20 notices at 8192 tokens
-// leaves several times the headroom a batch actually needs.
-export const SCORE_BATCH_SIZE = 20;
-export const SCORE_MAX_TOKENS = 8192;
+//   147 output tokens per notice      (I had assumed 80)
+//   3.3 seconds per notice, 44 tok/s  (I had assumed 8)
+//
+// So a 40-notice batch is ~5,900 tokens in ~133s. That fits the 16384 cap nearly
+// three times over and the 300s Anthropic timeout more than twice, and it explains
+// the original failure exactly: 40 x 147 = 5,880 tokens against the old default
+// 4096 cap, truncated mid-array.
+//
+// The batch was cut to 20 on that bad arithmetic, which traded a token problem for
+// a worse one. Workers allows 50 subrequests per invocation and each scoring batch
+// is one llm_extract costing 3, so halving the batch size raised the batch count
+// from 4 to 7 and pushed the sweep past the wall -- it died entering the last
+// batch, having scored 133 notices it then threw away.
+//
+// Bigger batches are CHEAPER here, and 60 is where the three constraints meet at
+// the designed limit of 250 notices:
+//
+//   subrequests  ceil(250/60) = 5 batches x 3 = 15, leaving real headroom under 50
+//   tokens       60 x 147   = 8,820   vs 16384 cap   (1.9x)
+//   wall clock   60 x 3.3s  = 198s    vs 300s timeout (1.5x)
+//
+// runtime/tests/unit/sweep-subrequest-budget.test.ts holds that arithmetic, so
+// halving this again fails CI instead of production.
+/**
+ * Whether to call the DoD SBIR/STTR source at all.
+ *
+ * It has returned 403 on every run since 2026-07: the portal moved to
+ * www.defensesbirsttr.mil behind Akamai bot protection and the SBIR.gov public API
+ * is disabled (#63). The sweep already treats this as a known outage and
+ * deliberately does not alert on it.
+ *
+ * Confirming a known outage cost 4 subrequests a run -- the defineTool bookkeeping
+ * pair, a budget claim, and the fetch that 403s -- out of a 50-per-invocation
+ * Worker budget that the sweep has been exhausting. That is 8% of the run's total
+ * resource spent learning something we already know.
+ *
+ * Flip this to true the moment a working SBIR source exists; the code path is
+ * unchanged and still tested. Until then the sweep reports sbirFound: 0, which is
+ * exactly what it reported when the call was being made.
+ */
+export const SBIR_SOURCE_AVAILABLE = false;
+
+export const SCORE_BATCH_SIZE = 60;
+export const SCORE_MAX_TOKENS = 16384;
 
 const scoreSchema = z.object({
   scored: z.array(
@@ -173,12 +208,14 @@ export default defineOrchestration({
           openOnly: true,
           ptypes: input.samNoticeTypes,
         }),
-        sbirTopicSearch(ctx, {
-          keyword: input.keywords,
-          component: input.sbirComponents,
-          topicStatus: "Open",
-          limit: input.sbirLimit,
-        }),
+        SBIR_SOURCE_AVAILABLE
+          ? sbirTopicSearch(ctx, {
+              keyword: input.keywords,
+              component: input.sbirComponents,
+              topicStatus: "Open",
+              limit: input.sbirLimit,
+            })
+          : Promise.resolve({ totalElements: 0, topics: [] }),
       ]);
       const samResults = samR.status === "fulfilled"
         ? samR.value

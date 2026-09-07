@@ -51,11 +51,17 @@ describe("recommendationFor", () => {
  * inside the cap with real headroom.
  */
 describe("scoring batch sizing", () => {
-  const BYTES_PER_SCORED_NOTICE = 80;
+  // Measured across six production batches, not guessed.
+  const OUTPUT_TOKENS_PER_NOTICE = 147;
 
-  it("keeps a full batch well inside the output cap", () => {
-    const worstCase = SCORE_BATCH_SIZE * BYTES_PER_SCORED_NOTICE;
-    expect(worstCase).toBeLessThan(SCORE_MAX_TOKENS / 2);
+  it("keeps a full batch inside the output cap with margin", () => {
+    // 1.5x, not 2x. The batch size is set where three constraints meet -- output
+    // tokens, the 300s Anthropic timeout, and the 50-subrequest Worker ceiling --
+    // and the subrequest ceiling is the binding one, so the token margin is spent
+    // deliberately rather than maximised. 147 tokens/notice is a measured mean; a
+    // batch of unusually verbose notices still has half again as much room.
+    const worstCase = SCORE_BATCH_SIZE * OUTPUT_TOKENS_PER_NOTICE;
+    expect(worstCase * 1.5).toBeLessThan(SCORE_MAX_TOKENS);
   });
 
   it("raises the cap above llm_extract's default, which is what truncated", () => {
@@ -69,7 +75,7 @@ describe("scoring batch sizing", () => {
    * ~8s per notice, so the batch has to fit the timeout with margin.
    */
   it("keeps a batch inside the Anthropic timeout, not just inside the token cap", () => {
-    const OBSERVED_SECONDS_PER_NOTICE = 8;
+    const OBSERVED_SECONDS_PER_NOTICE = 3.3; // measured: 66s per 20-notice batch
     const projectedMs = SCORE_BATCH_SIZE * OBSERVED_SECONDS_PER_NOTICE * 1000;
     expect(projectedMs).toBeLessThan(ANTHROPIC_DEFAULT_TIMEOUT_MS * 0.75);
   });
@@ -79,8 +85,18 @@ describe("scoring batch sizing", () => {
  * The demote step patches rows whose fit narrowed on re-score. It must touch only
  * rows that ALREADY EXIST: on a first sweep most notices score below the floor and
  * none of them are stored, so patching them all is ~100 requests that cannot match
- * a row. That is what killed the 2026-09-07 18:39 run — Cloudflare's per-invocation
- * subrequest limit, hit after all seven scoring batches had succeeded.
+ * a row.
+ *
+ * This docblock used to claim that fan-out killed the 2026-09-07 18:39 run "after
+ * all seven scoring batches had succeeded". It did not, and the claim was an
+ * off-by-one written down as fact: `llm-extract-7` is step index 7, which is batch
+ * SIX of seven. That run died ENTERING batch seven, three steps before the demote
+ * loop, and the database confirms it -- six `score-opportunities-N-of-7` rows
+ * reached `completed`, not seven. The real cause was the 50-subrequest ceiling.
+ *
+ * The fan-out is still a genuine bug and this test still earns its place. But it
+ * was never the cause of that failure, and a test comment asserting otherwise sent
+ * the investigation the wrong way for an hour.
  */
 describe("selectDemotions", () => {
   const subFloor = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
