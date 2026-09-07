@@ -25,7 +25,6 @@ export interface Opportunity {
   red_flags: string | null;
   recommendation: string | null;
   response_deadline: string | null;
-  status: string | null;
   solicitation_number: string | null;
   source_url: string | null;
   disposition: "pursue" | "watch" | "ignore" | null;

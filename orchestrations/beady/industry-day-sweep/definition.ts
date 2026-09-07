@@ -105,8 +105,14 @@ export default defineOrchestration({
       from.setDate(from.getDate() - input.postedWithinDays);
       for (const kw of SAM_TITLE_KEYWORDS) {
         try {
+          // `rdlfrom`, not `status`. SAM v2's `status` is documented "Coming Soon"
+          // and ignored silently, which is how the opportunity sweep ended up
+          // scoring closed notices for months (#204). On a Special Notice the
+          // response deadline is the registration date, so bounding it from today
+          // is what "an industry day that has not happened yet" means.
           const params = new URLSearchParams({
-            api_key: env.SAM_GOV_API_KEY, limit: "20", ptype: "s", status: "active",
+            api_key: env.SAM_GOV_API_KEY, limit: "20", ptype: "s",
+            rdlfrom: fmt(to), rdlto: fmt(new Date(to.getTime() + 364 * 86_400_000)),
             postedFrom: fmt(from), postedTo: fmt(to), title: kw,
           });
           const res = await ctx.fetch(`https://api.sam.gov/opportunities/v2/search?${params.toString()}`, { headers: { Accept: "application/json" } });

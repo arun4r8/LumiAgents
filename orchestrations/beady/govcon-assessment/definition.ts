@@ -220,7 +220,6 @@ export default defineOrchestration({
           evaluation_basis: facts.evaluation_basis,
           extracted_facts: facts,
           source: "agent",
-          status: "assessing",
         }, true);
       }
 

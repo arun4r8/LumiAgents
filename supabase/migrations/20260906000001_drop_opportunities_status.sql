@@ -1,0 +1,35 @@
+-- ============================================================================
+-- Drop opportunities.status
+--
+-- WHAT IT WAS FOR
+--   The solicitation's own state -- open vs closed -- as distinct from Beady's
+--   `recommendation` and the human's `disposition`. 20260905000002 spelled that
+--   out while adding `disposition`, and noted in passing that "the sweep hardcodes
+--   it to 'open' for every row".
+--
+-- WHY IT GOES
+--   That was the whole column. Every one of the 155 rows in production reads
+--   'open', including the 119 whose response_deadline had already passed on the
+--   day the sweep saved them (#209). Nothing ever transitioned it, so it never
+--   carried a bit of information.
+--
+--   It also had two vocabularies. The sweep wrote 'open'; govcon-assessment wrote
+--   'assessing', which is not the solicitation's state at all but ours -- and that
+--   now has real homes in `disposition` and `pipeline_stage`.
+--
+--   The state it was meant to hold is already in `response_deadline`, exactly and
+--   without a sync step. The dashboard's own "current / historical" filter reads
+--   that column and ignores `status`, and nothing renders `status` anywhere.
+--
+-- WHY NOT DERIVE IT INSTEAD
+--   A generated column cannot be: open-vs-closed depends on now(), which is not
+--   IMMUTABLE, so Postgres will not compute it. The alternative is a cron that
+--   rewrites a column to restate a timestamp comparison every reader can make
+--   for itself. That is machinery in exchange for a second place to be wrong.
+--
+-- REVERSIBLE
+--   Nothing is lost: a single constant value across every row. Re-adding the
+--   column restores the exact prior state.
+-- ============================================================================
+
+ALTER TABLE public.opportunities DROP COLUMN IF EXISTS status;

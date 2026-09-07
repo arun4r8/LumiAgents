@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 /**
  * Deadline filter (Tommy: "current / historical deals").
  *
- * `status` cannot answer that question: every row in production is 'open' because
- * nothing ever transitions it — closing the loop is the Go/No-go and award-tracking
- * work in #174. Until then `response_deadline` is the only real signal, and it is a
- * decisive one: 109 of 139 rows have a deadline in the past.
+ * `response_deadline` is the signal, and a decisive one: 119 of 155 rows have a
+ * deadline in the past. There used to be a `status` column meant for exactly this;
+ * it read 'open' on every row ever written and was dropped in #209, because
+ * open-vs-closed is this timestamp compared to now and nothing else.
  *
  * Filtering happens in the QUERY, not in the client. The page is capped and ordered by
  * fit, so a client-side filter would only filter the rows that survived the cap, and
@@ -127,7 +127,7 @@ export async function OpportunitiesTab({
       supabase
         .from("opportunities")
         .select(
-          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, status, solicitation_number, naics_code, last_scored_at, source_url, disposition",
+          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition",
         ),
     ))
       .order("fit_score", { ascending: false, nullsFirst: false })
