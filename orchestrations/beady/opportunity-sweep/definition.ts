@@ -91,13 +91,18 @@ export const SCORE_MAX_TOKENS = 16384;
  */
 export const SCORE_TIMEOUT_MS = 600_000;
 
-const scoreSchema = z.object({
+export const scoreSchema = z.object({
   scored: z.array(
     z.object({
       id: z.string(),
       fitScore: z.number().int().min(1).max(10),
-      fitReason: z.string(),
-      redFlags: z.string().nullable(),
+      // Bounded on purpose. Generation time is dominated by output tokens, and an
+      // unbounded reason averaged 147 tokens per notice -- around 110 words for a
+      // line that appears on a card and in a digest row. A 60-notice batch of those
+      // ran long enough that Anthropic's edge returned a 524 before the answer came
+      // back, which is not a timeout we can raise our way out of.
+      fitReason: z.string().max(200).describe("One sentence, at most 25 words."),
+      redFlags: z.string().max(200).nullable().describe("One short clause, or null."),
     }),
   ),
 });
@@ -384,6 +389,10 @@ Scoring (1-10):
 
 Score EVERY opportunity in the input and return one entry for each, including the ones
 you score 1. Do not filter, rank or omit anything: what to keep is decided downstream.
+
+Keep fitReason to ONE SENTENCE of at most 25 words, and redFlags to a short clause or
+null. These appear on a card and in a digest row, so length costs the reader nothing
+and costs the batch a great deal: the whole answer has to come back in one response.
         `.trim(),
         input: { opportunities: batch },
         schema: scoreSchema,

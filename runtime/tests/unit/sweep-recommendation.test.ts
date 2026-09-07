@@ -5,6 +5,7 @@ import {
   SCORE_BATCH_SIZE,
   SCORE_MAX_TOKENS,
   SCORE_TIMEOUT_MS,
+  scoreSchema,
 } from "../../../orchestrations/beady/opportunity-sweep/definition";
 import { LLM_EXTRACT_DEFAULT_MAX_TOKENS } from "../../src/primitives/llm";
 import { ANTHROPIC_DEFAULT_TIMEOUT_MS } from "../../../integrations/anthropic/client";
@@ -52,8 +53,10 @@ describe("recommendationFor", () => {
  * inside the cap with real headroom.
  */
 describe("scoring batch sizing", () => {
-  // Measured across six production batches, not guessed.
-  const OUTPUT_TOKENS_PER_NOTICE = 147;
+  // Measured across six production batches at 147 tokens per notice with an
+  // UNBOUNDED fitReason. The reason is now capped at 25 words, so ~60 is the
+  // expectation; 90 is kept as a pessimistic guard.
+  const OUTPUT_TOKENS_PER_NOTICE = 90;
 
   it("keeps a full batch inside the output cap with margin", () => {
     // 1.5x, not 2x. The batch size is set where three constraints meet -- output
@@ -82,7 +85,10 @@ describe("scoring batch sizing", () => {
    * 300s timeout on paper while it ran past it in production.
    */
   it("keeps a batch inside its own timeout, using the large-batch rate", () => {
-    const SECONDS_PER_NOTICE_AT_SCALE = 5.5; // measured at 60; deliberately pessimistic
+    // 5.5s/notice was measured at batch 60 with unbounded reasons, and that batch
+    // ran long enough to draw a 524 from Anthropic's edge. With the reason capped
+    // the output roughly halves, so does the time. 3.5 stays pessimistic.
+    const SECONDS_PER_NOTICE_AT_SCALE = 3.5;
     const projectedMs = SCORE_BATCH_SIZE * SECONDS_PER_NOTICE_AT_SCALE * 1000;
     expect(projectedMs).toBeLessThan(SCORE_TIMEOUT_MS * 0.75);
   });
@@ -124,5 +130,32 @@ describe("selectDemotions", () => {
     // The stored set is the intersection lookup's answer, not the whole table, but
     // a superset must not widen what gets patched.
     expect(selectDemotions([{ id: "a" }], new Set(["a", "zzz"]))).toEqual([{ id: "a" }]);
+  });
+});
+
+/**
+ * The scoring response has to come back in ONE HTTP response, and a long one draws a
+ * 524 from Anthropic's edge before it finishes — a failure our own timeout cannot
+ * reach, because it is their infrastructure giving up, not ours.
+ *
+ * That makes output length a hard constraint rather than a matter of taste, and the
+ * schema is where it gets enforced: a prompt asking for brevity is a request, a
+ * `.max()` is a contract. 60 notices x 147 tokens ran past 490s and failed; the same
+ * batch with bounded reasons is roughly half that.
+ */
+describe("scoring output is bounded, because the whole answer is one response", () => {
+  it("caps fitReason and redFlags in the schema, not only in the prompt", () => {
+    const field = scoreSchema.shape.scored.element.shape;
+    // A 25-word sentence is comfortably under 200 characters; 110 words is not.
+    expect(() => field.fitReason.parse("x".repeat(201))).toThrow();
+    expect(() => field.fitReason.parse("Strong match: federal data modernisation with a cleared team.")).not.toThrow();
+    expect(() => field.redFlags.parse(null)).not.toThrow();
+    expect(() => field.redFlags.parse("y".repeat(201))).toThrow();
+  });
+
+  it("keeps a full batch's projected response inside the cap with the bounded reason", () => {
+    const CHARS_PER_TOKEN = 4;
+    const worstCaseChars = SCORE_BATCH_SIZE * (200 + 200); // both fields at their max
+    expect(worstCaseChars / CHARS_PER_TOKEN).toBeLessThan(SCORE_MAX_TOKENS);
   });
 });
