@@ -1,3 +1,11 @@
+/**
+ * DOUBLE PROVENANCE: Microsoft Graph attachment payloads, modelled on the shapes
+ * documented at https://learn.microsoft.com/graph/api/resources/chatmessageattachment.
+ * Not modelled: Graph's throttling (429 + Retry-After) and the fact that
+ * `contentUrl` can be present with `content` null for hosted files. If either
+ * matters to a future change, extend the double from the docs first -- see
+ * docs/testing-doubles.md.
+ */
 import { describe, it, expect, vi } from "vitest";
 import { downloadTeamsFiles } from "../../../integrations/teams/bot";
 import type { BotAttachment } from "../../../integrations/teams/bot";

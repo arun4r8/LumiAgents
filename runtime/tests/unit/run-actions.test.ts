@@ -1,3 +1,10 @@
+/**
+ * DOUBLE PROVENANCE: PostgREST request/response shapes, modelled on
+ * https://postgrest.org/en/stable/references/api.html.
+ * Not modelled: a 404 from a schema-qualified path, which parses as a valid empty
+ * body and is how #223 stayed invisible; nor `Prefer: return=representation`
+ * returning an array where a caller expects an object. See docs/testing-doubles.md.
+ */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
 import {

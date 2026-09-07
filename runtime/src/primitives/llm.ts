@@ -181,7 +181,7 @@ export interface LlmDocument {
  * goes through here, so the no-document path has to produce exactly the request it
  * always did, not a one-element content array that merely behaves the same.
  */
-function buildUserContent(
+export function buildUserContent(
   prompt: string,
   documents?: LlmDocument[],
 ): string | Anthropic.ContentBlockParam[] {

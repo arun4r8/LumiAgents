@@ -1,3 +1,9 @@
+/**
+ * DOUBLE PROVENANCE: Azure AD JWT validation inputs, modelled on the token claims
+ * documented at https://learn.microsoft.com/entra/identity-platform/access-tokens.
+ * Not modelled: key rollover on the JWKS endpoint, or a token whose `tid` is valid
+ * but whose `aud` is another app in the same tenant. See docs/testing-doubles.md.
+ */
 import { describe, it, expect, vi } from "vitest";
 import { trustFor, getBotToken } from "../../../integrations/teams/base";
 

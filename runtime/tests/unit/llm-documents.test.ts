@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, PDF_FIELD_BY_TOOL } from "../../src/utils/pdf";
+import { buildUserContent } from "../../src/primitives/llm";
 
 /**
  * Covers the PDF path added for #166.
@@ -10,26 +11,14 @@ import { PDF_REQUIRED_TOOLS, PDF_BATCH_TOOLS, PDF_FIELD_BY_TOOL } from "../../sr
  * one-element content array would "work" and would also silently change every
  * LLM call in the product.
  *
- * buildUserContent is not exported (it is an implementation detail of the
- * primitive), so the shape contract is asserted against a local mirror of it and
- * the wiring is asserted against the real exported tables. If the mirror and the
- * real function drift, the integration assertions below still fail, because they
- * read the actual maps.
+ * This file used to re-implement buildUserContent locally and assert against the
+ * copy, on the grounds that the real one was not exported. That is not a test: a
+ * mirror and its original can only ever agree with each other, so the assertions
+ * held no matter what the primitive did. It is the same failure that let fakeSam
+ * hide a paging bug through a full mutation-tested suite (#222).
+ *
+ * The function is exported now and this tests the real one.
  */
-
-type Doc = { base64: string; mediaType: string };
-
-/** Mirror of buildUserContent in runtime/src/primitives/llm.ts. */
-function buildUserContent(prompt: string, documents?: Doc[]): unknown {
-  if (!documents || documents.length === 0) return prompt;
-  return [
-    ...documents.map((d) => ({
-      type: "document" as const,
-      source: { type: "base64" as const, media_type: d.mediaType, data: d.base64 },
-    })),
-    { type: "text" as const, text: prompt },
-  ];
-}
 
 describe("llm_extract user content", () => {
   it("returns a bare string when there are no documents, not a content array", () => {

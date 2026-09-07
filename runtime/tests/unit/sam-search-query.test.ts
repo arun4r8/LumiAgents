@@ -72,11 +72,21 @@ describe("buildSamSearchUrl", () => {
     }
   });
 
-  it("paginates: offset and a full page are always on the query", () => {
-    const p = paramsOf(buildSamSearchUrl("k", parse({}), { offset: 3000, pageSize: SAM_PAGE_SIZE, now: NOW }));
-    expect(p.get("offset")).toBe("3000");
-    expect(p.get("limit")).toBe(String(SAM_PAGE_SIZE));
-    expect(SAM_PAGE_SIZE).toBeLessThanOrEqual(1000); // SAM's documented ceiling
+  it("sends the page index and size SAM documents, within its stated ceiling", () => {
+    // This assertion used to read back the same values it passed in -- "offset is
+    // 3000 because I set offset to 3000" -- so it could not fail whatever `offset`
+    // meant, and it sat in the suite while the walk treated a page index as a
+    // record offset (#215). What is worth asserting is the relationship to SAM's
+    // documented limits, not the round trip.
+    const p = paramsOf(buildSamSearchUrl("k", parse({}), { offset: 3, pageSize: SAM_PAGE_SIZE, now: NOW }));
+    expect(Number(p.get("offset"))).toBeGreaterThanOrEqual(0);
+    // A page index addresses records [offset * limit, ...), so a constant page size
+    // is what makes it mean anything. Anything above SAM's 1000 is rejected outright.
+    expect(Number(p.get("limit"))).toBeLessThanOrEqual(1000);
+    expect(Number(p.get("limit"))).toBe(SAM_PAGE_SIZE);
+    // Both must be integers: SAM has no notion of half a page.
+    expect(Number.isInteger(Number(p.get("offset")))).toBe(true);
+    expect(Number.isInteger(Number(p.get("limit")))).toBe(true);
   });
 
   it("windows postedFrom/postedTo by postedWithinDays in SAM's MM/dd/yyyy", () => {
