@@ -21,8 +21,35 @@ export interface MsGraphEnv {
 }
 
 /**
+ * Cached token, keyed by client id so a config change cannot serve a stale one.
+ *
+ * Module scope, so it lives as long as the isolate: within a single Worker
+ * invocation it is always a hit after the first call, which is the case that
+ * matters. Across invocations it is a bonus, not something to rely on.
+ *
+ * WHY THIS EXISTS. Every graphGet/graphPatch/graphPost fetched a fresh token
+ * first, so each one was TWO subrequests -- login.microsoftonline.com, then
+ * graph.microsoft.com. Cloudflare Workers Free allows 50 per invocation, and
+ * cleo/content-sync writes one cell per calendar row: ~3 subrequests a row, so it
+ * broke at roughly 17 rows of a sheet that is meant to hold a year of posts (#221).
+ * Caching the token halves every Graph loop in the codebase.
+ */
+let tokenCache: { clientId: string; token: string; expiresAt: number } | null = null;
+
+/** Refresh this long before the token actually expires. */
+const TOKEN_SKEW_MS = 60_000;
+
+/** Test seam: drop the cached token. */
+export function resetGraphTokenCache(): void {
+  tokenCache = null;
+}
+
+/**
  * Acquire an app-only bearer token from Azure AD via the client-credentials
  * flow. Throws a clear error if any of the three MSGRAPH_* creds is missing.
+ *
+ * Cached until shortly before expiry -- see tokenCache above for why that matters
+ * more than it looks.
  */
 export async function getGraphToken(env: MsGraphEnv): Promise<string> {
   const { MSGRAPH_TENANT_ID, MSGRAPH_CLIENT_ID, MSGRAPH_CLIENT_SECRET } = env;
@@ -31,6 +58,11 @@ export async function getGraphToken(env: MsGraphEnv): Promise<string> {
       "Microsoft Graph not configured. Set secrets MSGRAPH_TENANT_ID, " +
         "MSGRAPH_CLIENT_ID, and MSGRAPH_CLIENT_SECRET.",
     );
+  }
+
+  const now = Date.now();
+  if (tokenCache && tokenCache.clientId === MSGRAPH_CLIENT_ID && tokenCache.expiresAt > now) {
+    return tokenCache.token;
   }
 
   const resp = await fetch(
@@ -51,8 +83,18 @@ export async function getGraphToken(env: MsGraphEnv): Promise<string> {
     throw new Error(`Microsoft Graph token → ${resp.status}: ${await resp.text()}`);
   }
 
-  const data = (await resp.json()) as { access_token?: string };
+  const data = (await resp.json()) as { access_token?: string; expires_in?: number };
   if (!data.access_token) throw new Error("Microsoft Graph token response had no access_token.");
+
+  // Azure returns expires_in seconds (typically 3599). Fall back to a short life if
+  // it is absent: a token we re-fetch too often is a performance bug, one we hold
+  // past expiry is an outage.
+  const lifetimeMs = (data.expires_in ?? 300) * 1000;
+  tokenCache = {
+    clientId: MSGRAPH_CLIENT_ID,
+    token: data.access_token,
+    expiresAt: now + Math.max(0, lifetimeMs - TOKEN_SKEW_MS),
+  };
   return data.access_token;
 }
 

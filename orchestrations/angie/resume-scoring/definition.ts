@@ -1,16 +1,46 @@
 import { z } from "zod";
+import { WORKER_SUBREQUEST_LIMIT } from "@/runtime/config/limits";
 import { defineOrchestration, step } from "@/runtime";
 import type { Env } from "@/runtime";
 import { scoreResume, type ScoredResume } from "../../../integrations/anthropic/score-resume";
+
+/**
+ * What one résumé costs in subrequests: step-open, the Anthropic call, the insert,
+ * the progress bump, step-close. Measured from the loop, not estimated.
+ */
+export const SUBREQUESTS_PER_RESUME = 5;
+
+/**
+ * How many fit in one run, leaving room for the orchestration's own overhead
+ * (workflow entry, the job row, the final summary step).
+ */
+export const MAX_RESUMES_PER_RUN = 8;
 
 export const inputSchema = z.object({
   jobDescription: z
     .string()
     .describe("Role title / key the résumés are scored against (the 'rolekey'). 'Lumiture' scores against the built-in JD."),
+  // Bounded by the Worker subrequest ceiling, not by taste.
+  //
+  // Each résumé costs 5 subrequests: step-open, the Anthropic call, an insert, a
+  // progress bump, step-close. Cloudflare Workers Free allows 50 per invocation and
+  // a Workflow spends that across the whole orchestration, so the real ceiling is
+  // around 8 résumés -- and this used to have no maximum at all, fed from chat
+  // attachments with no cap on that path either (#221).
+  //
+  // A recruiter dropping 20 CVs in is the intended use and would have died partway
+  // with everything already done thrown away, because a subrequest overrun kills
+  // the run wherever it is. Failing the input up front with a number in the message
+  // is the honest version of the same limit.
   pdfBase64s: z
     .array(z.string())
     .min(1)
-    .describe("Base64-encoded PDF résumés, injected automatically from chat attachments"),
+    .max(MAX_RESUMES_PER_RUN, {
+      message:
+        `Too many résumés for one run. Each costs ${SUBREQUESTS_PER_RESUME} Cloudflare subrequests against a ceiling of ` +
+        `${WORKER_SUBREQUEST_LIMIT} per invocation, so at most ${MAX_RESUMES_PER_RUN} fit. Split the batch.`,
+    })
+    .describe(`Base64-encoded PDF résumés, injected automatically from chat attachments. At most ${MAX_RESUMES_PER_RUN} per run.`),
 });
 
 export const outputSchema = z.object({
