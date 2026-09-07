@@ -37,6 +37,7 @@ import * as patchDocumentRag  from "../../orchestrations/patch/document-rag/defi
 import systemMemoryMaintenance from "../../orchestrations/system/memory-maintenance/definition";
 import systemRunWatchdog from "../../orchestrations/system/run-watchdog/definition";
 import beadyOpportunityHydrate from "../../orchestrations/beady/opportunity-hydrate/definition";
+import beadyProjectFolder from "../../orchestrations/beady/project-folder/definition";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -79,4 +80,5 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(systemMemoryMaintenance as unknown as AnyOrch),
   reg(systemRunWatchdog as unknown as AnyOrch),
   reg(beadyOpportunityHydrate as unknown as AnyOrch),
+  reg(beadyProjectFolder as unknown as AnyOrch),
 ]);

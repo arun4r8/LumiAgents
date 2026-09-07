@@ -71,6 +71,8 @@ export interface Env {
   // drive + item IDs; optional worksheet name → defaults to the first sheet).
   // Set in wrangler.toml [vars]. Unset → the Graph content sync is disabled.
   CONTENT_CALENDAR_DRIVE_ID?: string;
+  /** Graph drive hosting the Lumiture Labs document library, for per-project BD folders (#207). */
+  BD_DRIVE_ID?: string;
   CONTENT_CALENDAR_ITEM_ID?: string;
   CONTENT_CALENDAR_WORKSHEET?: string;
   // Name of the Excel Table the two-way sync reads/writes (default "ContentCalendar").

@@ -28,6 +28,7 @@ export interface Opportunity {
   solicitation_number: string | null;
   source_url: string | null;
   disposition: "pursue" | "watch" | "ignore" | null;
+  sharepoint_folder_url: string | null;
   naics_code: string | null;
   last_scored_at: string | null;
 }
@@ -292,6 +293,16 @@ function OpportunityRow({
                   <span>
                     <a href={o.source_url} target="_blank" rel="noopener noreferrer">
                       View on SAM.gov <ExternalLink size={12} style={{ verticalAlign: "-1px" }} />
+                    </a>
+                  </span>
+                )}
+                {/* Only pursued opportunities have a folder, so its presence is the
+                    signal. No placeholder when absent: "no folder yet" is the normal
+                    state for most rows and saying so on every card is noise. */}
+                {o.sharepoint_folder_url && (
+                  <span>
+                    <a href={o.sharepoint_folder_url} target="_blank" rel="noopener noreferrer">
+                      Project folder <ExternalLink size={12} style={{ verticalAlign: "-1px" }} />
                     </a>
                   </span>
                 )}

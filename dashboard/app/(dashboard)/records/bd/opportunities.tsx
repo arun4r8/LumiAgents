@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { fetchRuntime } from "@/lib/runtime-fetch";
 import { OpportunitiesClient, type Opportunity } from "@/components/opportunities-client";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,14 @@ export async function OpportunitiesTab({
    * rather than this action. Passing the same value again clears it, so the buttons
    * toggle and a mis-click is undone by clicking the same button.
    */
+  async function getToken(): Promise<string> {
+    "use server";
+    const supabase = await createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No active session");
+    return session.access_token;
+  }
+
   async function setDisposition(formData: FormData) {
     "use server";
     const id = String(formData.get("id") ?? "");
@@ -102,6 +111,29 @@ export async function OpportunitiesTab({
 
     const { error } = await sb.from("opportunities").update(patch).eq("id", id);
     if (error) throw new Error(error.message);
+
+    // Pursue also gets a SharePoint folder tree (#207). Deliberately best-effort and
+    // AFTER the update: the triage decision is the thing the user asked for, and it
+    // must not fail because Graph is unreachable or unconfigured. The orchestration
+    // is idempotent, so a failure here is recoverable by marking Pursue again, and
+    // the card shows no folder link until one exists.
+    if (next === "pursue") {
+      try {
+        const token = await getToken();
+        const res = await fetchRuntime(
+          `/api/orchestrations/${encodeURIComponent("beady/project-folder")}/run`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ opportunityId: id }),
+          },
+        );
+        if (!res.ok) console.warn(`[bd] project-folder → ${res.status}: ${await res.text()}`);
+      } catch (err) {
+        console.warn("[bd] project-folder trigger failed:", err);
+      }
+    }
+
     revalidatePath("/records/bd");
   }
 
@@ -127,7 +159,7 @@ export async function OpportunitiesTab({
       supabase
         .from("opportunities")
         .select(
-          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition",
+          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition, sharepoint_folder_url",
         ),
     ))
       .order("fit_score", { ascending: false, nullsFirst: false })
