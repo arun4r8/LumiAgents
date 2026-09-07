@@ -20,6 +20,23 @@ function sbirContentHash(t: { title: string; program: string; phase: string; clo
   return fnv1a([t.title, t.program, t.phase, t.closeDate, t.abstract].join(""));
 }
 
+// How many notices go into one scoring prompt. Small enough that the response
+// can't be truncated mid-array and the call comfortably beats the Anthropic
+// timeout; large enough that a normal sweep is one or two calls.
+const SCORE_BATCH_SIZE = 40;
+
+const scoreSchema = z.object({
+  scored: z.array(
+    z.object({
+      id: z.string(),
+      fitScore: z.number().int().min(1).max(10),
+      fitReason: z.string(),
+      redFlags: z.string().nullable(),
+      recommendation: z.enum(["pursue", "monitor", "pass"]),
+    }),
+  ),
+});
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 export const inputSchema = z.object({
@@ -41,7 +58,13 @@ export const inputSchema = z.object({
     .describe("DoD branch filter for SBIR (e.g. ['ARMY', 'USAF']). Omit for all."),
   postedWithinDays: z.number().int().min(1).max(90).default(30).describe("Only sweep notices posted in the last N days."),
   minScore: z.number().int().min(1).max(10).default(5).describe("Minimum fit score to keep an opportunity."),
-  samLimit: z.number().int().min(1).max(50).default(50).describe("Max SAM.gov notices to pull per sweep."),
+  samLimit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(250)
+    .describe("Max SAM.gov notices to pull per sweep. Only net-new notices reach the LLM (scored_notices dedupes), so this bounds the first sweep after a filter change far more than a steady-state daily run."),
   sbirLimit: z.number().int().min(1).max(200).default(50).describe("Max SBIR topics to pull per sweep."),
   samNoticeTypes: z
     .array(z.string())
@@ -65,7 +88,14 @@ const scoredOpportunitySchema = z.object({
 });
 
 export const outputSchema = z.object({
-  samFound: z.number(),
+  // The funnel, stage by stage. samFound alone hid the fact that the sweep was
+  // scoring 50 of ~8,500 matching notices; a sweep that sees N and keeps M should
+  // say both out loud.
+  samFound: z.number().describe("Notices SAM reports as matching the query (the match set)."),
+  samMatchedByNaics: z.record(z.number()).optional().describe("Match-set size per NAICS code searched."),
+  samPulled: z.number().describe("Notices actually pulled from SAM, after `samLimit`."),
+  samNew: z.number().describe("Of those, the ones not already scored (or amended since)."),
+  samTruncated: z.boolean().describe("True when the match set was larger than `samLimit` allowed us to pull."),
   sbirFound: z.number(),
   shortlistCount: z.number(),
   opportunities: z.array(scoredOpportunitySchema),
@@ -91,7 +121,7 @@ export default defineOrchestration({
     // Step 1: Fetch both sources (resilient, so one source failing or hitting its
     // budget cap doesn't kill the other), then drop opportunities we've already
     // scored so only net-new items reach the LLM.
-    const { samResults, sbirResults, samError, sbirError } = await step(ctx, "fetch-both-sources", async () => {
+    const { samResults, sbirResults, samPulled, samError, sbirError } = await step(ctx, "fetch-both-sources", async () => {
       const [samR, sbirR] = await Promise.allSettled([
         samGovOpportunitySearch(ctx, {
           keywords: input.keywords,
@@ -99,7 +129,7 @@ export default defineOrchestration({
           agencies: input.agencies,
           postedWithinDays: input.postedWithinDays,
           limit: input.samLimit,
-          activeOnly: true,
+          openOnly: true,
           ptypes: input.samNoticeTypes,
         }),
         sbirTopicSearch(ctx, {
@@ -109,7 +139,9 @@ export default defineOrchestration({
           limit: input.sbirLimit,
         }),
       ]);
-      const samResults = samR.status === "fulfilled" ? samR.value : { totalRecords: 0, opportunities: [] };
+      const samResults = samR.status === "fulfilled"
+        ? samR.value
+        : { totalRecords: 0, matchedByNaics: {} as Record<string, number>, fetched: 0, requests: 0, truncated: false, opportunities: [] };
       const sbirResults = sbirR.status === "fulfilled" ? sbirR.value : { totalElements: 0, topics: [] };
       if (samR.status === "rejected") console.warn("[sweep] SAM.gov fetch skipped:", samR.reason);
       if (sbirR.status === "rejected") console.warn("[sweep] SBIR fetch skipped:", sbirR.reason);
@@ -131,6 +163,9 @@ export default defineOrchestration({
       return {
         samResults: { ...samResults, opportunities: samResults.opportunities.filter((o) => changed(o.noticeId, samContentHash(o))) },
         sbirResults: { ...sbirResults, topics: sbirResults.topics.filter((t) => changed(`sbir_${t.topicNumber}`, sbirContentHash(t))) },
+        // Pulled count is taken before the dedupe filter above, so the run summary
+        // can distinguish "SAM had nothing new" from "we pulled nothing".
+        samPulled: samResults.opportunities.length,
         samError: samR.status === "rejected" ? String(samR.reason) : null,
         sbirError: sbirR.status === "rejected" ? String(sbirR.reason) : null,
       };
@@ -148,7 +183,15 @@ export default defineOrchestration({
       // alerting once a working SBIR source is restored.
       const issues: string[] = [];
       if (samError) issues.push(`SAM.gov source FAILED: ${samError.slice(0, 300)}`);
-      else if (samCount === 0) issues.push("SAM.gov returned 0 results (normally ~thousands, so this is likely an API/key issue).");
+      else if (samCount === 0) issues.push("SAM.gov returned 0 matching notices. Either every filter is wrong or the key/API is down.");
+      // Truncation is not a failure, but it is the thing that silently degraded this
+      // sweep for months, so it gets said out loud rather than left in runs.output.
+      if (samResults.truncated) {
+        issues.push(
+          `SAM.gov match set (${samCount}) is larger than samLimit allowed us to pull (${samResults.fetched}). ` +
+          `The sweep is sampling, not sweeping. Per NAICS: ${JSON.stringify(samResults.matchedByNaics)}.`,
+        );
+      }
 
       if (issues.length === 0) {
         return { alerted: false, samCount, sbirCount, sbirError: sbirError ?? null };
@@ -169,13 +212,55 @@ export default defineOrchestration({
 
     const totalFound = samResults.opportunities.length + sbirResults.topics.length;
     if (totalFound === 0) {
-      return { samFound: 0, sbirFound: 0, shortlistCount: 0, opportunities: [] };
+      return {
+        samFound: samResults.totalRecords,
+        samMatchedByNaics: samResults.matchedByNaics,
+        samPulled,
+        samNew: 0,
+        samTruncated: samResults.truncated,
+        sbirFound: sbirResults.totalElements,
+        shortlistCount: 0,
+        opportunities: [],
+      };
     }
 
-    // Step 2: Score all results together in one LLM call
-    const scored = await llm_extract(ctx, {
-      name: "score-all-opportunities",
-      prompt: `
+    // Step 2: Score every net-new notice. Batched, because a sweep that actually
+    // covers its match set can hand this step a few hundred notices, and one prompt
+    // holding all of them risks a truncated response or a request slow enough to
+    // trip the Anthropic timeout. Batches run in order so each llm_extract lands on
+    // a stable step index and the run can still be replayed.
+    const toScore = [
+      ...samResults.opportunities.map((o) => ({
+        id: `sam_${o.noticeId}`,
+        source: "SAM.gov",
+        title: o.title,
+        agency: o.agency,
+        naicsCode: o.naicsCode,
+        setAside: o.setAside,
+        deadline: o.responseDeadline,
+        description: o.description,
+      })),
+      ...sbirResults.topics.map((t) => ({
+        id: `sbir_${t.topicNumber}`,
+        source: `SBIR/STTR (${t.program} ${t.phase})`,
+        title: t.title,
+        agency: t.component,
+        naicsCode: null as string | null,
+        setAside: `${t.program} ${t.phase}`,
+        deadline: t.closeDate,
+        description: t.abstract,
+      })),
+    ];
+    const batches: (typeof toScore)[] = [];
+    for (let i = 0; i < toScore.length; i += SCORE_BATCH_SIZE) {
+      batches.push(toScore.slice(i, i + SCORE_BATCH_SIZE));
+    }
+
+    const scoredRows: z.infer<typeof scoreSchema>["scored"] = [];
+    for (const [i, batch] of batches.entries()) {
+      const result = await llm_extract(ctx, {
+        name: batches.length === 1 ? "score-all-opportunities" : `score-opportunities-${i + 1}-of-${batches.length}`,
+        prompt: `
 You are Beady, Lumiture's BD AI. Score each opportunity below against Lumiture's profile.
 Opportunities come from two sources: SAM.gov (traditional contracts) and DoD SBIR/STTR (R&D
 solicitations). Apply the same scoring logic to both. SBIR topics are R&D-focused so expect
@@ -201,45 +286,14 @@ recommendation:
   "pass"    → score ≤ 4
 
 Only include items with fitScore ≥ ${input.minScore} in the output.
-      `.trim(),
-      input: {
-        opportunities: [
-          ...samResults.opportunities.map((o) => ({
-            id: `sam_${o.noticeId}`,
-            source: "SAM.gov",
-            title: o.title,
-            agency: o.agency,
-            naicsCode: o.naicsCode,
-            setAside: o.setAside,
-            deadline: o.responseDeadline,
-            description: o.description,
-          })),
-          ...sbirResults.topics.map((t) => ({
-            id: `sbir_${t.topicNumber}`,
-            source: `SBIR/STTR (${t.program} ${t.phase})`,
-            title: t.title,
-            agency: t.component,
-            naicsCode: null,
-            setAside: `${t.program} ${t.phase}`,
-            deadline: t.closeDate,
-            description: t.abstract,
-          })),
-        ],
-      },
-      schema: z.object({
-        scored: z.array(
-          z.object({
-            id: z.string(),
-            fitScore: z.number().int().min(1).max(10),
-            fitReason: z.string(),
-            redFlags: z.string().nullable(),
-            recommendation: z.enum(["pursue", "monitor", "pass"]),
-          }),
-        ),
-      }),
-    });
+        `.trim(),
+        input: { opportunities: batch },
+        schema: scoreSchema,
+      });
+      scoredRows.push(...result.scored);
+    }
 
-    const scoreMap = new Map(scored.scored.map((s) => [s.id, s]));
+    const scoreMap = new Map(scoredRows.map((s) => [s.id, s]));
 
     // Record every notice we just scored (pass or pursue) in the dedup ledger so it
     // is never re-scored on a later run. Items below minScore aren't in scoreMap
@@ -407,6 +461,10 @@ Only include items with fitScore ≥ ${input.minScore} in the output.
 
     return {
       samFound: samResults.totalRecords,
+      samMatchedByNaics: samResults.matchedByNaics,
+      samPulled,
+      samNew: samResults.opportunities.length,
+      samTruncated: samResults.truncated,
       sbirFound: sbirResults.totalElements,
       shortlistCount: shortlisted.length,
       opportunities: shortlisted,

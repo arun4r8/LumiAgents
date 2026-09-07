@@ -114,6 +114,42 @@ async function loadDigestOpps(
   return rows.slice(0, MAX_DIGEST);
 }
 
+// ─── Sweep coverage ────────────────────────────────────────────────────────────
+
+// What the last sweep actually saw, so the digest states its own coverage instead
+// of implying the list is everything SAM had. The sweep records the whole funnel in
+// runs.output; this reads the most recent completed one. Returns null (no note)
+// when there's nothing to say or the lookup fails.
+async function loadSweepCoverage(env: Env): Promise<string | null> {
+  // runs stores the orchestration as a FK, so the name is matched through an inner
+  // embed rather than a column on runs itself.
+  const params = new URLSearchParams({
+    select: "output,ended_at,orchestrations!inner(name)",
+    "orchestrations.name": "eq.beady/opportunity-sweep",
+    status: "eq.completed",
+    order: "ended_at.desc",
+    limit: "1",
+  });
+  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/runs?${params.toString()}`, {
+    headers: sbHeaders(env, { profile: "orchestration" }),
+  });
+  if (!res.ok) return null;
+  const rows = (await res.json()) as { output: SweepOutput | null }[];
+  const out = rows[0]?.output;
+  if (!out || typeof out.samFound !== "number" || typeof out.samPulled !== "number") return null;
+
+  const covered = `Last sweep: SAM.gov reported <strong>${out.samFound.toLocaleString()}</strong> matching notices, of which <strong>${out.samPulled.toLocaleString()}</strong> were pulled and <strong>${(out.samNew ?? 0).toLocaleString()}</strong> were new enough to score.`;
+  if (!out.samTruncated) return covered;
+  return `${covered} The match set is larger than the sweep's pull limit, so this digest is a sample, not the full field.`;
+}
+
+interface SweepOutput {
+  samFound?: number;
+  samPulled?: number;
+  samNew?: number;
+  samTruncated?: boolean;
+}
+
 // ─── HTML rendering ─────────────────────────────────────────────────────────
 
 // Fit-badge colors by tier: pursue = green, monitor = amber, else neutral.
@@ -149,7 +185,7 @@ function sourceLabel(source: string | null): string {
 function renderEmail(
   sub: Subscription,
   opps: Opportunity[],
-  opts: { manual: boolean },
+  opts: { manual: boolean; note?: string },
 ): { subject: string; html: string } {
   const adj = opts.manual ? "" : "new ";
   const heading = opts.manual ? "Matching opportunities" : "New matching opportunities";
@@ -196,6 +232,7 @@ function renderEmail(
     cadence: sub.cadence,
     filterBits,
     cards,
+    ...(opts.note ? { note: opts.note } : {}),
     footer: "Sent by Beady &middot; manage this digest in LumiAgents under Settings &rarr; Subscriptions.",
   });
 
@@ -226,6 +263,7 @@ export default defineOrchestration({
       emptyReasonManual: "no-matching-opportunities",
       emptyReasonCron: "no-new-opportunities",
       loadRecords: loadDigestOpps,
+      loadNote: loadSweepCoverage,
       renderEmail,
     });
   },

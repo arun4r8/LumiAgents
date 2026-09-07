@@ -104,6 +104,10 @@ export function renderDigestShell(opts: {
   filterBits: string[];
   cards: string;
   footer: string;
+  // Optional line under the subline, for something true about the digest as a
+  // whole rather than about any one card (e.g. how much of the source it covers).
+  // Trusted HTML, same as `footer`.
+  note?: string;
 }): string {
   return `<!doctype html>
 <html>
@@ -113,6 +117,7 @@ export function renderDigestShell(opts: {
     <p style="color:#6b7280;margin:0 0 16px;font-size:14px;">
       ${escapeHtml(opts.label)} · ${opts.cadence} · ${escapeHtml(opts.filterBits.join(" · "))}
     </p>
+    ${opts.note ? `<p style="color:#6b7280;margin:0 0 16px;font-size:12px;padding:8px 10px;background:#f3f4f6;border-radius:6px;">${opts.note}</p>` : ""}
     ${opts.cards}
     <p style="color:#9ca3af;font-size:12px;margin-top:16px;">
       ${opts.footer}
@@ -139,7 +144,11 @@ export interface SubscriptionDigestConfig<Sub extends DigestSubscription, Item> 
   // since last send; false (manual) → the full current digest.
   loadRecords: (env: Env, sub: Sub, opts: { sinceLastSent: boolean }) => Promise<Item[]>;
   // render the email for a non-empty item set.
-  renderEmail: (sub: Sub, items: Item[], opts: { manual: boolean }) => { subject: string; html: string };
+  renderEmail: (sub: Sub, items: Item[], opts: { manual: boolean; note?: string }) => { subject: string; html: string };
+  // Optional, computed once per run and handed to every renderEmail call: a note
+  // about the digest as a whole (source coverage, a degraded upstream) that is the
+  // same for every subscriber.
+  loadNote?: (env: Env) => Promise<string | null>;
 }
 
 export interface DigestResult {
@@ -173,6 +182,19 @@ export async function runSubscriptionDigest<Sub extends DigestSubscription, Item
     return all.filter((s) => Array.isArray(s.recipients) && s.recipients.length > 0 && isDue(s, now));
   });
 
+  // Computed once, not per subscriber: it says the same thing to everyone. A
+  // failure here must not stop the digest going out.
+  const note = subscriptions.length > 0 && config.loadNote
+    ? await step(ctx, "load-digest-note", async () => {
+        try {
+          return await config.loadNote!(ctx.env);
+        } catch (err) {
+          console.warn("[digest] note lookup failed:", err);
+          return null;
+        }
+      })
+    : null;
+
   let emailsSent = 0;
   let emailsSkipped = 0;
 
@@ -187,7 +209,7 @@ export async function runSubscriptionDigest<Sub extends DigestSubscription, Item
         return { sent: false as const, reason: manual ? config.emptyReasonManual : config.emptyReasonCron };
       }
 
-      const { subject, html } = config.renderEmail(sub, items, { manual });
+      const { subject, html } = config.renderEmail(sub, items, { manual, ...(note ? { note } : {}) });
       const result = await sendEmail(ctx.env, {
         to: sub.recipients,
         subject,
