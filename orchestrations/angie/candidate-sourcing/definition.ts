@@ -158,6 +158,7 @@ Do NOT generate outreachDraft yet. Set it to null for all candidates.
           }),
         ),
       }),
+      maxTokens: 16384,
     });
 
     // ── Step 4: Upsert shortlisted candidates into Supabase ───────────────────
@@ -253,6 +254,7 @@ Guidelines:
           }),
         ),
       }),
+      maxTokens: 16384,
     });
 
     // Merge drafts back into the candidate list

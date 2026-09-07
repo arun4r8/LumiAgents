@@ -130,6 +130,7 @@ Do not use em dashes.
         narrative: z.string(),
         alerts: z.array(z.string()),
       }),
+      maxTokens: 16384,
     });
 
     return {

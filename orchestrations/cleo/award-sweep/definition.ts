@@ -250,6 +250,7 @@ Return an item ONLY if it is a real award program with fitScore >= ${input.minSc
           }),
         ),
       }),
+      maxTokens: 16384,
     });
 
     // Step 4: Upsert to awards table + record all scored items in ledger

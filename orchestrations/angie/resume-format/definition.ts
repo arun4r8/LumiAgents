@@ -107,6 +107,7 @@ export default defineOrchestration({
       prompt: `Parse the resume into structured JSON. Extract every position, all bullet points verbatim, education, and skills exactly as written. Do not rephrase or improve anything at this stage: faithful extraction only.`,
       input: { resume_text: input.resume_text },
       schema: parsedResumeSchema,
+      maxTokens: 16384,
     });
 
     const roleGuidance = ROLE_GUIDANCE[input.target_role];
@@ -125,6 +126,7 @@ Return:
         employee_name: input.employee_name ?? null,
       },
       schema: outputSchema,
+      maxTokens: 16384,
     });
 
     return formatted;

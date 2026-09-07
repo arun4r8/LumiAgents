@@ -59,6 +59,7 @@ export default defineOrchestration({
         actionItems: z.array(z.string()).describe("Concrete tasks or follow-ups needed"),
         suggestedAssignee: z.string().nullable().describe("Who should handle this, if determinable"),
       }),
+      maxTokens: 16384,
     });
 
     // Step 3: Route based on intent

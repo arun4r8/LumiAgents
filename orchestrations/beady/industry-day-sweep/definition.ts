@@ -189,6 +189,7 @@ Only return items scoring >= ${input.minScore}.
           recommendation: z.enum(["attend", "consider", "skip"]),
         })),
       }),
+      maxTokens: 16384,
     });
 
     // Step 4: upsert to industry_days + record every fresh candidate in the ledger.

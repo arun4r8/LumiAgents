@@ -174,6 +174,7 @@ export default defineOrchestration({
       input: { resume_text: input.resume_text || "(supplied as an attached PDF)" },
       ...(pdf ? { documents: pdf } : {}),
       schema: identifiersSchema,
+      maxTokens: 16384,
     });
 
     const literals = [
@@ -209,6 +210,7 @@ export default defineOrchestration({
       },
       ...(pdf ? { documents: pdf } : {}),
       schema: redactedSchema,
+      maxTokens: 16384,
     });
 
     // The part that makes this trustworthy. Everything above is the model's word

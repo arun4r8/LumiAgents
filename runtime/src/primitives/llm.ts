@@ -13,6 +13,28 @@ import { MODELS } from "../config/models";
  */
 export const LLM_EXTRACT_DEFAULT_MAX_TOKENS = 4096;
 
+/**
+ * Turn a truncated extraction into an error that says so.
+ *
+ * When the model hits `max_tokens` mid-answer, the tool-use JSON is simply cut off.
+ * Nothing in the response object says "truncated" at the point we parse it: Zod
+ * rejects the malformed input and the step fails with a bare `ZodError`. That cost
+ * three production runs of beady/opportunity-sweep before anyone thought to
+ * question the token cap, because the error pointed at the schema instead.
+ *
+ * `stop_reason` is the signal, and checking it before parsing means the next
+ * caller to outgrow the cap is told which knob to turn.
+ */
+export function assertNotTruncated(stopReason: string | null, name: string, maxTokens: number): void {
+  if (stopReason !== "max_tokens") return;
+  throw new Error(
+    `llm_extract("${name}") hit the ${maxTokens}-token output cap and the response was cut off mid-answer. ` +
+      `This is not a schema problem. Either raise \`maxTokens\` on this call or send fewer items per call: ` +
+      `a schema returning an array costs roughly (items x per-item tokens), so the cap has to scale with the input.`,
+  );
+}
+
+
 const DEFAULT_MODEL: string = MODELS.sonnet;
 
 function makeClient(ctx: RunContext): Anthropic {
@@ -254,6 +276,8 @@ export async function llm_extract<T extends z.ZodTypeAny>(
           messages: [{ role: "user", content: userContent }],
         });
 
+        assertNotTruncated(response.stop_reason, options.name, maxTokens);
+
         const toolUse = response.content.find((b) => b.type === "tool_use");
         if (!toolUse || toolUse.type !== "tool_use") {
           throw new Error("Model did not call the extract tool");
@@ -305,6 +329,8 @@ export async function llm_extract<T extends z.ZodTypeAny>(
       tool_choice: { type: "tool", name: "extract" },
       messages: [{ role: "user", content: userContent }],
     });
+
+    assertNotTruncated(response.stop_reason, options.name, maxTokens);
 
     const toolUse = response.content.find((b) => b.type === "tool_use");
     if (!toolUse || toolUse.type !== "tool_use") {
