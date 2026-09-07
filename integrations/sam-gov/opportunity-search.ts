@@ -82,8 +82,21 @@ interface RawSamResponse {
 
 // ─── Query building ───────────────────────────────────────────────────────────
 
-/** SAM v2 caps `limit` at 1000. Pull full pages so a wide sweep costs few requests. */
-export const SAM_PAGE_SIZE = 1000;
+/**
+ * Records per page. Constant for the whole walk of a NAICS code, and that is not a
+ * style choice: SAM's `offset` is a PAGE INDEX, not a record offset --
+ *
+ *   offset — "Indicates the page index. Default offset starts with 0"
+ *   limit  — "Total number of records to be retrieved per page"
+ *
+ * so page N covers records [N * pageSize, (N+1) * pageSize). Vary the page size
+ * mid-walk and the indices stop lining up with anything.
+ *
+ * SAM allows up to 1000. 100 is used because match sets are in the low hundreds
+ * once the NAICS filter actually applies, so a bigger page buys nothing, and a
+ * heavier query has already drawn a 504 from SAM's gateway once.
+ */
+export const SAM_PAGE_SIZE = 100;
 /** Per NAICS code. A stop so a runaway match set can't walk forever. */
 export const SAM_MAX_PAGES = 10;
 
@@ -233,41 +246,36 @@ export async function collectSamOpportunities(
   const matchedByNaics: Record<string, number> = {};
   const seen = new Set<string>();
   const opportunities: SamOpportunity[] = [];
-  // Where each code's walk got to, so the second pass resumes rather than restarts.
-  const offsets = new Map<string | undefined, number>();
-  // Pages spent per code, counted ACROSS passes: SAM_MAX_PAGES is a budget for the
-  // whole walk of a code, not per call, or a second pass would silently double it.
-  const pagesUsed = new Map<string | undefined, number>();
+  // Next page index per code, so the second pass resumes rather than restarts, and
+  // so SAM_MAX_PAGES is a budget for the whole walk of a code rather than per call.
+  const pages = new Map<string | undefined, number>();
+  // Records actually returned per code, for the "seen everything SAM claims" stop.
+  const seenRecords = new Map<string | undefined, number>();
+  // Rows fetched but not yet taken, because a pass hit its ceiling mid-page. Held
+  // so the next pass can take them without paying for the page again -- and so a
+  // partly-consumed page is never mistaken for an exhausted code.
+  const pending = new Map<string | undefined, RawSamOpportunity[]>();
   const exhausted = new Set<string | undefined>();
   let fetched = 0;
   let requests = 0;
 
-  /** Walk one code until `ceiling` total opportunities are held, or it runs dry. */
+  /**
+   * Walk one code until `ceiling` total opportunities are held, or it runs dry.
+   *
+   * `page` counts PAGES, not records, because that is what SAM's `offset` means.
+   * The previous version advanced it by `rows.length` and shrank the page size to
+   * whatever headroom was left, so the second request of a walk asked for page 63
+   * of a 91-record set and got an empty page back. It read as "exhausted" and the
+   * sweep quietly stopped 28 notices short of its own match set.
+   */
   async function walk(ncode: string | undefined, ceiling: number): Promise<void> {
-    if (exhausted.has(ncode)) return;
     const key = ncode ?? "(any)";
-    let offset = offsets.get(ncode) ?? 0;
 
-    while ((pagesUsed.get(ncode) ?? 0) < SAM_MAX_PAGES) {
-      if (opportunities.length >= ceiling) break;
-      pagesUsed.set(ncode, (pagesUsed.get(ncode) ?? 0) + 1);
-
-      // Ask for no more than we can keep, except when an agency filter is on:
-      // that one is applied client-side, so a tight page would mostly be discarded.
-      const pageSize = hasAgencyFilter
-        ? SAM_PAGE_SIZE
-        : Math.min(SAM_PAGE_SIZE, ceiling - opportunities.length);
-
-      const raw = await fetchPage({ ...(ncode ? { ncode } : {}), offset, pageSize });
-      requests++;
-
-      const rows = raw.opportunitiesData ?? [];
-      // totalRecords describes the whole match set, not the page, so take it once.
-      if (!(key in matchedByNaics)) matchedByNaics[key] = raw.totalRecords ?? rows.length;
-      fetched += rows.length;
-
-      for (const row of rows) {
-        if (opportunities.length >= ceiling) break;
+    /** Take from `pending` until it runs out or the ceiling is reached. */
+    const drain = () => {
+      const queue = pending.get(ncode) ?? [];
+      while (queue.length > 0 && opportunities.length < ceiling) {
+        const row = queue.shift()!;
         const opp = normalise(row);
         // SAM can repeat a notice across pages when the corpus shifts mid-walk.
         if (!opp.noticeId || seen.has(opp.noticeId)) continue;
@@ -275,13 +283,33 @@ export async function collectSamOpportunities(
         seen.add(opp.noticeId);
         opportunities.push(opp);
       }
+      pending.set(ncode, queue);
+    };
 
-      offset += rows.length;
-      offsets.set(ncode, offset);
-      // Short page or nothing left to walk: this code is exhausted.
-      if (rows.length < pageSize || offset >= (raw.totalRecords ?? 0)) {
+    drain();
+
+    while (!exhausted.has(ncode) && opportunities.length < ceiling) {
+      const page = pages.get(ncode) ?? 0;
+      if (page >= SAM_MAX_PAGES) break;
+
+      const raw = await fetchPage({ ...(ncode ? { ncode } : {}), offset: page, pageSize: SAM_PAGE_SIZE });
+      requests++;
+      pages.set(ncode, page + 1);
+
+      const rows = raw.opportunitiesData ?? [];
+      // totalRecords describes the whole match set, not the page, so take it once.
+      if (!(key in matchedByNaics)) matchedByNaics[key] = raw.totalRecords ?? rows.length;
+      fetched += rows.length;
+      seenRecords.set(ncode, (seenRecords.get(ncode) ?? 0) + rows.length);
+
+      pending.set(ncode, [...(pending.get(ncode) ?? []), ...rows]);
+      drain();
+
+      // A short page is the last page; so is having seen every record SAM claims.
+      // Note this marks the SOURCE exhausted, not the code: anything still in
+      // `pending` is taken by a later pass without another request.
+      if (rows.length < SAM_PAGE_SIZE || (seenRecords.get(ncode) ?? 0) >= (raw.totalRecords ?? 0)) {
         exhausted.add(ncode);
-        break;
       }
     }
   }

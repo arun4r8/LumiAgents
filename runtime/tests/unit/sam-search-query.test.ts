@@ -94,13 +94,30 @@ describe("buildSamSearchUrl", () => {
 
 // ─── The walk ──────────────────────────────────────────────────────────────────
 
-/** A fake SAM corpus: `perCode` notices for each NAICS code, served in pages. */
+/**
+ * A fake SAM corpus: `total` notices per NAICS code, served in pages.
+ *
+ * `offset` is a PAGE INDEX, because that is what SAM.gov's v2 API documents:
+ *
+ *   offset — "Indicates the page index. Default offset starts with 0"
+ *   limit  — "Total number of records to be retrieved per page"
+ *
+ * This double used to slice by RECORD offset, which is what the implementation
+ * assumed. Written from the implementation's mental model rather than the API's
+ * contract, it agreed with the code about a thing they were both wrong about:
+ * every pagination test passed, mutation testing passed, and in production the
+ * second page of a walk asked for page 63 of a 91-record set and got nothing.
+ *
+ * A double for an external system has to be built from that system's
+ * documentation. Built from the caller, it can only ever prove self-consistency.
+ */
 function fakeSam(corpus: Record<string, number>): SamPageFetcher {
   return async ({ ncode, offset, pageSize }) => {
     const key = ncode ?? "(any)";
     const total = corpus[key] ?? 0;
+    const start = offset * pageSize; // page index × page size
     const rows = [];
-    for (let i = offset; i < Math.min(offset + pageSize, total); i++) {
+    for (let i = start; i < Math.min(start + pageSize, total); i++) {
       rows.push({ noticeId: `${key}-${i}`, title: `${key} notice ${i}`, fullParentPathName: "DEPT OF DEFENSE > ARMY" });
     }
     return { totalRecords: total, opportunitiesData: rows };
@@ -145,16 +162,17 @@ describe("collectSamOpportunities", () => {
     expect(r.truncated).toBe(false);
   });
 
-  it("walks past the first page rather than stopping at one request", async () => {
-    // 2,500 wanted from a single code: more than SAM returns in one page.
+  it("walks page by page rather than stopping at one request", async () => {
+    // 250 wanted from a single code, more than one page holds.
     const r = await collectSamOpportunities(
-      parse({ naicsCodes: ["A"], limit: 1000 }),
+      parse({ naicsCodes: ["A"], limit: 250 }),
       fakeSam({ A: 2500 }),
     );
-    expect(r.opportunities).toHaveLength(1000);
-    expect(r.requests).toBe(1); // one full 1,000-record page covers the limit
-    const offsets = new Set(r.opportunities.map((o) => o.noticeId));
-    expect(offsets.size).toBe(1000); // no duplicates
+    expect(r.opportunities).toHaveLength(250);
+    // Pages 0, 1, 2 at SAM_PAGE_SIZE each. Asking for page 0 three times, or
+    // advancing the index by record count, both fail this.
+    expect(r.requests).toBe(Math.ceil(250 / SAM_PAGE_SIZE));
+    expect(new Set(r.opportunities.map((o) => o.noticeId)).size).toBe(250);
   });
 
   it("drops a notice SAM repeats, rather than scoring it twice", async () => {
@@ -234,10 +252,11 @@ describe("collectSamOpportunities — leftover capacity", () => {
     // Equal shares alone would stop at 50 + 4 = 54 and leave 46 unspent.
     expect(byCode).toEqual({ big: 96, small: 4 });
     expect(r.opportunities).toHaveLength(100);
-    // The second pass RESUMES each code's walk. Restarting it from offset 0 would
-    // still reach 100 -- the dedupe would hide it -- while re-fetching everything
-    // pass 1 already had, spending SAM calls on rows we then throw away.
-    expect(r.fetched).toBe(100);
+    // One page per code and no more. Pass 1 takes 50 of big's first page and the
+    // rest is BUFFERED, so pass 2 finishes the job without asking again: a walk
+    // that restarted, or re-fetched a partly-consumed page, would spend more.
+    expect(r.requests).toBe(2);
+    expect(r.fetched).toBe(SAM_PAGE_SIZE + 4);
   });
 
   it("does not loop forever when every code is exhausted below the limit", async () => {
