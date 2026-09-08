@@ -12,6 +12,7 @@ import {
   LogOut,
   Bot,
   Clock,
+  BarChart3,
   Server,
   BookOpen,
   Brain,
@@ -74,6 +75,7 @@ export default function Sidebar({ userEmail, userRole, pendingApprovals }: Sideb
         { href: "/approvals", label: "Approvals", icon: <CheckSquare />, badge: pendingApprovals || undefined },
         { href: "/orchestrations", label: "Orchestrations", icon: <GitBranch />, enduserVisible: true },
         { href: "/schedules", label: "Schedules", icon: <Clock /> },
+        { href: "/analytics", label: "Analytics", icon: <BarChart3 /> },
       ],
     },
     {

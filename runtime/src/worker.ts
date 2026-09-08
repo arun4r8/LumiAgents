@@ -10,6 +10,7 @@ import { handleApprovals } from "./routes/approvals";
 import { handleAgents } from "./routes/agents";
 import { handleSchedules } from "./routes/schedules";
 import { handleRuns } from "./routes/runs";
+import { handleAnalytics } from "./routes/analytics";
 import { handleVault } from "./routes/vault";
 import { handleAgentBuilder } from "./routes/agent-builder";
 
@@ -122,6 +123,7 @@ export default {
         handleSchedules,
         handleVault,
         handleRuns,
+        handleAnalytics,
       ];
 
       for (const handler of handlers) {

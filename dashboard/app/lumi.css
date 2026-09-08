@@ -2754,3 +2754,99 @@ table.tbl tbody tr.rec-row { cursor: default; }
   font-size: 12px; color: var(--color-neutral-400);
 }
 .rec-detail-meta code { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* ── Analytics ────────────────────────────────────────────────────────────────
+   Reuses the overview's stat and section idioms; adds the two chart shapes that
+   page does not have — a horizontal ranked bar list, and a small histogram. */
+
+.an-h1 {
+  font-family: var(--font-heading);
+  font-size: 22px; font-weight: 500; letter-spacing: -0.02em;
+  color: var(--color-text);
+  margin: 0 0 26px;
+}
+.an-stat-l {
+  font-size: 12px; color: var(--color-neutral-400);
+  margin-top: 6px; letter-spacing: .01em;
+}
+.an-sub {
+  font-family: var(--font-heading);
+  font-size: 12.5px; font-weight: 500; letter-spacing: -0.005em;
+  color: var(--color-text);
+  margin: 0 0 12px;
+}
+.an-sub.is-wide { margin-top: 32px; }
+.an-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+  margin-top: 26px;
+}
+@media (max-width: 900px) { .an-cols { grid-template-columns: 1fr; gap: 28px; } }
+
+.an-empty, .an-note {
+  font-size: 12px; color: var(--color-neutral-400); line-height: 1.5;
+  margin: 10px 0 0;
+}
+
+/* The provisional-scores warning. Tinted, because it changes how every number on
+   the page should be read, and a reader who misses it draws wrong conclusions. */
+.an-caveat {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-800);
+  border-left: 2px solid var(--color-warn, #d29922);
+  font-size: 12.5px; line-height: 1.55; color: var(--color-neutral-300);
+}
+.an-caveat strong { color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+/* Ranked horizontal bars */
+.an-bars { display: flex; flex-direction: column; gap: 9px; }
+.an-bar-row {
+  display: grid;
+  grid-template-columns: 168px 1fr 38px;
+  grid-template-areas: "label track n" "label sub sub";
+  align-items: center; gap: 2px 12px;
+}
+.an-bar-label {
+  grid-area: label;
+  font-size: 12px; color: var(--color-neutral-300);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.an-bar-track {
+  grid-area: track; position: relative;
+  height: 9px; border-radius: 3px;
+  background: var(--color-neutral-800);
+  overflow: hidden;
+}
+.an-bar-track i {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--color-neutral-600);
+  border-radius: 3px;
+}
+/* Strong-fit share, drawn over the total rather than beside it. */
+.an-bar-track i.an-bar-strong { background: var(--color-accent-600); }
+.an-bar-n {
+  grid-area: n; text-align: right;
+  font-family: var(--font-mono); font-size: 12px;
+  font-variant-numeric: tabular-nums; color: var(--color-text);
+}
+.an-bar-sub {
+  grid-area: sub;
+  font-size: 11px; color: var(--color-neutral-500);
+}
+
+/* Fit histogram */
+.an-dist { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; align-items: end; }
+.an-dist-col { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.an-dist-bar { height: 92px; width: 100%; display: flex; align-items: flex-end; }
+.an-dist-bar i {
+  display: block; width: 100%; min-height: 2px;
+  background: var(--color-neutral-600);
+  border-radius: 2px 2px 0 0;
+}
+.an-dist-bar i.is-strong { background: var(--color-accent-600); }
+.an-dist-n {
+  font-family: var(--font-mono); font-size: 11px;
+  font-variant-numeric: tabular-nums; color: var(--color-neutral-300);
+}
+.an-dist-s { font-size: 11px; color: var(--color-neutral-500); }
