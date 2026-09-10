@@ -18,6 +18,17 @@
  *   3. Under "Configuration" → manage → New client secret → TEAMS_BOT_APP_SECRET
  *   4. Set messaging endpoint to: https://lumiagents-runtime.<account>.workers.dev/api/teams/bot
  *   5. Add "Microsoft Teams" channel in the bot resource
+ *   6. Build and install the Teams APP PACKAGE: scripts/build-teams-app.sh
+ *      Steps 1-5 make the bot reachable by Teams infrastructure. They do NOT make
+ *      it installable by a person, and this comment used to stop at step 5 -- which
+ *      is how the bot spent months looking configured while a deep link to it
+ *      answered "You do not have permission to use this app here" (#162). Nothing
+ *      on our side reports this: the endpoint is healthy and returns a correct 401
+ *      to unsigned requests, so "never installed" and "auth is rejecting us" are
+ *      indistinguishable from the outside.
+ *      Install via Teams -> Apps -> Manage your apps -> Upload a custom app (needs
+ *      custom-app upload enabled in the Teams admin app-setup policy), or publish
+ *      org-wide via Teams admin center -> Teams apps -> Manage apps -> Upload new app.
  */
 
 import { verifyBotToken, getBotToken } from "./base";
