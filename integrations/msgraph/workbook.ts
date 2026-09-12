@@ -54,6 +54,61 @@ export async function readWorksheetGrid(
   );
 }
 
+/**
+ * List the workbooks in a drive folder, addressed by PATH.
+ *
+ * BD's GovWin exports are addressed this way because they cannot be addressed any
+ * other way. There are three of them in one folder and two carry the export DATE in
+ * the filename ("Upcoming Deals opportunitySearchResults_07-28-2026.xlsx"), so both
+ * the driveItem id and the exact filename change every time someone re-exports.
+ * The FOLDER is the only stable handle, so the importer takes what is in it.
+ *
+ * Graph's path addressing is `/drives/{id}/root:/a/b:/children`. The segments are
+ * encoded individually -- encoding the whole path would escape the separators --
+ * and a leading slash would produce an empty first segment, so it is stripped. An
+ * empty path means the drive root, which Graph spells `/root/children` with no
+ * colons at all.
+ *
+ * A 404 returns [] : "the folder is not there" is a normal answer to "what is in
+ * the folder", and it must not read the same as a permission failure, which throws.
+ */
+export async function listWorkbooksInFolder(
+  env: MsGraphEnv,
+  opts: { driveId: string; folderPath: string },
+): Promise<Array<{ id: string; name: string; webUrl: string | null; lastModified: string | null }>> {
+  const segments = opts.folderPath.split("/").filter((s) => s.length > 0);
+  const encoded = segments.map((s) => encodeURIComponent(s)).join("/");
+  const path =
+    segments.length === 0
+      ? `/drives/${opts.driveId}/root/children`
+      : `/drives/${opts.driveId}/root:/${encoded}:/children`;
+
+  let res: { value?: Array<{ id?: string; name?: string; webUrl?: string; lastModifiedDateTime?: string; folder?: unknown }> };
+  try {
+    res = await graphGet(env, `${path}?$select=id,name,webUrl,lastModifiedDateTime,folder&$top=200`);
+  } catch (e) {
+    // callJson throws `<label> → <status>: <body>`, so match the status the way it
+    // is actually formatted -- a bare /404/ would also match a 404 mentioned in the
+    // error body of some other failure.
+    if (/→ 404:/.test(String(e))) return [];
+    throw e;
+  }
+
+  return (res.value ?? [])
+    // `folder` is present only on folders. Excluding them here means a subfolder
+    // named something.xlsx cannot be handed to the workbook API as a workbook.
+    .filter((c) => c.folder === undefined && typeof c.name === "string" && /\.xlsx$/i.test(c.name) && c.id)
+    // Excel's own lock files. They are real driveItems with a real .xlsx extension
+    // and they are not workbooks.
+    .filter((c) => !c.name!.startsWith("~$"))
+    .map((c) => ({
+      id: c.id!,
+      name: c.name!,
+      webUrl: c.webUrl ?? null,
+      lastModified: c.lastModifiedDateTime ?? null,
+    }));
+}
+
 // ─── Excel Table helpers (two-way sync) ────────────────────────────────────────
 
 /**

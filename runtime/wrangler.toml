@@ -10,6 +10,15 @@ ENVIRONMENT = "production"
 ALLOWED_ORIGINS = "https://lumiagents-dashboard.lumiture.workers.dev"
 VAULT_OWNER = "LumitureLabs"
 VAULT_REPO  = "LumiKnowledge"
+# BD site document library, where BD keeps the GovWin IQ exports that
+# beady/govwin-import reads (#198). A different drive to BD_DRIVE_ID, which is the
+# Lumiture Labs library. Read-only use: the importer never writes to it.
+#
+# The app's Sites.Selected grant must include the BD site for this to resolve --
+# without it Graph returns 403 and the run fails loudly rather than importing
+# nothing quietly. Unset → beady/govwin-import skips.
+GOVWIN_DRIVE_ID = "b!kbYuUXk61EKMp1NaXf0WnNjiwP0elTFDgohE8mXziC-1RUzQQJdiRp5GmSPhiTqE"
+
 # Content-calendar live sync (Microsoft Graph). Location of the planning workbook.
 # Fill in once the Excel file's Graph drive + item IDs are known; the worksheet
 # name is optional (unset → first sheet). Unset → cleo/content-sync stays disabled.

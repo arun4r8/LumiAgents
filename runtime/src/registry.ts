@@ -38,6 +38,7 @@ import systemMemoryMaintenance from "../../orchestrations/system/memory-maintena
 import systemRunWatchdog from "../../orchestrations/system/run-watchdog/definition";
 import beadyOpportunityHydrate from "../../orchestrations/beady/opportunity-hydrate/definition";
 import beadyProjectFolder from "../../orchestrations/beady/project-folder/definition";
+import beadyGovwinImport from "../../orchestrations/beady/govwin-import/definition";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -81,4 +82,5 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(systemRunWatchdog as unknown as AnyOrch),
   reg(beadyOpportunityHydrate as unknown as AnyOrch),
   reg(beadyProjectFolder as unknown as AnyOrch),
+  reg(beadyGovwinImport as unknown as AnyOrch),
 ]);
