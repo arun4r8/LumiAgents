@@ -1,12 +1,22 @@
 import type { Env } from "../types";
 import { json, requireUser } from "./helpers";
+import { ghAppFetch, hasAppSecrets } from "../integrations/github/app-auth";
 
 /**
  * Delivery analytics: the shape of the backlog, read from GitHub.
  *
- * Lives in the runtime rather than the dashboard because GITHUB_API_TOKEN is a
+ * Lives in the runtime rather than the dashboard because the GitHub credential is a
  * Worker secret. The dashboard reaches it through the service binding, like every
  * other server-side runtime call.
+ *
+ * AUTH: the GitHub App, not GITHUB_API_TOKEN. The first version of this used the
+ * latter and got nothing back, because -- as its own declaration in types/index.ts
+ * says -- it is "the read-only vault credential scoped to a different repo"
+ * (LumiKnowledge). The App is the identity installed on LumitureLabs/LumiAgents.
+ *
+ * The App currently holds Contents:write + Pull requests:write and NOT Issues:read,
+ * so this returns a 502 naming the missing permission rather than an opaque failure.
+ * Granting it is an org-owner action.
  *
  * Derived from LABELS, not from the Project board. The board's columns
  * (No Status / Current / Backlog) mirror the `status:` labels one-for-one, and
@@ -60,16 +70,20 @@ function rank<T extends string>(items: (T | null)[], fallback: string): { label:
 }
 
 async function gh<T>(env: Env, path: string): Promise<T> {
-  const res = await fetch(`https://api.github.com${path}`, {
-    headers: {
-      Authorization: `Bearer ${env.GITHUB_API_TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "lumiagents/1.0",
-    },
-  });
-  if (!res.ok) throw new Error(`GitHub ${path} → ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return (await res.json()) as T;
+  try {
+    return await ghAppFetch<T>(env, path);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // 403/404 on an issues read from an App that can write code means one thing.
+    if (/\b40[34]\b/.test(msg)) {
+      throw new Error(
+        `GitHub App cannot read issues on ${OWNER}/${REPO}. It holds Contents:write and ` +
+          `Pull requests:write; this needs Issues:read added to the installation, which is an ` +
+          `org-owner action. Underlying: ${msg.slice(0, 160)}`,
+      );
+    }
+    throw err;
+  }
 }
 
 export async function handleAnalytics(
@@ -82,6 +96,12 @@ export async function handleAnalytics(
 
   const auth = await requireUser(request, env);
   if (auth instanceof Response) return auth;
+
+  // Absent in CI and in any environment where the App is not provisioned. Say so
+  // plainly rather than failing with a credential error.
+  if (!hasAppSecrets(env)) {
+    return json({ error: "GitHub App is not configured in this environment (GH_APP_* secrets absent)." }, 502);
+  }
 
   try {
     const now = Date.now();

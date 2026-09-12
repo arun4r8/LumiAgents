@@ -4,6 +4,11 @@ import Link from "next/link";
 
 import type { BdAnalytics, Bucket } from "@/lib/bd-analytics";
 
+/** Set when the delivery half could not be read, so the page can say why. */
+export interface DeliveryUnavailable {
+  reason: string;
+}
+
 export interface DeliveryAnalytics {
   openIssues: number;
   byStatus: { label: string; count: number }[];
@@ -62,7 +67,15 @@ function BarList({ rows, max, empty }: { rows: Bucket[]; max: number; empty: str
   );
 }
 
-export function AnalyticsClient({ bd, delivery }: { bd: BdAnalytics; delivery: DeliveryAnalytics | null }) {
+export function AnalyticsClient({
+  bd,
+  delivery,
+  deliveryError,
+}: {
+  bd: BdAnalytics;
+  delivery: DeliveryAnalytics | null;
+  deliveryError?: string;
+}) {
   const maxBar = Math.max(1, ...bd.distribution.map((d) => d.count));
   const titleOnly = bd.total - bd.bodyScored;
 
@@ -74,7 +87,10 @@ export function AnalyticsClient({ bd, delivery }: { bd: BdAnalytics; delivery: D
       <h2 className="ov-sec">Delivery</h2>
       {delivery === null ? (
         <p className="an-empty">
-          Delivery figures are unavailable: GitHub did not answer. The BD half below is unaffected.
+          {deliveryError
+            ? `Delivery figures are unavailable. ${deliveryError}`
+            : "Delivery figures are unavailable: GitHub did not answer."}{" "}
+          The BD half below is unaffected.
         </p>
       ) : (
         <>
