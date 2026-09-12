@@ -98,7 +98,6 @@ Dashboard runs at `http://localhost:3000`. Runtime at `http://localhost:8787`.
 | `SAM_GOV_API_KEY` | SAM.gov → Account → API keys | Yes (Beady) |
 | `APOLLO_API_KEY` | Apollo.io → Settings → API | No (Angie sourcing) |
 | `N8N_WEBHOOK_SECRET` | n8n → Settings → API | No (n8n calls work without it) |
-| `TEAMS_INCOMING_WEBHOOK_URL` | Teams → channel connector URL | No (notifications) |
 | `GITHUB_API_TOKEN` | GitHub → Settings → Developer settings → PAT | No (vault sync) |
 
 Non-secret vars (`SUPABASE_URL`, `JIRA_BASE_URL`, `ENVIRONMENT`) are already set in `wrangler.toml` and don't need to go in `.dev.vars`.

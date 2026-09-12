@@ -7,7 +7,6 @@ flowchart TB
   subgraph Interface["Interface Layer"]
     direction LR
     Dashboard["Next.js Dashboard\nCloudflare Workers (via OpenNext)"]
-    TeamsUI["MS Teams\nBot & Adaptive Cards"]
     ObsidianVault["Obsidian Vault\nlocal → GitHub repo"]
   end
 
@@ -77,7 +76,6 @@ flowchart TB
     TavilyAPI["Tavily\nweb search"]
     GitHubAPI["GitHub API\nvault R/W"]
     JiraAPI["Jira\nAtlassian Cloud"]
-    TeamsAPI["MS Teams\nwebhook + bot"]
     ResendAPI["Resend\ndigest email"]
     AnthropicAPI["Anthropic API\nclaude-sonnet-4-6"]
     CFAI["Cloudflare Workers AI\nbge-large-en-v1.5\n(embeddings)"]
@@ -96,7 +94,7 @@ flowchart TB
     subgraph OrchSchema["orchestration.*"]
       OT["orchestrations · runs · run_steps\ntool_calls · approvals · schedules"]
       RAG["orch_documents (corpus + sensitivity)\ndocument_chunks\n(Workers vector RAG: Dewey's shared corpus)\n+ source_uri for vault upsert"]
-      MEM["conversations · messages\nmemory_chunks · teams_users\n(agent memory)"]
+      MEM["conversations · messages\nmemory_chunks\n(agent memory)"]
       SUBS["subscriptions · report_subscriptions\naward_subscriptions · award_scored\nscored_notices"]
     end
 
@@ -112,8 +110,7 @@ flowchart TB
   end
 
   %% ── Edges: Interface → Orchestration ────────────────────────────────────
-  Dashboard -->|"POST /api/orchestrations/:name/run\nGET /api/runs"| Worker
-  TeamsUI   -->|"POST /api/teams/bot\nPOST /api/agents/:slug/chat"| Worker
+  Dashboard -->|"POST /api/orchestrations/:name/run\nGET /api/runs\nPOST /api/agents/:slug/chat"| Worker
   ObsidianVault -->|"GitHub push webhook\nPOST /api/vault/webhook"| Worker
 
   %% ── Runtime → agents ─────────────────────────────────────────────────────
@@ -133,8 +130,7 @@ flowchart TB
   IDS & AS --> TavilyAPI
   VS --> GitHubAPI
   IT & TO & SR --> JiraAPI
-  AR & OR --> ResendAPI
-  Worker -->|"bot replies"| TeamsAPI
+  AR & OR & IT & TO & SR --> ResendAPI
 
   CS & OSW & GA & RFI & IDS & IT & SR & FR & DA & DR & VS & AS & CD & KS --> AnthropicAPI
   DR & VS & KS --> CFAI
@@ -213,7 +209,7 @@ The registry lives in `runtime/src/registry.ts`. `patch/vault-sync` is not in th
 |---|---|---|
 | `orchestration.*` (orchestrations, runs, run_steps, tool_calls, approvals, schedules) | Workers runtime | ops + enduser policies |
 | `orch_documents` (corpus + sensitivity), `document_chunks` | Workers runtime (Dewey / Patch) | ops + enduser read |
-| `conversations`, `messages`, `memory_chunks`, `teams_users` | Workers runtime (agent memory) | ops only |
+| `conversations`, `messages`, `memory_chunks` | Workers runtime (agent memory) | ops only |
 | `subscriptions`, `report_subscriptions`, `award_subscriptions`, `award_scored`, `scored_notices` | Workers runtime | ops only |
 | `opportunities`, `assessments`, `incumbent_research`, `past_performance` | Workers runtime (native; formerly n8n writes) | ops only |
 | `awards`, `content_calendar`, `industry_days`, `industry_day_scored`, `rfi_drafts` | Workers runtime | ops only |

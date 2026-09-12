@@ -41,7 +41,7 @@ VALUES
   (
     'patch/inbound-triage',
     1,
-    'Triage inbound email or Teams messages: classify, extract action items, route or auto-respond',
+    'Triage inbound email: classify, extract action items, route or auto-respond',
     '{}', '{}',
     true
   ),

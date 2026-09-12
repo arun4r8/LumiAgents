@@ -47,7 +47,7 @@ The key architectural bet: **deterministic workflow spine, LLM at decision point
 │  Anthropic Claude    │        │  runs, run_steps       │
 │  SAM.gov API         │        │  tool_calls, artifacts │
 │  Apollo.io API       │        │  approvals, auth, RLS  │
-│  Jira / Teams        │        └───────────────────────┘
+│  Jira / Resend       │        └───────────────────────┘
 └──────────────────────┘
 ```
 

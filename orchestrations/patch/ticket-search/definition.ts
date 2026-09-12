@@ -7,7 +7,7 @@ import { searchJiraIssues } from "./tools";
  *
  * Why this exists: `readOnly` is a property of an *orchestration*, not of one
  * branch of its input. `patch/ticket-ops` is a discriminated union whose
- * `create` and `update` branches write to Jira and post Teams cards, so it can
+ * `create` and `update` branches write to Jira and send email, so it can
  * never be flagged `readOnly` and therefore may never run on the retrying
  * inline (`/run-sync`) path. But Patch's `search_tickets` tool genuinely is a
  * pure read, and it wants sync dispatch so results come back inside the

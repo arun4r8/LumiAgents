@@ -153,7 +153,7 @@ Embeddings are Cloudflare Workers AI `@cf/baai/bge-large-en-v1.5` (1024-dim), st
 
 **Digests.** Each agent's digest is its own scheduled orchestration (`beady/opportunity-report`, `cleo/award-report`), driven by the meta-cron, honoring each subscription's cadence (daily/weekly) and sending via the shared Resend `sendEmail` with a per-agent `from`. A dashboard "Send now" hits `/api/orchestrations/{name}/run` with `{subscriptionId}`, routed by kind.
 
-**Email alerts to subscribers.** Operational failure/health alerts go by **email to the live recipients of the active subscriptions** (Teams is no longer used for alerts). Beady's sweep-health alert emails opportunity subscribers when SAM fails; Cleo's content-nudge emails subscribers when posts are due. `ALERT_EMAIL` adds fixed recipients. The sweep alert deliberately stays quiet about the known SBIR outage so it doesn't spam.
+**Email alerts to subscribers.** Operational failure/health alerts go by **email to the live recipients of the active subscriptions** (Microsoft Teams was retired entirely). Beady's sweep-health alert emails opportunity subscribers when SAM fails; Cleo's content-nudge emails subscribers when posts are due. `ALERT_EMAIL` adds fixed recipients. The sweep alert deliberately stays quiet about the known SBIR outage so it doesn't spam.
 
 ---
 

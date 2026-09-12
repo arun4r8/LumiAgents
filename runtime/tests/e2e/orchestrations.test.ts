@@ -205,7 +205,7 @@ describe.skip("patch/ticket-ops", () => {
       operation: "create",
       requestText: "[E2E TEST] Smoke test ticket, safe to close immediately",
       requestedBy: "e2e-test-runner",
-      notifyTeams: false,
+      notify: false,
     });
     expect(runId).toBeTruthy();
 
@@ -321,9 +321,8 @@ describe.skip("money/financial-report", () => {
   }, 130_000);
 });
 
-// ─── Patch: inbound-triage (Teams + LLM) ──────────────────────────────────────
-// Skipped in automated CI: posts cards to Microsoft Teams
-// (TEAMS_INCOMING_WEBHOOK_URL / TEAMS_BOT_APP_ID).
+// ─── Patch: inbound-triage (LLM + email) ──────────────────────────────────────
+// Skipped in automated CI: emails the digest subscribers (RESEND_API_KEY).
 
 describe.skip("patch/inbound-triage", () => {
   it("classifies an inbound message and routes it", async () => {
@@ -341,9 +340,9 @@ describe.skip("patch/inbound-triage", () => {
   }, 70_000);
 });
 
-// ─── Patch: staff-request (Jira + Teams + LLM) ────────────────────────────────
-// Skipped in automated CI: creates a Jira ticket in the HR project and posts
-// a Teams card. Requires JIRA_EMAIL, JIRA_API_TOKEN, TEAMS_INCOMING_WEBHOOK_URL.
+// ─── Patch: staff-request (Jira + LLM + email) ────────────────────────────────
+// Skipped in automated CI: creates a Jira ticket in the HR project and emails ops.
+// Requires JIRA_EMAIL, JIRA_API_TOKEN, RESEND_API_KEY.
 
 describe.skip("patch/staff-request", () => {
   it("creates an HR staff request and Jira ticket", async () => {
@@ -352,7 +351,7 @@ describe.skip("patch/staff-request", () => {
       requestText: "[E2E TEST] Need a cleared Oracle DBA for Task Order 7 starting next quarter. Safe to close immediately.",
       requestedBy: "e2e-test-runner",
       urgency: "this_month",
-      notifyTeams: false,
+      notify: false,
     });
     expect(runId).toBeTruthy();
 

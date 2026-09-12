@@ -124,14 +124,14 @@ describe("schemaToJsonSchema — types", () => {
   it("emits booleans with their default so the checkbox starts in the right state", () => {
     const out = toSchema(z.object({
       requireClearance: z.boolean().default(false).describe("Keyword-search for clearance holders"),
-      notifyTeams: z.boolean().default(true),
+      notify: z.boolean().default(true),
     }));
     expect(out.properties?.["requireClearance"]).toEqual({
       type: "boolean",
       default: false,
       description: "Keyword-search for clearance holders",
     });
-    expect(out.properties?.["notifyTeams"]).toEqual({ type: "boolean", default: true });
+    expect(out.properties?.["notify"]).toEqual({ type: "boolean", default: true });
   });
 
   it("emits records as an open object", () => {
@@ -149,7 +149,7 @@ describe("schemaToJsonSchema — discriminated unions", () => {
     z.object({
       operation: z.literal("create"),
       requestText: z.string().min(10).describe("What needs doing"),
-      notifyTeams: z.boolean().default(true).describe("Post a Teams card"),
+      notify: z.boolean().default(true).describe("Email ops"),
     }),
     z.object({
       operation: z.literal("search"),
@@ -171,7 +171,7 @@ describe("schemaToJsonSchema — discriminated unions", () => {
     const create = out.variants?.find((v) => v.value === "create");
     expect(create?.properties).toEqual({
       requestText: { type: "string", minLength: 10, description: "What needs doing" },
-      notifyTeams: { type: "boolean", default: true, description: "Post a Teams card" },
+      notify: { type: "boolean", default: true, description: "Email ops" },
     });
     // The discriminator itself is supplied by the selector, not by a field.
     expect(create?.properties["operation"]).toBeUndefined();

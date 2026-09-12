@@ -98,7 +98,7 @@ Drive LinkedIn/eminence content. The `content_calendar` table is populated by ma
 **Registered orchestrations:**
 - `cleo/content-plan`: **agent**. Theme → calendar idea rows.
 - `cleo/content-draft`: **agent**. Post copy + asset brief for a calendar row.
-- `cleo/content-nudge`: **scheduled** daily (~09:00 UTC). Emails subscribers about posts due soon that aren't drafted yet (delivery is email via `sendAlertEmail`, despite a stale "Teams" comment in the code).
+- `cleo/content-nudge`: **scheduled** daily (~09:00 UTC). Emails subscribers about posts due soon that aren't drafted yet (delivery is email via `sendAlertEmail`).
 
 **Visible to:** ops role.
 **Note:** A live Microsoft Graph sync is **not** built. CSV export is the interim path; Graph is the future upgrade.

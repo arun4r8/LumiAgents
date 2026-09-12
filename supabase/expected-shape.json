@@ -1,5 +1,5 @@
 {
-    "orchestration_tables": 23,
+    "orchestration_tables": 22,
     "public_tables": 29,
     "orchestration_rls_off": [
         "award_scored"
@@ -14,7 +14,6 @@
         "public.rfi_drafts": 14,
         "orchestration.orchestration_access": 5,
         "public.industry_day_scored": 3,
-        "orchestration.teams_users": 4,
         "orchestration.schedules": 9,
         "public.past_performance": 2,
         "public.analyst_uploads": 9,

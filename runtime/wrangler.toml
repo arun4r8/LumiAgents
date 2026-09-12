@@ -41,9 +41,6 @@ BD_DRIVE_ID = "b!bd50wGHzTkyYU9BpkWz_g1-hQ_-X0qxEsh_XIKKEfTWQqQt1AtB_RrNcEUcYckH
 # JIRA_EMAIL
 # JIRA_API_TOKEN
 # SAM_GOV_API_KEY
-# TEAMS_INCOMING_WEBHOOK_URL   ← Teams channel connector URL (notifications)
-# TEAMS_BOT_APP_ID             ← Azure Bot registration App ID
-# TEAMS_BOT_APP_SECRET         ← Azure Bot registration client secret
 # GITHUB_API_TOKEN             ← GitHub PAT with repo scope (vault read/write)
 # GITHUB_WEBHOOK_SECRET        ← Secret set in the GitHub push webhook config
 # RESEND_API_KEY               ← Resend API key (email reports)
@@ -129,7 +126,7 @@ VAULT_REPO  = "LumiKnowledge"
 # Secrets: staging intentionally runs with ONLY three —
 #   SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET (both staging-specific,
 #   never production's) and ANTHROPIC_API_KEY.
-# Everything else (GITHUB_API_TOKEN, MSGRAPH_*, RESEND_*, JIRA_*, GH_APP_*, TEAMS_*,
+# Everything else (GITHUB_API_TOKEN, MSGRAPH_*, RESEND_*, JIRA_*, GH_APP_*,
 # SAM_GOV/TAVILY/APOLLO keys) is deliberately UNSET because those integrations write to
 # production systems — the real vault, the real content-calendar workbook, real email,
 # real Jira tickets, real PRs — and there is no staging copy of those systems.

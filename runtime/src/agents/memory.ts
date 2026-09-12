@@ -1,4 +1,4 @@
-// Agent memory (Phase 1): durable conversations + transcripts, Teams identity.
+// Agent memory (Phase 1): durable conversations + transcripts.
 // All helpers fail open: a memory problem must never break the chat itself.
 // Runs in the runtime worker (has Supabase creds); the route orchestrates recall
 // and persistence around the agent Service-Binding forward.
@@ -32,8 +32,8 @@ async function embed(env: Env, text: string): Promise<number[] | null> {
 }
 
 // Semantic recall: most relevant past turns/summaries for this (user, agent), as a
-// system preamble. Empty string when there's no user (unmapped Teams) or nothing
-// relevant, so it's a no-op until memory accrues.
+// system preamble. Empty string when there's no user or nothing relevant, so it's a
+// no-op until memory accrues.
 export async function recall(
   env: Env,
   opts: { userId?: string | null; agentSlug: string; queryText: string; k?: number },
@@ -65,47 +65,22 @@ export async function recall(
   }
 }
 
-// Map a Teams user id → Lumiture user_id, recording unmapped users so an admin can
-// link them later. Returns null when unmapped.
-export async function resolveTeamsUser(env: Env, teamsUserId: string, displayName?: string): Promise<string | null> {
-  try {
-    const res = await fetch(rest(env, `teams_users?teams_user_id=eq.${encodeURIComponent(teamsUserId)}&select=user_id`), { headers: sbHeaders(env) });
-    if (res.ok) {
-      const rows = (await res.json()) as Array<{ user_id: string | null }>;
-      if (rows.length) return rows[0]!.user_id;
-    }
-    await fetch(rest(env, "teams_users?on_conflict=teams_user_id"), {
-      method: "POST",
-      headers: sbHeaders(env, { Prefer: "resolution=ignore-duplicates,return=minimal" }),
-      body: JSON.stringify({ teams_user_id: teamsUserId, display_name: displayName ?? null }),
-    });
-  } catch (e) {
-    console.warn("[memory] resolveTeamsUser failed:", e);
-  }
-  return null;
-}
-
 // Resolve (or create) the conversation for this turn. Returns its id, or null on failure.
+//
+// `conversations.external_id` is left null. It existed to key a thread by its id in an
+// outside chat system, which only ever meant the Teams bot; that bot is gone and the
+// column was null on all 881 rows, so nothing writes it. The column stays in case a
+// future external channel needs it.
 export async function resolveConversation(
   env: Env,
-  opts: { agentSlug: string; userId?: string | null; conversationId?: string | null; externalId?: string | null },
+  opts: { agentSlug: string; userId?: string | null; conversationId?: string | null },
 ): Promise<string | null> {
   try {
     if (opts.conversationId) return opts.conversationId;
-    if (opts.externalId) {
-      const res = await fetch(
-        rest(env, `conversations?agent_slug=eq.${encodeURIComponent(opts.agentSlug)}&external_id=eq.${encodeURIComponent(opts.externalId)}&select=id`),
-        { headers: sbHeaders(env) },
-      );
-      if (res.ok) {
-        const rows = (await res.json()) as Array<{ id: string }>;
-        if (rows.length) return rows[0]!.id;
-      }
-    }
     const insert = await fetch(rest(env, "conversations"), {
       method: "POST",
       headers: sbHeaders(env, { Prefer: "return=representation" }),
-      body: JSON.stringify({ agent_slug: opts.agentSlug, user_id: opts.userId ?? null, external_id: opts.externalId ?? null }),
+      body: JSON.stringify({ agent_slug: opts.agentSlug, user_id: opts.userId ?? null }),
     });
     if (insert.ok) {
       const rows = (await insert.json()) as Array<{ id: string }>;

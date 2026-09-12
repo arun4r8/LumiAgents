@@ -244,12 +244,6 @@
       "updated_at",
       "user_id"
     ],
-    "orchestration.teams_users": [
-      "created_at",
-      "display_name",
-      "teams_user_id",
-      "user_id"
-    ],
     "orchestration.tool_calls": [
       "attempt",
       "ended_at",

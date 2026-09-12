@@ -34,12 +34,6 @@ export interface Env {
   DEWEY_WORKER?: Fetcher;
   PATCH_WORKER?: Fetcher;
   MONEY_WORKER?: Fetcher;
-  // Teams integration (set via `wrangler secret put`)
-  TEAMS_INCOMING_WEBHOOK_URL?: string;
-  TEAMS_BOT_APP_ID?: string;
-  TEAMS_BOT_APP_SECRET?: string;
-  /** Required for SingleTenant bot registrations. See integrations/teams/base.ts. */
-  TEAMS_BOT_TENANT_ID?: string;
   // GitHub integration (Obsidian vault sync)
   VAULT_OWNER: string;           // set in wrangler.toml [vars]; org/user that owns LumiKnowledge
   VAULT_REPO: string;            // set in wrangler.toml [vars]
@@ -132,7 +126,7 @@ export interface OrchestrationDefinition<
   triggerMode?: "manual" | "agent";
   /**
    * Explicit declaration that `run()` performs NO writes (no INSERT/UPDATE/DELETE to
-   * business data, no outbound email/Teams/Jira side effect) and contains NO
+   * business data, no outbound email/Jira side effect) and contains NO
    * `await_approval`. Bookkeeping the framework itself does — run/run_step rows, LLM
    * usage — does not count.
    *

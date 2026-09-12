@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
-import { createJiraIssue, sendTeamsCard } from "./tools";
+import { createJiraIssue } from "./tools";
 import { sbHeaders } from "@/runtime/utils/supabase";
+import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +25,7 @@ export const inputSchema = z.object({
     .uuid()
     .optional()
     .describe("Contract this request is associated with"),
-  notifyTeams: z.boolean().default(true).describe("Post a Teams card when the request is filed"),
+  notify: z.boolean().default(true).describe("Email ops when the request is filed"),
 });
 
 export const outputSchema = z.object({
@@ -136,16 +138,31 @@ Do not use em dashes.
       return created?.id ?? "unknown";
     });
 
-    // Step 4: Notify Teams
-    if (input.notifyTeams) {
-      await step(ctx, "notify-teams", () =>
-        sendTeamsCard(ctx, {
-          channel: "ops-general",
-          title: `📋 Staff request: ${ticket.issueKey}`,
-          body: `**${fields.summary}**\n\nRequested by: ${input.requestedBy} | Priority: ${jiraPriority} | Type: ${input.requestType.replace("_", " ")}`,
-          actions: [{ label: "Open in Jira", url: ticket.url }],
-        }),
-      );
+    // Step 4: Notify ops by email.
+    //
+    // This posted an Office 365 Connector card into a Teams channel until Microsoft
+    // retired those connectors in the 18-22 May 2026 rollout, after which the webhook
+    // delivered nothing. Email is the path that already reaches people here, so the
+    // card became the plain-text note below rather than a new Power Automate webhook.
+    // Recipients are the active digest subscribers plus ALERT_EMAIL; sendAlertEmail
+    // returns { sent: false } instead of throwing when there is nobody to tell.
+    if (input.notify) {
+      await step(ctx, "notify-ops", async () => {
+        const to = await subscriptionRecipients(ctx.env);
+        const result = await sendAlertEmail(ctx.env, {
+          to,
+          subject: `📋 Staff request ${ticket.issueKey}: ${fields.summary}`,
+          text:
+            `${fields.summary}\n\n` +
+            `Requested by: ${input.requestedBy}\n` +
+            `Priority: ${jiraPriority}\n` +
+            `Type: ${input.requestType.replace("_", " ")}\n` +
+            `Urgency: ${input.urgency}\n` +
+            `\nOpen in Jira: ${ticket.url}`,
+          from: senderFor(ctx.env, "patch"),
+        });
+        return { sent: result.sent, recipients: to.length };
+      });
     }
 
     return {

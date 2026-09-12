@@ -1,14 +1,15 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { createJiraIssue, addJiraComment, transitionJiraIssue, searchJiraIssues } from "./tools";
-import { sendTeamsCard } from "./tools";
+import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
+import { senderFor } from "../../../integrations/resend/sender";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 /*
  * One orchestration, three operations, selected by `operation`:
  *
- *  create: parse a plain-language request, create a Jira ticket, notify Teams
+ *  create: parse a plain-language request, create a Jira ticket, email ops
  *  update: transition status and/or add a comment to an existing ticket
  *  search: run a JQL query and return structured results (useful for dashboards / reports)
  */
@@ -25,7 +26,7 @@ export const inputSchema = z.discriminatedUnion("operation", [
       .min(10)
       .describe("Plain-language description of the work to be done"),
     requestedBy: z.string().describe("Name or email of who is requesting this"),
-    notifyTeams: z.boolean().default(true).describe("Post a Teams card when the ticket is created"),
+    notify: z.boolean().default(true).describe("Email ops when the ticket is created"),
   }),
   z.object({
     operation: z.literal("update"),
@@ -73,9 +74,9 @@ export default defineOrchestration({
   name: "patch/ticket-ops",
   version: 1,
   // #127: deliberately NOT readOnly. `operation: "search"` is a pure JQL read, but
-  // "create" and "update" create Jira issues, transition them, add comments and post
-  // Teams cards. Read-only-ness is a property of the orchestration, not of one branch
-  // of its input, so this may never run on the retrying inline path.
+  // "create" and "update" create Jira issues, transition them, add comments and send
+  // email. Read-only-ness is a property of the orchestration, not of one branch of
+  // its input, so this may never run on the retrying inline path.
   description: "Create, update, or search Jira tickets for ops. Patch's primary ticketing interface",
   inputSchema,
   outputSchema,
@@ -128,16 +129,30 @@ Rules:
         }),
       );
 
-      // Step 3: Notify Teams (optional)
-      if (input.notifyTeams) {
-        await step(ctx, "notify-teams", () =>
-          sendTeamsCard(ctx, {
-            channel: "ops-general",
-            title: `🎫 New ticket: ${ticket.issueKey}`,
-            body: `**${ticketFields.summary}**\n\nPriority: ${ticketFields.priority} | Requested by: ${input.requestedBy}`,
-            actions: [{ label: "Open in Jira", url: ticket.url }],
-          }),
-        );
+      // Step 3: Notify ops by email (optional).
+      //
+      // This posted an Office 365 Connector card into a Teams channel until Microsoft
+      // retired those connectors in the 18-22 May 2026 rollout, after which the webhook
+      // delivered nothing. Email already reaches people here, so the card became the
+      // plain-text note below rather than a new Power Automate webhook. Recipients are
+      // the active digest subscribers plus ALERT_EMAIL; sendAlertEmail returns
+      // { sent: false } instead of throwing when there is nobody to tell.
+      if (input.notify) {
+        await step(ctx, "notify-ops", async () => {
+          const to = await subscriptionRecipients(ctx.env);
+          const result = await sendAlertEmail(ctx.env, {
+            to,
+            subject: `🎫 New ticket ${ticket.issueKey}: ${ticketFields.summary}`,
+            text:
+              `${ticketFields.summary}\n\n` +
+              `Priority: ${ticketFields.priority}\n` +
+              `Type: ${ticketFields.issueType}\n` +
+              `Requested by: ${input.requestedBy}\n` +
+              `\nOpen in Jira: ${ticket.url}`,
+            from: senderFor(ctx.env, "patch"),
+          });
+          return { sent: result.sent, recipients: to.length };
+        });
       }
 
       return {

@@ -7,8 +7,7 @@ import { resolveAgentChatConfig } from "../agents/resolve-agent-config";
 import { buildConfigAgentDefinition } from "../agents/catalog-agent";
 import { orchestrations } from "../registry";
 import { SupabaseClient } from "../db/client";
-import { resolveConversation, loadTranscript, persistTurn, resolveTeamsUser, recall, maybeSummarize } from "../agents/memory";
-import { parseBotActivity, sendBotReplyWithToken, downloadTeamsFiles } from "../../../integrations/teams/bot";
+import { resolveConversation, loadTranscript, persistTurn, recall, maybeSummarize } from "../agents/memory";
 import { suggestedPromptsFor } from "../../../agents";
 import { json, requireUser, rateLimited, schemaToJsonSchema } from "./helpers";
 
@@ -273,93 +272,6 @@ export async function handleAgents(
     }
 
     return json({ ...result, conversationId });
-  }
-
-/**
- * Deep links back into the dashboard for runs a Teams message kicked off.
- *
- * Derived from ALLOWED_ORIGINS, which already carries the dashboard origin in
- * both environments, so this needs no new configuration. Returning a link rather
- * than the file itself is deliberate: posting a document into a Teams chat needs
- * elevated Graph application permissions, and the least-privilege line is worth
- * more than saving the user one click.
- */
-function dashboardLinks(env: { ALLOWED_ORIGINS?: string }, runIds: string[]): string {
-  const origin = (env.ALLOWED_ORIGINS ?? "").split(",")[0]?.trim();
-  if (!origin || runIds.length === 0) return "";
-  return runIds.map((id) => `\n[Open in LumiAgents](${origin}/records/talent?run=${id})`).join("");
-}
-
-  // POST /api/teams/bot
-  if (pathname === "/api/teams/bot" && request.method === "POST") {
-    const parsed = await parseBotActivity(request, env);
-
-    if (!parsed.valid || !parsed.activity) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    // A file with no caption is a perfectly ordinary Teams message ("here, blind
-    // this"), so only bail when there is neither text nor an attachment.
-    if (parsed.activity.type !== "message" || (!parsed.text && parsed.attachments.length === 0)) {
-      return new Response(null, { status: 200 });
-    }
-
-    const slug = (parsed.agentSlug ?? "patch") as AgentSlug;
-    const runtimeUrl = `${url.protocol}//${url.host}`;
-
-    const chatPromise = (async () => {
-      // Map the Teams user → Lumiture user, and attach this thread's durable memory.
-      const userId = await resolveTeamsUser(env, parsed.from.id, parsed.from.name);
-      const conversationId = await resolveConversation(env, {
-        agentSlug: slug,
-        userId,
-        externalId: parsed.conversationId,
-      });
-      const transcript = conversationId ? await loadTranscript(env, conversationId, 10) : [];
-
-      // Files were parsed but never used until #159, so uploading a resume in
-      // Teams and asking for something to be done with it quietly did nothing.
-      const { files, skipped } = await downloadTeamsFiles(parsed.attachments);
-      const userText = parsed.text || (files.length > 0
-        ? `Attached: ${files.map((f) => f.name).join(", ")}`
-        : "");
-
-      const messages: ChatMessage[] = [...transcript, { role: "user", content: userText }];
-      const memoryPreamble = await recall(env, { userId, agentSlug: slug, queryText: userText });
-
-      const agentConfig = await resolveAgentChatConfig(new SupabaseClient(env), slug);
-      const chatReq: AgentChatRequest = { agentSlug: slug, messages };
-      if (files.length > 0) chatReq.files = files;
-      if (memoryPreamble) chatReq.memoryPreamble = memoryPreamble;
-      if (agentConfig.modelConfig) chatReq.modelConfig = agentConfig.modelConfig;
-      if (agentConfig.override) chatReq.override = agentConfig.override;
-      const result = await runAgentChat(env, chatReq, runtimeUrl);
-      // Tell the user plainly when an attachment could not be used. Silently
-      // ignoring it is how the original gap went unnoticed for so long.
-      const skipNote = skipped.length > 0
-        ? `\n\n*Could not read: ${skipped.join("; ")}*`
-        : "";
-      const runNote = result.runIds.length > 0
-        ? `\n\n*Run IDs: ${result.runIds.join(", ")}*${dashboardLinks(env, result.runIds)}`
-        : "";
-      const replyText = `${result.reply}${skipNote}${runNote}`;
-      await sendBotReplyWithToken(
-        env,
-        parsed.serviceUrl,
-        parsed.conversationId,
-        parsed.activity!.id,
-        replyText,
-      );
-      if (conversationId && result.reply) {
-        await persistTurn(env, { conversationId, userId, agentSlug: slug, userText, assistantText: result.reply });
-        await maybeSummarize(env, { conversationId, userId, agentSlug: slug });
-      }
-    })().catch((err) => {
-      console.error("[teams-bot] reply error:", err);
-    });
-
-    ctx.waitUntil(chatPromise);
-    return new Response(null, { status: 200 });
   }
 
   return null;

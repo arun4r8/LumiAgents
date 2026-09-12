@@ -123,8 +123,7 @@ wrangler secret put ANTHROPIC_API_KEY         --env staging
 # Everything else the runtime reads; see the comment block at the top of
 # runtime/wrangler.toml for the authoritative list and what each one is for:
 #   N8N_WEBHOOK_SECRET, APOLLO_API_KEY, JIRA_EMAIL, JIRA_API_TOKEN,
-#   SAM_GOV_API_KEY, TEAMS_INCOMING_WEBHOOK_URL, TEAMS_BOT_APP_ID,
-#   TEAMS_BOT_APP_SECRET, GITHUB_API_TOKEN, GITHUB_WEBHOOK_SECRET,
+#   SAM_GOV_API_KEY, GITHUB_API_TOKEN, GITHUB_WEBHOOK_SECRET,
 #   RESEND_API_KEY, RESEND_FROM, TAVILY_API_KEY, ALERT_EMAIL,
 #   SBIR_API_BASE, N8N_QUEUE_ENABLED,
 #   MSGRAPH_TENANT_ID, MSGRAPH_CLIENT_ID, MSGRAPH_CLIENT_SECRET
@@ -156,7 +155,6 @@ broken in staging", that broken tab is the safety mechanism working:
 | `RESEND_API_KEY` / `RESEND_FROM` / `ALERT_EMAIL` | **Sends real email to real people** — digests, alerts, approval requests. |
 | `JIRA_EMAIL` / `JIRA_API_TOKEN` | Creates and transitions **real Jira tickets**. |
 | `GH_APP_ID` / `GH_APP_INSTALLATION_ID` / `GH_APP_PRIVATE_KEY` | The Tier 2 agent builder opens **real pull requests** against this repo. |
-| `TEAMS_*` | Posts into **real Teams channels**. |
 | `SAM_GOV_API_KEY` / `TAVILY_API_KEY` / `APOLLO_API_KEY` | No write risk, but burns the **shared production API quota/budget**. |
 | `GITHUB_WEBHOOK_SECRET` | The production vault webhook points at the production runtime. Do not add a second webhook on `LumiKnowledge` for staging. |
 | `N8N_QUEUE_ENABLED` | Staging would drain the **production** n8n call queue. |

@@ -80,8 +80,10 @@ export default async function TalentPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // ?run=<id> arrives from the Teams bot's deep link: the run already started
-  // over there, so the panel resumes it rather than asking for the text again.
+  // ?run=<id> means the run already started elsewhere, so the panel resumes it
+  // rather than asking for the text again. The Teams bot was what generated those
+  // links; nothing does now, and the parameter is kept as a plain resume-by-id
+  // entry point for a run id pasted or linked by hand.
   const sp = await searchParams;
   const runParam = typeof sp.run === "string" ? sp.run : undefined;
   const supabase = await createClient();

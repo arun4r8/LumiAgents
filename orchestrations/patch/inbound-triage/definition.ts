@@ -1,27 +1,54 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_decide, llm_extract, await_approval } from "@/runtime";
-import { sendTeamsMessage, sendTeamsCard } from "./tools";
+import { sendAlertEmail, subscriptionRecipients } from "../../../integrations/resend/alert";
+import { senderFor } from "../../../integrations/resend/sender";
+import type { Env } from "@/runtime";
+
+// Where these notifications go, and why by email.
+//
+// Every branch below used to post an Office 365 Connector card into a Teams channel.
+// Microsoft retired Office 365 Connectors in the 18-22 May 2026 rollout, after which
+// the incoming webhook stopped delivering, so those posts have gone nowhere since.
+// Email is the path that already reaches people (the digests and the watchdog use it),
+// so the notifications move there rather than picking up a new dependency.
+//
+// Recipients are the people subscribed to the active digests, plus anything in
+// ALERT_EMAIL. sendAlertEmail degrades to { sent: false } when there is no recipient
+// or no RESEND_API_KEY, so a notification can never fail a run.
+async function notifyOps(
+  env: Env,
+  opts: { subject: string; text: string },
+): Promise<{ sent: boolean; recipients: number }> {
+  const to = await subscriptionRecipients(env);
+  const result = await sendAlertEmail(env, {
+    to,
+    subject: opts.subject,
+    text: opts.text,
+    from: senderFor(env, "patch"),
+  });
+  return { sent: result.sent, recipients: to.length };
+}
 
 export const inputSchema = z.object({
-  source: z.enum(["email", "teams"]).describe("Channel the message arrived on"),
+  source: z.enum(["email"]).describe("Channel the message arrived on"),
   messageId: z.string().describe("External message ID for deduplication"),
-  from: z.string().describe("Sender email or Teams user"),
+  from: z.string().describe("Sender email address"),
   subject: z.string().optional().describe("Message subject line, when the channel has one"),
   body: z.string().describe("Full message body"),
   receivedAt: z.string().datetime().optional().describe("ISO timestamp the message was received. Defaults to now"),
 });
 
 export const outputSchema = z.object({
-  action: z.enum(["ticket", "reply", "card", "discard"]),
+  action: z.enum(["ticket", "reply", "notified", "discard"]),
   intent: z.enum(["inquiry", "task", "escalation", "noise"]),
-  referenceId: z.string().optional().describe("Jira ticket key or Teams message ID if created"),
+  referenceId: z.string().optional().describe("Jira ticket key, if one was created"),
   summary: z.string(),
 });
 
 export default defineOrchestration({
   name: "patch/inbound-triage",
   version: 1,
-  description: "Triage inbound email or Teams messages: classify, extract action items, route or auto-respond",
+  description: "Triage inbound email: classify, extract action items, route or auto-respond",
   inputSchema,
   outputSchema,
   access: {
@@ -64,13 +91,17 @@ export default defineOrchestration({
 
     // Step 3: Route based on intent
     if (intent === "escalation") {
-      // Post a Teams card and pause for human approval before responding
-      await step(ctx, "post-escalation-card", () =>
-        sendTeamsCard(ctx, {
-          channel: "ops-alerts",
-          title: `Escalation: ${input.subject ?? "No subject"} from ${input.from}`,
-          body: extracted.summary,
-          actions: [{ label: "View message", url: `https://outlook.office.com/mail/${input.messageId}` }],
+      // Email ops, then pause for human approval before responding
+      await step(ctx, "email-escalation", () =>
+        notifyOps(ctx.env, {
+          subject: `🚨 Escalation: ${input.subject ?? "No subject"} from ${input.from}`,
+          text:
+            `${extracted.summary}\n\n` +
+            `From: ${input.from}\n` +
+            `Subject: ${input.subject ?? "No subject"}\n` +
+            `Priority: ${extracted.priority}\n` +
+            (extracted.suggestedAssignee ? `Suggested owner: ${extracted.suggestedAssignee}\n` : "") +
+            `\nView message: https://outlook.office.com/mail/${input.messageId}`,
         }),
       );
 
@@ -82,31 +113,35 @@ export default defineOrchestration({
       });
 
       return {
-        action: decision.approved ? "reply" : "card",
+        action: decision.approved ? "reply" : "notified",
         intent,
         summary: extracted.summary,
       };
     }
 
     if (intent === "task" && extracted.actionItems.length > 0) {
-      // Post to Teams ops channel
-      await step(ctx, "post-task-card", () =>
-        sendTeamsCard(ctx, {
-          channel: "ops-tasks",
-          title: `New task: ${extracted.summary}`,
-          body: extracted.actionItems.map((a, i) => `${i + 1}. ${a}`).join("\n"),
+      // Email the ops task list
+      await step(ctx, "email-task", () =>
+        notifyOps(ctx.env, {
+          subject: `New task: ${extracted.summary}`,
+          text:
+            `${extracted.summary}\n\n` +
+            `From: ${input.from}\n` +
+            `Priority: ${extracted.priority}\n` +
+            (extracted.suggestedAssignee ? `Suggested owner: ${extracted.suggestedAssignee}\n` : "") +
+            `\nAction items:\n` +
+            extracted.actionItems.map((a, i) => `${i + 1}. ${a}`).join("\n"),
         }),
       );
 
-      return { action: "card", intent, summary: extracted.summary };
+      return { action: "notified", intent, summary: extracted.summary };
     }
 
-    // inquiry: post simple Teams message
-    await step(ctx, "post-inquiry-message", () =>
-      sendTeamsMessage(ctx, {
-        channel: "ops-general",
-        subject: input.subject,
-        message: `Inquiry from ${input.from}:\n${extracted.summary}`,
+    // inquiry: a plain note to ops
+    await step(ctx, "email-inquiry", () =>
+      notifyOps(ctx.env, {
+        subject: `Inquiry: ${input.subject ?? extracted.summary}`,
+        text: `Inquiry from ${input.from}:\n\n${extracted.summary}`,
       }),
     );
 

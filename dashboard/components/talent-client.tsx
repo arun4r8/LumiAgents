@@ -11,7 +11,7 @@ interface Props {
   resumeResults: Record<string, unknown>[];
   startRedaction: (resumeText: string, candidateCode: string) => Promise<string>;
   getRedactionResult: (runId: string) => Promise<RedactionState>;
-  /** From ?run=<id>, set when arriving from the Teams bot deep link. */
+  /** From ?run=<id>: resume a run that was started elsewhere. */
   initialRunId?: string;
 }
 

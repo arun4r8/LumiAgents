@@ -67,18 +67,17 @@ All external systems touched by the orchestration layer. The n8n migration is co
 - `alert.ts`: `sendAlertEmail` + `subscriptionRecipients(env, kind?)`; failure/health alerts go by email to the **live recipients of the active subscriptions** (plus any `ALERT_EMAIL` addresses)
 **Auth model:** API key
 **Env:** `RESEND_API_KEY`, `RESEND_FROM`, `ALERT_EMAIL` (optional extra alert recipients)
-**Note:** digests (Beady opportunity, Cleo award) and all operational alerts now go over email; Teams is no longer used for alerts.
+**Note:** digests (Beady opportunity, Cleo award), all operational alerts, and Patch's ticket/staff-request/inbound-triage notifications go over email. Microsoft Teams is no longer an outbound channel at all.
 
 ---
 
-## Microsoft Teams
-**Used by:** two-way chat with agents (bot)
-**Integration code:** `integrations/teams/` (`incoming-webhook.ts`, `bot.ts`, `cards.ts`, `notify.ts`, `base.ts`)
-**Usage:**
-- `incoming-webhook.ts`: one-way channel notifications (MessageCard / Adaptive Card). **No longer used for operational alerts**; those moved to email (Resend). Still available for ad-hoc notifications.
-- `bot.ts`: the two-way Bot Framework endpoint (`POST /api/teams/bot`): verifies the JWT, parses the Activity, replies via the Bot Connector. Still live for Teams chat with agents.
-**Auth model:** webhook URL (incoming); Azure Bot app ID + secret (bot)
-**Env:** `TEAMS_INCOMING_WEBHOOK_URL`, `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`
+## Microsoft Teams (retired)
+Both Teams surfaces were removed. The bot (`POST /api/teams/bot`) never worked: the app
+was never installed in the tenant, so `conversations.external_id` is null on all 881 rows
+(#162, #165). The one-way notifications used Office 365 Connectors, which Microsoft
+retired in the 18-22 May 2026 rollout, so they had been silently dead since. Patch's
+notifications moved to email. Microsoft Graph, SharePoint and Excel are unaffected and
+remain in use.
 
 ---
 
@@ -147,6 +146,3 @@ All runtime secrets are set via `wrangler secret put <name>`, never in `wrangler
 | Jira base URL | `JIRA_BASE_URL` | Patch tickets |
 | GitHub token | `GITHUB_API_TOKEN` | Patch vault sync |
 | GitHub webhook secret | `GITHUB_WEBHOOK_SECRET` | Signed vault-sync webhook |
-| Teams incoming webhook | `TEAMS_INCOMING_WEBHOOK_URL` | Ad-hoc Teams notifications |
-| Teams bot app ID | `TEAMS_BOT_APP_ID` | Two-way Teams bot |
-| Teams bot app secret | `TEAMS_BOT_APP_SECRET` | Two-way Teams bot |

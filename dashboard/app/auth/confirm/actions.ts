@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
  *
  * Why: `verifyOtp` CONSUMES a single-use token. When the endpoint was a plain
  * GET, anything that fetched the URL burned the token before its recipient ever
- * clicked — and links pasted into Teams, Slack or email are fetched routinely by
+ * clicked — and links pasted into a chat client or email are fetched routinely by
  * preview unfurlers and by mail-security scanners (Defender Safe Links and
  * friends). We watched it happen: an invite generated at 13:30:00 was consumed
  * at 13:30:05, 3.8 seconds BEFORE the message carrying it was even sent, so the

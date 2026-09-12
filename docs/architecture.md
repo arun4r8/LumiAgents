@@ -129,7 +129,7 @@ Role-based views over the same data, RLS doing the authorization heavy lifting:
 
 Shared: auth, notifications, search.
 
-Notifications run on a single unified `subscriptions` table (a `kind` discriminator separates opportunity vs. award digests, replacing the older per-domain subscription tables). Scheduled digests and **operational failure alerts go to subscribers by email via Resend, not Teams** (the Teams incoming webhook is no longer wired to alerts; the two-way Teams bot remains for chat).
+Notifications run on a single unified `subscriptions` table (a `kind` discriminator separates opportunity vs. award digests, replacing the older per-domain subscription tables). Scheduled digests and **operational failure alerts go to subscribers by email via Resend**. Email is the only outbound notification channel: both Microsoft Teams surfaces (the bot and the Office 365 Connector webhook) were retired, and agent chat lives in the dashboard.
 
 On top of the per-orchestration health checks, the runtime alerts on **every** run that transitions to `failed`, from one place (`runtime/src/utils/run-failure-alert.ts`, called by `workflow.ts` and the cron dispatcher). A new orchestration is covered without its author doing anything. Suppression state lives in `orchestration.run_failure_alerts`: one email on the first failure of a streak, one when the error changes, one reminder per 6h while it stays broken, and one when it recovers. Alerting is fail-open, so it can never break a run.
 

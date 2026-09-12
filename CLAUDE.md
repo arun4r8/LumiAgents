@@ -48,7 +48,7 @@ Six named agents, each an LLM tool-loop that calls orchestrations. Defined in `/
   tools.ts           # tools this workflow uses
 /agents/<slug>/      # the six agents (LLM tool-loops that invoke orchestrations)
 /runtime/            # the engine itself: workflow runner, tool registry, LLM primitives
-/integrations/       # typed wrappers around external integrations (SAM.gov, SBIR, Tavily, Resend, Jira, Apollo, Teams, ...)
+/integrations/       # typed wrappers around external integrations (SAM.gov, SBIR, Tavily, Resend, Jira, Apollo, MS Graph, ...)
 /supabase/           # migrations, RLS policies, seed data
 /dashboard/          # Next.js app
 /docs/

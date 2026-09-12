@@ -178,7 +178,7 @@ export default function Topbar({ isOps = false }: { isOps?: boolean }) {
             {isOps && (
               <section className="help-sect">
                 <h4>Approvals</h4>
-                <p>Some runs pause for a human decision and wait here, with a count in the nav. Not all of them do. A few orchestrations write to Jira, Teams or the content calendar directly, so treat the pause as a feature of those runs rather than a guarantee.</p>
+                <p>Some runs pause for a human decision and wait here, with a count in the nav. Not all of them do. A few orchestrations write to Jira, email or the content calendar directly, so treat the pause as a feature of those runs rather than a guarantee.</p>
               </section>
             )}
             <section className="help-sect">

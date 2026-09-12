@@ -69,7 +69,7 @@ Capability that landed on top of the five-phase spine, all running on the Worker
 - **Content calendar + CSV import (Cleo):** `content_calendar` populated by manual add, `plan_calendar`, or idempotent CSV import (`source_key`); `cleo/content-draft` + `cleo/content-nudge`. No auto-publish.
 - **Unified subscriptions:** one `orchestration.subscriptions` table with a `kind` discriminator ('opportunity' | 'award'), replacing the now-deprecated `report_subscriptions` + `award_subscriptions` (kept only as a rollback net).
 - **Knowledge corpus/sensitivity separation + Dewey:** `corpus` and `sensitivity` columns on `orch_documents`/`document_chunks`, runtime-enforced retrieval scoping (`knowledge-access.ts`), and the Dewey librarian orchestrations (`knowledge-search`, `retag-document`, `knowledge-inventory`).
-- **Email alerts:** operational failure and "due soon" alerts go by email to subscription recipients via Resend (`sendAlertEmail`), not Teams. The Teams incoming webhook is no longer used for alerts.
+- **Email alerts:** operational failure and "due soon" alerts go by email to subscription recipients via Resend (`sendAlertEmail`). Both Microsoft Teams surfaces were retired, so email is the only outbound notification channel.
 
 ## Known external blocker
 

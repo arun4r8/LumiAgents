@@ -67,10 +67,9 @@ interface ChatResponse {
  * The runtime now returns `runs: [{ runId, orchestration }]` so the embedded run
  * card can name itself immediately (an enduser can always read their own run row
  * under RLS, but the joined orchestration row is only readable while that
- * orchestration is active). `runIds` is still populated as a deprecated alias —
- * the Teams path in runtime/src/routes/agents.ts reads it — and is accepted here
- * as the fallback so a mid-deploy dashboard talking to an older runtime, or vice
- * versa, still renders cards.
+ * orchestration is active). `runIds` is still populated as a deprecated alias and
+ * is accepted here as the fallback so a mid-deploy dashboard talking to an older
+ * runtime, or vice versa, still renders cards.
  */
 function runsFrom(data: ChatResponse): RunRef[] {
   if (data.runs?.length) return data.runs;

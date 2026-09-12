@@ -20,9 +20,8 @@ import type { RedactionOutput, RedactionState } from "@/app/(dashboard)/records/
 interface Props {
   startRedaction: (resumeText: string, candidateCode: string) => Promise<string>;
   getRedactionResult: (runId: string) => Promise<RedactionState>;
-  /** From ?run=<id>. Set when arriving from the Teams bot's deep link, which
-   *  started the run elsewhere; the panel picks up that run instead of asking
-   *  for the resume text a second time. */
+  /** From ?run=<id>, for a run that was started elsewhere; the panel picks up
+   *  that run instead of asking for the resume text a second time. */
   initialRunId?: string;
 }
 

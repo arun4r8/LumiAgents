@@ -138,7 +138,7 @@ export interface AgentChatResponse {
   reply: string;
   /**
    * @deprecated Use `runs`. Kept populated (same ids, same order) because the
-   * Teams path in routes/agents.ts and the e2e suite still read it.
+   * dashboard's older-runtime fallback and the e2e suite still read it.
    */
   runIds: string[];
   runs: AgentRunRef[];
@@ -315,7 +315,7 @@ export async function runAgentChat(
 
   const client = anthropicClient(env.ANTHROPIC_API_KEY);
   // `runs` is the real accumulator; `runIds` is its deprecated projection, kept
-  // in lockstep so existing callers (Teams, e2e) keep working unchanged.
+  // in lockstep so existing callers (the dashboard fallback, e2e) keep working.
   const runs: AgentRunRef[] = [];
   const runIds: string[] = [];
 
