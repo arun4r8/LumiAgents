@@ -1,34 +1,43 @@
 /**
  * Per-project SharePoint folders for the BD pipeline (#207).
  *
- * Layout, from the LumiAgents BD Figma:
+ * Layout, as it EXISTS in the Lumiture Labs library:
  *
  *   Shared Documents/General/
  *     Opportunity Tracking/
- *       {solicitation-number} — {short title}/
- *         NOTES/            human space; automation never writes here
- *         SOLICITATION/     received documents: the RFI/RFP, pricing template
- *         RESPONSE/         everything we generate
+ *       {title}/
+ *         Notes/            human space; automation never writes here
+ *         Solicitation/     received documents: the RFI/RFP, pricing template
+ *         Response/         everything we generate
  *
- * Three decisions worth disagreeing with explicitly rather than discovering later:
+ * THE NAMING HERE IS OBSERVED, NOT DESIGNED. An earlier version of this keyed
+ * folders on the solicitation number ("W91QF026QA015 - Some Title") and uppercased
+ * the subfolders, reasoning from the Figma that a number is unique, stable and
+ * short. Then BD created one by hand on 2026-09-10:
  *
- * FOLDER NAMES KEY ON THE SOLICITATION NUMBER. Unique, stable, already on the card,
- * and short. Titles get edited and carry characters SharePoint rejects.
+ *   Opportunity Tracking/Advana and Army Vantage Data Engineering and A365
+ *     Dataverse Foundation Support/{Notes,Response,Solicitation}
  *
- * AUTOMATION WRITES ONLY TO RESPONSE. The Figma puts humans in NOTES. If generated
+ * Title only, title case. Shipping the designed convention would have produced a
+ * SECOND folder beside that one for the same pursuit, which is the worst outcome
+ * available: documents split across two directories that both look right. The
+ * people who use this have answered the question, so this follows them.
+ *
+ * Two decisions that stand:
+ *
+ * AUTOMATION WRITES ONLY TO Response. The Figma puts humans in Notes. If generated
  * content only ever lands in one place, "did a person or a machine write this" is
  * answerable by location -- which matters given the concern about AI-generated
  * output going out under the company's name.
  *
- * PRICING SITS UNDER SOLICITATION, matching the Figma, even though pricing is
- * something we produce rather than receive. That is the open question on #207. This
- * implements the design as drawn; moving it later is a folder rename, not a
- * migration, so following the drawing is the cheaper way to be wrong.
+ * PRICING SITS UNDER Solicitation, matching both the Figma and the folder BD built,
+ * even though pricing is something we produce rather than receive. Moving it later
+ * is a rename, not a migration.
  */
 
 import { graphGet, graphPost, type MsGraphEnv } from "./base";
 
-export const PROJECT_SUBFOLDERS = ["NOTES", "SOLICITATION", "RESPONSE"] as const;
+export const PROJECT_SUBFOLDERS = ["Notes", "Solicitation", "Response"] as const;
 export const OPPORTUNITY_ROOT = "General/Opportunity Tracking";
 
 export interface DriveItem {
@@ -53,15 +62,18 @@ export function sanitiseFolderName(raw: string, maxLength = 90): string {
 }
 
 /**
- * The folder name for an opportunity: solicitation number first because it is the
- * stable half, title after it because that is what a human scans for.
+ * The folder name for an opportunity: its TITLE, matching what BD already creates
+ * by hand. The solicitation number is deliberately not prefixed -- see the header.
+ *
+ * Falls back to the solicitation number when a notice has no title, which happens,
+ * and to a fixed string when it has neither, so this never returns "" or "null".
  */
 export function projectFolderName(opts: { solicitationNumber?: string | null; title?: string | null }): string {
-  const num = opts.solicitationNumber?.trim();
   const title = opts.title?.trim();
-  if (num && title) return sanitiseFolderName(`${num} - ${title}`);
+  if (title) return sanitiseFolderName(title);
+  const num = opts.solicitationNumber?.trim();
   if (num) return sanitiseFolderName(num);
-  return sanitiseFolderName(title ?? "untitled opportunity");
+  return sanitiseFolderName("untitled opportunity");
 }
 
 /** Create a child folder, treating "already exists" as success. */

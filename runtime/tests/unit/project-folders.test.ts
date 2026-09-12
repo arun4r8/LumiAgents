@@ -37,15 +37,28 @@ describe("sanitiseFolderName", () => {
 });
 
 describe("projectFolderName", () => {
-  it("leads with the solicitation number, which is the stable half", () => {
+  it("uses the title, matching the folder BD created by hand", () => {
+    // Observed in the Lumiture Labs library on 2026-09-10:
+    //   Opportunity Tracking/Advana and Army Vantage Data Engineering and A365
+    //     Dataverse Foundation Support/
+    // No solicitation-number prefix. An earlier version prefixed one, which would
+    // have produced a SECOND folder beside that for the same pursuit.
     expect(
-      projectFolderName({ solicitationNumber: "W91QF026QA015", title: "CIO Microsoft Sentinel Implementation FY26" }),
-    ).toBe("W91QF026QA015 - CIO Microsoft Sentinel Implementation FY26");
+      projectFolderName({
+        solicitationNumber: "W91QF026QA015",
+        title: "Advana and Army Vantage Data Engineering and A365 Dataverse Foundation Support",
+      }),
+    ).toBe("Advana and Army Vantage Data Engineering and A365 Dataverse Foundation Support");
   });
 
-  it("copes with a notice that has no solicitation number", () => {
-    // Sources Sought notices frequently have none.
-    expect(projectFolderName({ solicitationNumber: null, title: "Enterprise AI Strategy" })).toBe("Enterprise AI Strategy");
+  it("does not prefix the solicitation number even when there is one", () => {
+    const name = projectFolderName({ solicitationNumber: "W91QF026QA015", title: "Enterprise AI Strategy" });
+    expect(name).toBe("Enterprise AI Strategy");
+    expect(name).not.toContain("W91QF026QA015");
+  });
+
+  it("falls back to the solicitation number when a notice has no title", () => {
+    expect(projectFolderName({ solicitationNumber: "W91QF026QA015", title: null })).toBe("W91QF026QA015");
   });
 
   it("copes with neither, rather than creating a folder called 'null'", () => {
@@ -59,8 +72,12 @@ describe("projectFolderName", () => {
 });
 
 describe("the layout matches the Figma", () => {
-  it("creates exactly the three subfolders the design specifies", () => {
-    expect([...PROJECT_SUBFOLDERS]).toEqual(["NOTES", "SOLICITATION", "RESPONSE"]);
+  it("creates exactly the three subfolders that exist in the library today", () => {
+    // Title case, not uppercase. SharePoint compares names case-insensitively, so
+    // creating "NOTES" beside "Notes" would 409 and resolve to the existing folder
+    // rather than duplicating -- but the display name would then be whichever was
+    // made first, and half the tree would read in a different case to the other half.
+    expect([...PROJECT_SUBFOLDERS]).toEqual(["Notes", "Solicitation", "Response"]);
   });
 
   it("roots under General/Opportunity Tracking, beside the existing folders", () => {
@@ -115,7 +132,7 @@ describe("ensureProjectFolder is idempotent", () => {
     fakeGraph(new Set());
     const r = await ensureProjectFolder(env, "drive1", opp);
     expect(r.created).toHaveLength(4); // project + 3 subfolders
-    expect(r.folderId).toContain("W91QF026QA015");
+    expect(r.folderId).toContain("Sentinel Implementation");
   });
 
   it("re-running creates nothing new and returns the same folder", async () => {

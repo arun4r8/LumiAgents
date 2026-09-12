@@ -30,3 +30,7 @@ supabase/.temp/
 *.log
 npm-debug.log*
 
+
+# Built Teams app package: contains a tenant-specific bot id, rebuild with
+# scripts/build-teams-app.sh rather than committing one.
+teams-app/*.zip

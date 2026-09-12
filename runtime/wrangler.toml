@@ -25,6 +25,12 @@ GOVWIN_DRIVE_ID = "b!kbYuUXk61EKMp1NaXf0WnNjiwP0elTFDgohE8mXziC-1RUzQQJdiRp5GmSP
 # CONTENT_CALENDAR_DRIVE_ID = ""
 # CONTENT_CALENDAR_ITEM_ID  = ""
 # CONTENT_CALENDAR_WORKSHEET = ""
+# Per-project BD folders (#207). The Lumiture Labs default document library, which
+# is the drive behind /sites/LumitureLabs/Shared Documents. Covered by the existing
+# Sites.Selected write grant, so no new permission. A var rather than a secret: a
+# drive id is not sensitive, and keeping it here means staging and production can
+# differ and the value is reviewable in a PR.
+BD_DRIVE_ID = "b!bd50wGHzTkyYU9BpkWz_g1-hQ_-X0qxEsh_XIKKEfTWQqQt1AtB_RrNcEUcYckHK"
 
 # Secrets (set via `wrangler secret put`):
 # SUPABASE_SERVICE_ROLE_KEY
