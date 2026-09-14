@@ -67,10 +67,6 @@ export async function recall(
 
 // Resolve (or create) the conversation for this turn. Returns its id, or null on failure.
 //
-// `conversations.external_id` is left null. It existed to key a thread by its id in an
-// outside chat system, which only ever meant the Teams bot; that bot is gone and the
-// column was null on all 881 rows, so nothing writes it. The column stays in case a
-// future external channel needs it.
 export async function resolveConversation(
   env: Env,
   opts: { agentSlug: string; userId?: string | null; conversationId?: string | null },

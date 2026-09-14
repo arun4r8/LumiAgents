@@ -56,7 +56,7 @@
         "public.icp_profiles": 2,
         "orchestration.approvals": 12,
         "orchestration.document_chunks": 6,
-        "orchestration.conversations": 8,
+        "orchestration.conversations": 7,
         "orchestration.memory_chunks": 9,
         "public.assessments": 5,
         "orchestration.runs": 14,

@@ -88,7 +88,6 @@
     "orchestration.conversations": [
       "agent_slug",
       "created_at",
-      "external_id",
       "id",
       "last_message_at",
       "title",

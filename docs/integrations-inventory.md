@@ -73,8 +73,9 @@ All external systems touched by the orchestration layer. The n8n migration is co
 
 ## Microsoft Teams (retired)
 Both Teams surfaces were removed. The bot (`POST /api/teams/bot`) never worked: the app
-was never installed in the tenant, so `conversations.external_id` is null on all 881 rows
-(#162, #165). The one-way notifications used Office 365 Connectors, which Microsoft
+was never installed in the tenant, so it never completed a single turn in 881 conversations
+(#162, #165). The column that would have linked those threads to Teams,
+`conversations.external_id`, was dropped once that was confirmed. The one-way notifications used Office 365 Connectors, which Microsoft
 retired in the 18-22 May 2026 rollout, so they had been silently dead since. Patch's
 notifications moved to email. Microsoft Graph, SharePoint and Excel are unaffected and
 remain in use.

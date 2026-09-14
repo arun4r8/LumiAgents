@@ -1,0 +1,31 @@
+-- ============================================================================
+-- Drop orchestration.conversations.external_id
+--
+-- The column keyed a chat thread by its id in an outside system, and the only
+-- outside system it ever meant was the Teams bot, retired in #242. It was never
+-- written successfully even then: the bot was never installed in the tenant.
+--
+-- Verified against production before writing this, on 2026-09-14:
+--
+--   conversations = 892 rows | external_id non-null = 0
+--   no view, function or RLS policy references the column
+--
+-- 20260912000002_drop_teams_users.sql kept this column deliberately, on the
+-- grounds that it was generic and cheap to keep. That was a reasonable default
+-- for a change scoped to Teams; this is the follow-up tidy-up, decided
+-- separately. With no writer, a nullable key column is only ever a question for
+-- the next reader ("what fills this?") whose answer is "nothing".
+--
+-- Its partial unique index, conversations_external_uidx on
+-- (agent_slug, external_id) WHERE external_id IS NOT NULL, goes with it: Postgres
+-- drops an index when a column it covers is dropped. It is named here so the
+-- rollback can restore it.
+--
+-- Rollback (no data is lost -- every value was null):
+--   ALTER TABLE orchestration.conversations ADD COLUMN external_id text;
+--   CREATE UNIQUE INDEX conversations_external_uidx
+--     ON orchestration.conversations (agent_slug, external_id)
+--     WHERE external_id IS NOT NULL;
+-- ============================================================================
+
+ALTER TABLE orchestration.conversations DROP COLUMN IF EXISTS external_id;

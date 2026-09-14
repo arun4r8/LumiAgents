@@ -88,7 +88,7 @@ Domain tables (the actual business data the orchestrations operate on) live in t
 
 All in `orchestration`:
 
-- `conversations`: one per (agent, user) thread; `agent_slug`, `user_id`, `external_id` (an outside system's thread id; unused since the Teams bot was retired, null on every row), `title`, timestamps, `last_message_at`.
+- `conversations`: one per (agent, user) thread; `agent_slug`, `user_id`, `title`, timestamps, `last_message_at`.
 - `messages`: transcript rows (`conversation_id` FK, `role` (`user`|`assistant`), `content`).
 - `memory_chunks`: semantic recall (`user_id`, `agent_slug`, `conversation_id`, `source_message_id`, `kind` (`turn`|`summary`|`fact`), `content`, `embedding vector(1024)`). Recalled via `orchestration.match_memory(query_embedding, p_user_id, p_agent_slug, …)`, scoped to one (user, agent) inside the SECURITY DEFINER function.
 

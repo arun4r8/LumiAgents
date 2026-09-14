@@ -11,8 +11,6 @@ interface Props {
   resumeResults: Record<string, unknown>[];
   startRedaction: (resumeText: string, candidateCode: string) => Promise<string>;
   getRedactionResult: (runId: string) => Promise<RedactionState>;
-  /** From ?run=<id>: resume a run that was started elsewhere. */
-  initialRunId?: string;
 }
 
 /**
@@ -29,7 +27,6 @@ export function TalentClient({
   resumeResults,
   startRedaction,
   getRedactionResult,
-  initialRunId,
 }: Props) {
   const empty =
     candidates.length === 0 &&
@@ -49,7 +46,6 @@ export function TalentClient({
       <BlindResumePanel
         startRedaction={startRedaction}
         getRedactionResult={getRedactionResult}
-        initialRunId={initialRunId}
       />
 
       {empty ? (

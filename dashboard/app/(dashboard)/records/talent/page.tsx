@@ -75,17 +75,7 @@ async function getToken(): Promise<string> {
  * Blind resume export (#156) sits above them, because preparing a client-safe
  * copy of a resume is a thing you do to a candidate rather than a report on one.
  */
-export default async function TalentPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // ?run=<id> means the run already started elsewhere, so the panel resumes it
-  // rather than asking for the text again. The Teams bot was what generated those
-  // links; nothing does now, and the parameter is kept as a plain resume-by-id
-  // entry point for a run id pasted or linked by hand.
-  const sp = await searchParams;
-  const runParam = typeof sp.run === "string" ? sp.run : undefined;
+export default async function TalentPage() {
   const supabase = await createClient();
 
   const [candidatesRes, staffRequestsRes, resumeJobsRes, resumeResultsRes] = await Promise.all([
@@ -197,7 +187,6 @@ export default async function TalentPage({
 
   return (
     <TalentClient
-      initialRunId={runParam}
       candidates={(candidatesRes.data ?? []) as Record<string, unknown>[]}
       staffRequests={(staffRequestsRes.data ?? []) as Record<string, unknown>[]}
       resumeJobs={(resumeJobsRes.data ?? []) as Record<string, unknown>[]}

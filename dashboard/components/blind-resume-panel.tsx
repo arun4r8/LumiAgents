@@ -20,9 +20,6 @@ import type { RedactionOutput, RedactionState } from "@/app/(dashboard)/records/
 interface Props {
   startRedaction: (resumeText: string, candidateCode: string) => Promise<string>;
   getRedactionResult: (runId: string) => Promise<RedactionState>;
-  /** From ?run=<id>, for a run that was started elsewhere; the panel picks up
-   *  that run instead of asking for the resume text a second time. */
-  initialRunId?: string;
 }
 
 const POLL_MS = 1500;
@@ -41,11 +38,11 @@ function messageOf(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-export function BlindResumePanel({ startRedaction, getRedactionResult, initialRunId }: Props) {
+export function BlindResumePanel({ startRedaction, getRedactionResult }: Props) {
   const [resumeText, setResumeText] = useState("");
   const [candidateCode, setCandidateCode] = useState("");
-  const [phase, setPhase] = useState<"idle" | "running" | "done">(initialRunId ? "running" : "idle");
-  const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
+  const [phase, setPhase] = useState<"idle" | "running" | "done">("idle");
+  const [runId, setRunId] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState("missing");
   const [result, setResult] = useState<RedactionOutput | null>(null);
   /** The code the run actually used. The input can be edited afterwards; the
