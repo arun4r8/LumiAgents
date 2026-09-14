@@ -73,12 +73,22 @@ export async function RfiDraftsTab() {
     .limit(100);
 
   // SAM opportunities you can draft a response for (RFIs/Sources Sought come from SAM).
+  //
+  // OPEN ones only. This used to take the 60 earliest deadlines with no floor, and
+  // with 277 opportunities in the table those 60 had all closed -- the list ran from
+  // September 2025 to early August 2026 and stopped there. Every live notice,
+  // including the SSA RFI that is the pipeline's practice run (#196, due
+  // 2026-09-28), was unselectable, so the one screen for drafting a response could
+  // only draft responses nobody can submit. Undated notices are kept, last: RFIs
+  // often carry no response date, and that is not the same as closed.
+  const today = new Date().toISOString().slice(0, 10);
   const { data: opps } = await supabase
     .from("opportunities")
     .select("sam_notice_id,title,notice_type,agency,response_deadline")
     .eq("source", "sam_gov")
+    .or(`response_deadline.gte.${today},response_deadline.is.null`)
     .order("response_deadline", { ascending: true, nullsFirst: false })
-    .limit(60);
+    .limit(100);
 
   // Trigger a draft: fires beady/rfi-draft (async); it lands in rfi_drafts.
   async function generateDraft(formData: FormData) {
