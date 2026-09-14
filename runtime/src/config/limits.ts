@@ -33,3 +33,15 @@ export const SUBREQUESTS_PER_STEP = 2;
 
 /** What one `defineTool` call costs: createToolCall + updateToolCall. */
 export const SUBREQUESTS_PER_TOOL_CALL = 2;
+
+/**
+ * The largest value one Workflow step may return. Step results are persisted so a
+ * replay can skip the work, and Cloudflare refuses to persist more than 1 MiB:
+ * "Step ... output is too large. Maximum allowed size is 1MiB."
+ *
+ * Like the subrequest ceiling, this kills the run where it stands. beady/govwin-import
+ * hit it on its first real run by returning four whole GovWin exports -- thousands
+ * of rows, each with a paragraph of summary -- from the step that read them. The
+ * data is fine in memory; it is only the RETURN that is persisted and capped.
+ */
+export const WORKFLOW_STEP_OUTPUT_LIMIT_BYTES = 1024 * 1024;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOrchestration, step, llm_extract } from "@/runtime";
 import { sbHeaders } from "@/runtime/utils/supabase";
+import { WORKFLOW_STEP_OUTPUT_LIMIT_BYTES } from "@/runtime/config/limits";
 import { fnv1a } from "@/runtime/utils/hash";
 import { loadContentHashLedger, contentChanged, upsertContentHashLedger } from "@/runtime/utils/scored-sweep";
 import { readWorksheetGrid, listWorkbooksInFolder } from "../../../integrations/msgraph/workbook";
@@ -98,7 +99,8 @@ export const MAX_WORKBOOKS = 5;
 export function rowsToScore(
   workbooks: Array<{ name: string; webUrl: string | null; grid: string[][] }>,
   opts: { naicsCodes: string[]; horizonMonths: number; now: Date },
-): { mapped: ImportRow[]; selected: ImportRow[] } {
+  isFresh: (row: ImportRow) => boolean = () => true,
+): { mapped: ImportRow[]; eligible: number; selected: ImportRow[] } {
   const mapped: ImportRow[] = [];
   const seen = new Set<string>();
 
@@ -116,11 +118,19 @@ export function rowsToScore(
     }
   }
 
+  const inScope = selectForScoring(mapped, opts) as ImportRow[];
+
+  // Already-scored rows are removed BEFORE the cap, not after. The other order
+  // starves: with an export of thousands of in-scope rows, the first
+  // MAX_ROWS_TO_SCORE are the same every week, get scored once, and are then
+  // filtered out after the cut -- so every later run scores nothing and the rows
+  // past the cap are never reached at all.
+  //
   // The cap is here rather than at the call site so it cannot be forgotten by a
   // second caller: it is the only thing standing between a 3,000-row export and
   // 50 scoring batches against a 50-subrequest ceiling.
-  const selected = selectForScoring(mapped, opts).slice(0, MAX_ROWS_TO_SCORE) as ImportRow[];
-  return { mapped, selected };
+  const selected = inScope.filter(isFresh).slice(0, MAX_ROWS_TO_SCORE);
+  return { mapped, eligible: inScope.length, selected };
 }
 
 /** A mapped row plus which export it came from -- the only provenance there is. */
@@ -129,7 +139,79 @@ export interface ImportRow extends GovWinRow {
   sourceUrl: string | null;
 }
 
-function govwinContentHash(r: GovWinRow): string {
+/**
+ * How much of a summary survives into the scoring set. The prompt only ever used
+ * the first 2,000 characters; the step that hands rows on is persisted and capped
+ * at 1 MiB, so 180 rows must fit with room to spare even when a summary is all
+ * characters JSON has to escape. See WORKFLOW_STEP_OUTPUT_LIMIT_BYTES.
+ */
+export const SUMMARY_CHARS = 1_500;
+/** Every other text cell. GovWin's are short; a hand-edited one need not be. */
+export const FIELD_CHARS = 300;
+
+/** A row as it leaves the read step: clipped to fit, carrying its full-text hash. */
+export interface ScoringRow extends ImportRow {
+  contentHash: string;
+}
+
+/**
+ * Clip a row for the step boundary, hashing it FIRST.
+ *
+ * The hash is the ledger's "has this changed" check, so it must be taken over the
+ * full row. Hashing the clipped copy would still be stable week to week -- but a
+ * summary edited only past character 1,500 would never be noticed, and a later
+ * change to these limits would silently re-score the whole export.
+ */
+export function toScoringRow(r: ImportRow): ScoringRow {
+  const clip = (v: string | null, n: number) => (v === null ? null : v.slice(0, n));
+  return {
+    ...r,
+    contentHash: govwinContentHash(r),
+    title: r.title.slice(0, FIELD_CHARS),
+    status: clip(r.status, FIELD_CHARS),
+    agency: clip(r.agency, FIELD_CHARS),
+    subAgency: clip(r.subAgency, FIELD_CHARS),
+    solicitationNumber: clip(r.solicitationNumber, FIELD_CHARS),
+    summary: clip(r.summary, SUMMARY_CHARS),
+    setAside: clip(r.setAside, FIELD_CHARS),
+    incumbent: clip(r.incumbent, FIELD_CHARS),
+    vehicle: clip(r.vehicle, FIELD_CHARS),
+    sourceFile: r.sourceFile.slice(0, FIELD_CHARS),
+  };
+}
+
+/**
+ * The share of the 1 MiB step ceiling the scoring rows may use. The rest is the
+ * step's other return fields and Cloudflare's own envelope.
+ */
+export const STEP_ROWS_BUDGET_BYTES = Math.floor(WORKFLOW_STEP_OUTPUT_LIMIT_BYTES * 0.75);
+
+/**
+ * Keep rows, in order, until the next one would push the serialised step output
+ * past the budget. The rest are deferred, not dropped: they are not in the ledger,
+ * so the next run finds them fresh and takes them first.
+ *
+ * Clipping the fields (toScoringRow) makes 180 rows small in practice, and that is
+ * not a guarantee. JSON escapes quotes, backslashes and newlines to two bytes and
+ * non-ASCII to up to three, so a summary of 1,500 characters can serialise to 4,500
+ * bytes. This measures the real thing rather than trusting a character count.
+ */
+export function fitToStepBudget<T>(rows: T[], maxBytes: number = STEP_ROWS_BUDGET_BYTES): { kept: T[]; deferred: number } {
+  const enc = new TextEncoder();
+  let used = 2; // the array brackets
+  const kept: T[] = [];
+  for (const r of rows) {
+    const size = enc.encode(JSON.stringify(r)).length + 1; // + separator
+    // Stop at the first row that does not fit, rather than skipping it for a
+    // smaller one: order is what makes the deferral deterministic run to run.
+    if (used + size > maxBytes) break;
+    used += size;
+    kept.push(r);
+  }
+  return { kept, deferred: rows.length - kept.length };
+}
+
+export function govwinContentHash(r: GovWinRow): string {
   // The fields a re-score would actually depend on. Deliberately not the whole row:
   // GovWin rewrites its own tracking columns constantly, and hashing those would
   // re-score the entire export every week.
@@ -169,6 +251,7 @@ export const outputSchema = z.object({
   mapped: z.number().describe("Of those, distinct rows with both an Opp ID and a Program Name -- the rest are spacers, footers, and the same pursuit appearing in two exports."),
   selected: z.number().describe("Rows inside the NAICS filter and the horizon."),
   scored: z.number().describe("Of those, the ones not already scored with unchanged content."),
+  deferred: z.number().default(0).describe("Unscored rows held for the next run because this run's step output was full. Not lost: they are not in the ledger, so the next run takes them first."),
   shortlisted: z.number().describe("Rows at or above minScore, upserted into opportunities."),
   scoreDistribution: z.record(z.number()).optional().describe("Count at each fit score 1-10, before the minScore cut -- the sub-floor scores exist nowhere else."),
   totalValueUsd: z.number().nullable().describe("Summed contract value of the shortlist, in dollars. The number SAM.gov has never been able to give us."),
@@ -201,7 +284,7 @@ export default defineOrchestration({
   },
 
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
-    const empty = { workbooks: [] as string[], rows: 0, mapped: 0, selected: 0, scored: 0, shortlisted: 0, totalValueUsd: null };
+    const empty = { workbooks: [] as string[], rows: 0, mapped: 0, selected: 0, scored: 0, deferred: 0, shortlisted: 0, totalValueUsd: null };
 
     const driveId = input.driveId ?? ctx.env.BD_DRIVE_ID;
     if (!driveId || !ctx.env.MSGRAPH_TENANT_ID || !ctx.env.MSGRAPH_CLIENT_ID || !ctx.env.MSGRAPH_CLIENT_SECRET) {
@@ -219,8 +302,22 @@ export default defineOrchestration({
     }
 
     const opened = files.slice(0, MAX_WORKBOOKS);
-    const workbooks = await step(ctx, "read-exports", async () => {
-      const out: Array<{ name: string; webUrl: string | null; grid: string[][] }> = [];
+    const externalId = (r: GovWinRow) => `govwin_${r.externalId}`;
+
+    // Read, map, dedupe, filter and cap in ONE step, and return only the rows that
+    // will be scored. The grids are thousands of rows with a paragraph each; they
+    // are fine in memory and far over the 1 MiB a step may persist, which is what
+    // killed the first production run. Only this step's RETURN is persisted.
+    const read = await step(ctx, "read-and-select", async () => {
+      // Loaded here, not after, so already-scored rows can be dropped before the cap.
+      const ledger = await loadContentHashLedger(ctx, {
+        table: "scored_notices",
+        keyColumn: "notice_id",
+        profile: "orchestration",
+        warnLabel: "[govwin] ledger load",
+      });
+
+      const workbooks: Array<{ name: string; webUrl: string | null; grid: string[][] }> = [];
       for (const f of opened) {
         const grid = await readWorksheetGrid(ctx.env, {
           driveId,
@@ -230,44 +327,43 @@ export default defineOrchestration({
           // "first sheet".
           ...(input.worksheet ? { worksheet: input.worksheet } : {}),
         });
-        out.push({ name: f.name, webUrl: f.webUrl, grid });
+        workbooks.push({ name: f.name, webUrl: f.webUrl, grid });
       }
-      return out;
+
+      const { mapped, eligible, selected } = rowsToScore(
+        workbooks,
+        { naicsCodes: input.naicsCodes, horizonMonths: input.horizonMonths, now: new Date() },
+        (r) => contentChanged(ledger, externalId(r), govwinContentHash(r)),
+      );
+
+      const { kept, deferred } = fitToStepBudget(selected.map(toScoringRow));
+      return {
+        dataRows: workbooks.reduce((n, w) => n + Math.max(0, w.grid.length - 1), 0),
+        mapped: mapped.length,
+        eligible,
+        deferred,
+        toScore: kept,
+      };
     });
 
-    const dataRows = workbooks.reduce((n, w) => n + Math.max(0, w.grid.length - 1), 0);
+    const workbookNames = opened.map((f) => f.name);
+    const dataRows = read.dataRows;
 
-    const { mapped, selected } = rowsToScore(workbooks, {
-      naicsCodes: input.naicsCodes,
-      horizonMonths: input.horizonMonths,
-      now: new Date(),
-    });
-    if (mapped.length === 0) {
+    if (read.mapped === 0) {
       // Every sheet was empty, or none of them was a GovWin export: a workbook with
       // no "Opp ID" column maps every row to null. Say so rather than reporting a
       // clean run over nothing.
-      return { ...empty, workbooks: opened.map((f) => f.name), rows: dataRows, skipped: `No GovWin rows in ${opened.length} workbook(s)` };
+      return { ...empty, workbooks: workbookNames, rows: dataRows, skipped: `No GovWin rows in ${opened.length} workbook(s)` };
     }
 
-    const externalId = (r: GovWinRow) => `govwin_${r.externalId}`;
-
-    // Dedupe against everything ever scored, by content hash, so a weekly run on a
-    // mostly-unchanged export costs one LLM call or none.
-    const ledger = await loadContentHashLedger(ctx, {
-      table: "scored_notices",
-      keyColumn: "notice_id",
-      profile: "orchestration",
-      warnLabel: "[govwin] ledger load",
-    });
-    const toScore = selected.filter((r) => contentChanged(ledger, externalId(r), govwinContentHash(r)));
-
+    const toScore = read.toScore;
     if (toScore.length === 0) {
       // Nothing changed since the last run: the export is refreshed by hand, so
       // this is the expected outcome most weeks and costs no LLM call at all.
-      return { ...empty, workbooks: opened.map((f) => f.name), rows: dataRows, mapped: mapped.length, selected: selected.length, skipped: null };
+      return { ...empty, workbooks: workbookNames, rows: dataRows, mapped: read.mapped, selected: read.eligible, skipped: null };
     }
 
-    const batches: ImportRow[][] = [];
+    const batches: ScoringRow[][] = [];
     for (let i = 0; i < toScore.length; i += SCORE_BATCH_SIZE) {
       batches.push(toScore.slice(i, i + SCORE_BATCH_SIZE));
     }
@@ -324,7 +420,7 @@ and costs the batch a great deal.
             vehicle: r.vehicle,
             status: r.status,
             deadline: r.responseDeadline,
-            summary: r.summary?.slice(0, 2_000) ?? null,
+            summary: r.summary,
           })),
         },
         schema: scoreSchema,
@@ -352,7 +448,7 @@ and costs the batch a great deal.
             source: "govwin",
             fit_score: s?.fitScore ?? null,
             recommendation: s ? recommendationFor(s.fitScore) : "pass",
-            content_hash: govwinContentHash(r),
+            content_hash: r.contentHash,
             scored_at: scoredAt,
           };
         }),
@@ -367,7 +463,7 @@ and costs the batch a great deal.
 
     const shortlist = toScore
       .map((r) => ({ row: r, score: scoreMap.get(externalId(r)) }))
-      .filter((x): x is { row: ImportRow; score: NonNullable<typeof x.score> } =>
+      .filter((x): x is { row: ScoringRow; score: NonNullable<typeof x.score> } =>
         x.score !== undefined && x.score.fitScore >= input.minScore,
       );
 
@@ -412,11 +508,12 @@ and costs the batch a great deal.
     const values = shortlist.map((x) => x.row.estimatedValueUsd).filter((v): v is number => v !== null);
 
     return {
-      workbooks: opened.map((f) => f.name),
+      workbooks: workbookNames,
       rows: dataRows,
-      mapped: mapped.length,
-      selected: selected.length,
+      mapped: read.mapped,
+      selected: read.eligible,
       scored: scoredRows.length,
+      deferred: read.deferred,
       shortlisted: shortlist.length,
       scoreDistribution,
       totalValueUsd: values.length > 0 ? values.reduce((a, b) => a + b, 0) : null,

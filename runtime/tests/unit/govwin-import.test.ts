@@ -264,7 +264,7 @@ describe("rowsToScore (the orchestration's own path from sheets to scoring set)"
 
   it("survives header-only and empty sheets among real ones", async () => {
     const { rowsToScore } = await load();
-    expect(rowsToScore([], opts)).toEqual({ mapped: [], selected: [] });
+    expect(rowsToScore([], opts)).toEqual({ mapped: [], eligible: 0, selected: [] });
     const { mapped } = rowsToScore(
       [book("Empty.xlsx", []), { name: "Blank.xlsx", webUrl: null, grid: [] }, book("VA.xlsx", [rowWith(SOON)])],
       opts,
@@ -278,5 +278,106 @@ describe("rowsToScore (the orchestration's own path from sheets to scoring set)"
     // nothing rather than contributing garbage rows with empty ids.
     const foreign = { name: "Budget.xlsx", webUrl: null, grid: [["Month", "Spend"], ["January", "12000"]] };
     expect(rowsToScore([foreign], opts).mapped).toHaveLength(0);
+  });
+});
+
+/**
+ * The first production run died on its read step: "Step output is too large.
+ * Maximum allowed size is 1MiB." Four real exports -- thousands of rows, a paragraph
+ * each -- were returned whole from the step that read them. Steps persist their
+ * return value for replay, and Cloudflare refuses to persist more than 1 MiB.
+ *
+ * Fixing that exposed a quieter bug in the same place: the ledger check ran AFTER
+ * the scoring cap, so an export bigger than the cap would score its first 180 rows
+ * once and then nothing, every week, for ever.
+ */
+describe("the read step's return: what is scored, and whether it fits", () => {
+  const now = new Date("2026-09-12T00:00:00Z");
+  const opts = { naicsCodes: ["541512", "541511"], horizonMonths: 18, now };
+  const load = () => import("../../../orchestrations/beady/govwin-import/definition");
+  const limits = () => import("../../src/config/limits");
+
+  function rowWith(overrides: Record<string, string>): string[] {
+    const r = [...EDW];
+    for (const [header, value] of Object.entries(overrides)) r[HEADER.indexOf(header)] = value;
+    return r;
+  }
+  const many = (n: number, extra: Record<string, string> = {}) =>
+    Array.from({ length: n }, (_, i) => rowWith({ "Opp ID": String(100000 + i), "Response Date": "11/14/2026", ...extra }));
+  const book = (rows: string[][]) => ({ name: "Super Swath.xlsx", webUrl: null, grid: [HEADER, ...rows] });
+
+  it("drops already-scored rows BEFORE the cap, so a big export is worked through, not starved", async () => {
+    const { rowsToScore, MAX_ROWS_TO_SCORE } = await load();
+    const rows = many(MAX_ROWS_TO_SCORE + 120);
+    // Last week's run scored the first MAX_ROWS_TO_SCORE.
+    const scored = new Set(Array.from({ length: MAX_ROWS_TO_SCORE }, (_, i) => String(100000 + i)));
+    const { selected, eligible } = rowsToScore([book(rows)], opts, (r) => !scored.has(r.externalId));
+
+    // Cap-then-filter would return 0 here, this week and every week after.
+    expect(selected).toHaveLength(120);
+    expect(selected[0]!.externalId).toBe(String(100000 + MAX_ROWS_TO_SCORE));
+    // `eligible` still reports the whole in-scope set, so the funnel stays honest.
+    expect(eligible).toBe(MAX_ROWS_TO_SCORE + 120);
+  });
+
+  it("hashes the FULL row, so an edit past the clipped summary is still noticed", async () => {
+    const { toScoringRow, govwinContentHash, SUMMARY_CHARS } = await load();
+    const { rowsToScore } = await load();
+    const long = "A".repeat(SUMMARY_CHARS + 500);
+    const [a] = rowsToScore([book([rowWith({ Summary: long + "x", "Response Date": "11/14/2026" })])], opts).selected;
+    const [b] = rowsToScore([book([rowWith({ Summary: long + "y", "Response Date": "11/14/2026" })])], opts).selected;
+
+    const sa = toScoringRow(a!);
+    const sb = toScoringRow(b!);
+    // Identical once clipped...
+    expect(sa.summary).toBe(sb.summary);
+    expect(sa.summary).toHaveLength(SUMMARY_CHARS);
+    // ...and still different where it matters.
+    expect(sa.contentHash).not.toBe(sb.contentHash);
+    expect(sa.contentHash).toBe(govwinContentHash(a!));
+  });
+
+  it("keeps a full scoring set of realistic rows", async () => {
+    const { rowsToScore, toScoringRow, fitToStepBudget, MAX_ROWS_TO_SCORE } = await load();
+    const realistic = "The agency seeks data engineering and analytics support. ".repeat(40); // ~2,300 chars
+    const { selected } = rowsToScore([book(many(MAX_ROWS_TO_SCORE, { Summary: realistic }))], opts);
+    const { kept, deferred } = fitToStepBudget(selected.map(toScoringRow));
+    expect(kept).toHaveLength(MAX_ROWS_TO_SCORE);
+    expect(deferred).toBe(0);
+  });
+
+  it("stays under the 1 MiB step ceiling even when every cell is worst-case JSON", async () => {
+    const { rowsToScore, toScoringRow, fitToStepBudget, MAX_ROWS_TO_SCORE } = await load();
+    const { WORKFLOW_STEP_OUTPUT_LIMIT_BYTES } = await limits();
+    // A quote serialises to two bytes and "€" to three: a 1,500-character summary
+    // of either is several times its character count.
+    const hostile = '"€\\'.repeat(2_000);
+    const { selected } = rowsToScore(
+      [book(many(MAX_ROWS_TO_SCORE, {
+        Summary: hostile, "Program Name": hostile, "Incumbent/Contractor": hostile,
+        "Contract Vehicle": hostile, "Organization Level 1": hostile, "Organization Level 2": hostile,
+      }))],
+      opts,
+    );
+    const { kept, deferred } = fitToStepBudget(selected.map(toScoringRow));
+
+    const bytes = new TextEncoder().encode(JSON.stringify(kept)).length;
+    expect(bytes).toBeLessThan(WORKFLOW_STEP_OUTPUT_LIMIT_BYTES);
+    // Something had to give, and it is deferred -- not silently lost.
+    expect(deferred).toBeGreaterThan(0);
+    expect(kept.length + deferred).toBe(MAX_ROWS_TO_SCORE);
+  });
+
+  it("defers in order, so the same rows are held back run to run", async () => {
+    const { fitToStepBudget } = await load();
+    const rows = [{ v: "a".repeat(40) }, { v: "b".repeat(40) }, { v: "c" }];
+    // Brackets (2) + the first row (48 + separator) = 51 bytes. At 62, the second
+    // row does not fit, and the small third one (9 + separator) WOULD -- so this
+    // budget is exactly the one that tells "stop at the first misfit" apart from
+    // "skip it and keep going". At 60 both behaviours give the same answer, which
+    // is how the first version of this test let the skip mutation through.
+    const { kept, deferred } = fitToStepBudget(rows, 62);
+    expect(kept.map((r) => r.v[0])).toEqual(["a"]);
+    expect(deferred).toBe(2);
   });
 });
