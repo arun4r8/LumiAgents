@@ -12,14 +12,13 @@ import type { Env } from "@/runtime";
 // Email is the path that already reaches people (the digests and the watchdog use it),
 // so the notifications move there rather than picking up a new dependency.
 //
-// Recipients are the people subscribed to the active digests, plus anything in
-// ALERT_EMAIL. sendAlertEmail degrades to { sent: false } when there is no recipient
+// Recipients are the operational alert list (#233), plus anything in ALERT_EMAIL. sendAlertEmail degrades to { sent: false } when there is no recipient
 // or no RESEND_API_KEY, so a notification can never fail a run.
 async function notifyOps(
   env: Env,
   opts: { subject: string; text: string },
 ): Promise<{ sent: boolean; recipients: number }> {
-  const to = await subscriptionRecipients(env);
+  const to = await subscriptionRecipients(env, "alert");
   const result = await sendAlertEmail(env, {
     to,
     subject: opts.subject,

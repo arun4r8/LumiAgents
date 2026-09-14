@@ -139,7 +139,7 @@ Rules:
       // { sent: false } instead of throwing when there is nobody to tell.
       if (input.notify) {
         await step(ctx, "notify-ops", async () => {
-          const to = await subscriptionRecipients(ctx.env);
+          const to = await subscriptionRecipients(ctx.env, "alert");
           const result = await sendAlertEmail(ctx.env, {
             to,
             subject: `🎫 New ticket ${ticket.issueKey}: ${ticketFields.summary}`,

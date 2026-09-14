@@ -308,9 +308,9 @@ export default defineOrchestration({
       const sbirNote = sbirError ? "\n\n(SBIR is separately unavailable: known external issue, not alerting on it.)" : "";
       const text = `Beady opportunity-sweep health alert\n\n- ${issues.join("\n- ")}\n\nThis run had SAM: ${samCount}, SBIR: ${sbirCount}.${authHint}${sbirNote}`;
 
-      // Alert the people subscribed to the opportunity digest; they're the ones a
-      // broken sweep affects.
-      const to = await subscriptionRecipients(ctx.env, "opportunity");
+      // A broken sweep is fixed by someone with platform access, not by the people
+      // who read its digest (#233). They find out the usual way: the digest is thin.
+      const to = await subscriptionRecipients(ctx.env, "alert");
       const result = await sendAlertEmail(ctx.env, { to, subject: "⚠️ Beady sweep health alert", text, from: senderFor(ctx.env, "beady") });
       return { alerted: result.sent, recipients: result.recipients, reason: result.error, issues };
     });

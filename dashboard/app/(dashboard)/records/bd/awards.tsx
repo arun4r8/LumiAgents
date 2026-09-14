@@ -43,6 +43,8 @@ export async function AwardsTab() {
     .schema("orchestration")
     .from("subscriptions")
     .select("*")
+    // Digests only: the 'alert' row is not editable here (#233).
+    .in("kind", ["opportunity", "award"])
     .order("created_at", { ascending: true });
 
   // Dismiss = remove from the radar. Safe: the award_scored ledger keeps the sweep

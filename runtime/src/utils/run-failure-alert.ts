@@ -168,7 +168,8 @@ function buildFailureEmail(params: {
 /** Returns whether the email actually went out. Never throws. */
 async function emailAlert(env: Env, orchestrationName: string, subject: string, text: string): Promise<boolean> {
   try {
-    const to = await subscriptionRecipients(env);
+    // A failed run is an operational page, not business news (#233).
+    const to = await subscriptionRecipients(env, "alert");
     const result = await sendAlertEmail(env, { to, subject, text, from: senderFor(env, agentSlug(orchestrationName)) });
     if (!result.sent) console.warn(`[run-alert] ${orchestrationName}: not emailed (${result.error ?? "unknown"})`);
     return result.sent;

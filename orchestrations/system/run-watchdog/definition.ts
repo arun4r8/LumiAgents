@@ -254,7 +254,7 @@ export default defineOrchestration({
         `LumiAgents watchdog found ${findings.length} thing(s) that would not have alerted on their own.\n\n` +
         `${lines.join("\n\n")}\n\n` +
         `Checked ${counts.runs} recent runs and ${counts.schedules} schedules.`;
-      const to = await subscriptionRecipients(ctx.env);
+      const to = await subscriptionRecipients(ctx.env, "alert");
       const result = await sendAlertEmail(ctx.env, {
         to,
         subject: `⚠️ LumiAgents watchdog: ${findings.length} silent failure(s)`,

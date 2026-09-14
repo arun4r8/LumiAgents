@@ -45,7 +45,10 @@ export default async function SettingsPage({
     // 308s here. Endusers never see the tab, so only fetch for ops.
     isOps
       ? supabase.schema("orchestration").from("subscriptions")
-          .select("*").order("created_at", { ascending: true })
+          // Digests only. The 'alert' row (#233) is the operational page list; this
+          // editor's save path maps any unknown kind to "opportunity", so showing it
+          // here would let one click turn the alert list into a GovCon digest.
+          .select("*").in("kind", ["opportunity", "award"]).order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as Subscription[] }),
   ]);
 
