@@ -340,10 +340,9 @@ CREATE TABLE IF NOT EXISTS public.staff_requests (
 -- in some cases `GRANT SELECT ... TO analyst_ro` (20260527000001). No migration
 -- reads or writes a single column of any of them.
 --
--- Their real n8n-era column lists are NOT recoverable from this repo, so each is
--- created with an `id` primary key and a `created_at` and nothing else. If you
--- ever need the real shapes, they must come from a production dump -- and at
--- that point they should be captured in a proper migration instead.
+-- Each is created here with an `id` primary key and a `created_at` only. Their
+-- real n8n-era columns were recovered from a production dump and are added in
+-- section 8, below, once every table exists.
 CREATE TABLE IF NOT EXISTS public.budget_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at timestamptz NOT NULL DEFAULT now()
@@ -424,6 +423,274 @@ CREATE TABLE IF NOT EXISTS public.past_performance_vt (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+
+
+-- ============================================================================
+-- 8. Legacy columns recovered from production  (#180)
+-- ============================================================================
+-- Sections 3-7 create the n8n-era tables as the MINIMUM the migration chain
+-- needs, because their full shapes were "not recoverable from this repo". They
+-- were recoverable from production. A rebuild without them was missing 174
+-- columns across 20 tables -- including opportunities.evaluation_basis,
+-- num_past_performances_required and extracted_facts, which the GovCon
+-- assessment reads and writes, so a rebuilt database could not run it.
+--
+-- Generated from information_schema.columns in production (2026-09-14), minus
+-- every column a rebuild already has. That subtraction is what makes these safe
+-- to add here, BEFORE the migrations:
+--   - a column present in production but absent from a rebuild is not added by
+--     any migration (or the rebuild would have it), so no migration's
+--     `ADD COLUMN IF NOT EXISTS ... <inline constraint>` is turned into a no-op;
+--   - nor is it dropped or renamed away by one (or production would lack it).
+-- They live in their own section, rather than folded into the CREATE TABLEs
+-- above, so the reasoning in those sections about what each migration needs
+-- stays true and readable.
+--
+-- Carried: type, and NOT NULL where production has a default to satisfy it.
+-- Not carried, deliberately:
+--   - defaults that reference objects the bootstrap does not create (sequences);
+--   - NOT NULL with no default, which would break the migrations that seed rows;
+--   - foreign keys and CHECK constraints, which information_schema.columns does
+--     not describe. This closes the COLUMN gap; constraint parity is separate.
+-- To regenerate: diff production's information_schema.columns against a
+-- `scripts/verify-db-rebuild.sh --keep` container for the tables above.
+--
+-- NOT NULL omitted (no default to satisfy it during replay):
+--   assessments.result
+--   budget_lines.contract_id
+--   budget_lines.budgeted
+--   company_profiles.company_name
+--   company_profiles.profile
+--   contracts.contract_number
+--   contracts.client_name
+--   employees.full_name
+--   indirect_rates.fiscal_year
+--   indirect_rates.rate_type
+--   indirect_rates.rate_pct
+--   invoices.invoice_number
+--   invoices.client_name
+--   invoices.amount
+--   invoices.invoice_date
+--   labor_records.work_date
+--   labor_records.hours
+--   prompt_bank.dimension
+--   prompt_bank.label
+--   prompt_bank.prompt_template
+--   resume_queue.payload
+--   staff_requests.subject
+-- ============================================================================
+
+ALTER TABLE public.assessments
+  ADD COLUMN IF NOT EXISTS company_profile_id uuid,
+  ADD COLUMN IF NOT EXISTS dimension_scores jsonb,
+  ADD COLUMN IF NOT EXISTS weights jsonb DEFAULT '{"icp_fit": 0.25, "incumbent": 0.15, "competitive": 0.10, "requirements": 0.20, "past_performance": 0.30}'::jsonb,
+  ADD COLUMN IF NOT EXISTS result jsonb,
+  ADD COLUMN IF NOT EXISTS executive_memo text;
+
+ALTER TABLE public.budget_lines
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+  ADD COLUMN IF NOT EXISTS contract_id uuid,
+  ADD COLUMN IF NOT EXISTS clin text,
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS category text,
+  ADD COLUMN IF NOT EXISTS fiscal_year integer,
+  ADD COLUMN IF NOT EXISTS budgeted numeric,
+  ADD COLUMN IF NOT EXISTS obligated numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS expended numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS remaining numeric,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.candidates
+  ADD COLUMN IF NOT EXISTS name text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS status text,
+  ADD COLUMN IF NOT EXISTS role text,
+  ADD COLUMN IF NOT EXISTS date_contacted timestamptz,
+  ADD COLUMN IF NOT EXISTS resume_received timestamptz;
+
+ALTER TABLE public.capability_statements
+  ADD COLUMN IF NOT EXISTS company_profile_id uuid,
+  ADD COLUMN IF NOT EXISTS capability_name text,
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb;
+
+ALTER TABLE public.company_profiles
+  ADD COLUMN IF NOT EXISTS company_name text,
+  ADD COLUMN IF NOT EXISTS profile jsonb;
+
+ALTER TABLE public.contracts
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+  ADD COLUMN IF NOT EXISTS contract_number text,
+  ADD COLUMN IF NOT EXISTS task_order_number text,
+  ADD COLUMN IF NOT EXISTS vehicle text,
+  ADD COLUMN IF NOT EXISTS solicitation_number text,
+  ADD COLUMN IF NOT EXISTS client_name text,
+  ADD COLUMN IF NOT EXISTS client_agency text,
+  ADD COLUMN IF NOT EXISTS co_name text,
+  ADD COLUMN IF NOT EXISTS cor_name text,
+  ADD COLUMN IF NOT EXISTS contract_type text,
+  ADD COLUMN IF NOT EXISTS set_aside text,
+  ADD COLUMN IF NOT EXISTS description text,
+  ADD COLUMN IF NOT EXISTS total_value numeric,
+  ADD COLUMN IF NOT EXISTS obligated_value numeric,
+  ADD COLUMN IF NOT EXISTS option_years integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS pop_start date,
+  ADD COLUMN IF NOT EXISTS pop_end date,
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'active'::text NOT NULL,
+  ADD COLUMN IF NOT EXISTS clins jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS opportunity_id uuid,
+  ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+  ADD COLUMN IF NOT EXISTS full_name text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS personal_email text,
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS title text,
+  ADD COLUMN IF NOT EXISTS department text,
+  ADD COLUMN IF NOT EXISTS start_date date,
+  ADD COLUMN IF NOT EXISTS end_date date,
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'active'::text NOT NULL,
+  ADD COLUMN IF NOT EXISTS employment_type text,
+  ADD COLUMN IF NOT EXISTS clearance_level text,
+  ADD COLUMN IF NOT EXISTS manager_id uuid,
+  ADD COLUMN IF NOT EXISTS jira_account_id text,
+  ADD COLUMN IF NOT EXISTS github_username text,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.icp_profiles
+  ADD COLUMN IF NOT EXISTS company_profile_id uuid,
+  ADD COLUMN IF NOT EXISTS label text,
+  ADD COLUMN IF NOT EXISTS target_agencies text[],
+  ADD COLUMN IF NOT EXISTS target_domains text[],
+  ADD COLUMN IF NOT EXISTS target_set_asides text[],
+  ADD COLUMN IF NOT EXISTS min_contract_value text,
+  ADD COLUMN IF NOT EXISTS max_contract_value text,
+  ADD COLUMN IF NOT EXISTS preferred_vehicles text[],
+  ADD COLUMN IF NOT EXISTS ideal_fte_range text,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE public.incumbent_research
+  ADD COLUMN IF NOT EXISTS opportunity_id uuid,
+  ADD COLUMN IF NOT EXISTS incumbent_name text,
+  ADD COLUMN IF NOT EXISTS years_on_contract integer,
+  ADD COLUMN IF NOT EXISTS source_urls text[],
+  ADD COLUMN IF NOT EXISTS confidence text,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS raw_search_results jsonb;
+
+ALTER TABLE public.indirect_rates
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+  ADD COLUMN IF NOT EXISTS fiscal_year integer,
+  ADD COLUMN IF NOT EXISTS rate_type text,
+  ADD COLUMN IF NOT EXISTS rate_basis text,
+  ADD COLUMN IF NOT EXISTS rate_pct numeric,
+  ADD COLUMN IF NOT EXISTS base_description text,
+  ADD COLUMN IF NOT EXISTS approved_by text,
+  ADD COLUMN IF NOT EXISTS approved_date date,
+  ADD COLUMN IF NOT EXISTS effective_from date,
+  ADD COLUMN IF NOT EXISTS effective_to date,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE public.invoices
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now() NOT NULL,
+  ADD COLUMN IF NOT EXISTS invoice_number text,
+  ADD COLUMN IF NOT EXISTS contract_id uuid,
+  ADD COLUMN IF NOT EXISTS client_name text,
+  ADD COLUMN IF NOT EXISTS client_agency text,
+  ADD COLUMN IF NOT EXISTS amount numeric,
+  ADD COLUMN IF NOT EXISTS amount_paid numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS currency text DEFAULT 'USD'::text,
+  ADD COLUMN IF NOT EXISTS invoice_date date,
+  ADD COLUMN IF NOT EXISTS due_date date,
+  ADD COLUMN IF NOT EXISTS paid_date date,
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'draft'::text NOT NULL,
+  ADD COLUMN IF NOT EXISTS payment_terms text DEFAULT 'NET30'::text,
+  ADD COLUMN IF NOT EXISTS billing_period text,
+  ADD COLUMN IF NOT EXISTS line_items jsonb DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.labor_records
+  ADD COLUMN IF NOT EXISTS employee_id uuid,
+  ADD COLUMN IF NOT EXISTS employee_name text,
+  ADD COLUMN IF NOT EXISTS contract_id uuid,
+  ADD COLUMN IF NOT EXISTS contract_number text,
+  ADD COLUMN IF NOT EXISTS clin text,
+  ADD COLUMN IF NOT EXISTS work_date date,
+  ADD COLUMN IF NOT EXISTS hours numeric,
+  ADD COLUMN IF NOT EXISTS labor_category text,
+  ADD COLUMN IF NOT EXISTS hourly_rate numeric,
+  ADD COLUMN IF NOT EXISTS charge_type text DEFAULT 'direct'::text,
+  ADD COLUMN IF NOT EXISTS cost_element text,
+  ADD COLUMN IF NOT EXISTS submitted_at timestamptz,
+  ADD COLUMN IF NOT EXISTS approved_by text,
+  ADD COLUMN IF NOT EXISTS approved_at timestamptz,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE public.opportunities
+  ADD COLUMN IF NOT EXISTS opportunity_name text,
+  ADD COLUMN IF NOT EXISTS vehicle text,
+  ADD COLUMN IF NOT EXISTS contract_type text,
+  ADD COLUMN IF NOT EXISTS pop text,
+  ADD COLUMN IF NOT EXISTS due_date date,
+  ADD COLUMN IF NOT EXISTS estimated_fte_range text,
+  ADD COLUMN IF NOT EXISTS key_requirements jsonb,
+  ADD COLUMN IF NOT EXISTS evaluation_basis text,
+  ADD COLUMN IF NOT EXISTS extracted_facts jsonb,
+  ADD COLUMN IF NOT EXISTS page_count integer,
+  ADD COLUMN IF NOT EXISTS num_past_performances_required integer,
+  ADD COLUMN IF NOT EXISTS num_key_personnel_required integer,
+  ADD COLUMN IF NOT EXISTS pages_per_day_ratio double precision;
+
+ALTER TABLE public.opportunity_documents
+  ADD COLUMN IF NOT EXISTS opportunity_id uuid,
+  ADD COLUMN IF NOT EXISTS doc_type text,
+  ADD COLUMN IF NOT EXISTS source_name text,
+  ADD COLUMN IF NOT EXISTS raw_text text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb;
+
+ALTER TABLE public.past_performance
+  ADD COLUMN IF NOT EXISTS company_profile_id uuid,
+  ADD COLUMN IF NOT EXISTS title text,
+  ADD COLUMN IF NOT EXISTS customer text,
+  ADD COLUMN IF NOT EXISTS domain text,
+  ADD COLUMN IF NOT EXISTS scope_summary text,
+  ADD COLUMN IF NOT EXISTS contract_value text,
+  ADD COLUMN IF NOT EXISTS period_of_performance text,
+  ADD COLUMN IF NOT EXISTS relevance_tags jsonb,
+  ADD COLUMN IF NOT EXISTS metadata jsonb;
+
+ALTER TABLE public.prompt_bank
+  ADD COLUMN IF NOT EXISTS dimension text,
+  ADD COLUMN IF NOT EXISTS label text,
+  ADD COLUMN IF NOT EXISTS prompt_template text,
+  ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+  ADD COLUMN IF NOT EXISTS version integer DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+ALTER TABLE public.resume_jobs
+  ADD COLUMN IF NOT EXISTS job text DEFAULT 'lumiture'::text NOT NULL;
+
+ALTER TABLE public.resume_queue
+  ADD COLUMN IF NOT EXISTS user_id integer,
+  ADD COLUMN IF NOT EXISTS payload jsonb,
+  ADD COLUMN IF NOT EXISTS error text;
+
+ALTER TABLE public.staff_requests
+  ADD COLUMN IF NOT EXISTS employee_id uuid,
+  ADD COLUMN IF NOT EXISTS employee_name text,
+  ADD COLUMN IF NOT EXISTS department text,
+  ADD COLUMN IF NOT EXISTS subject text,
+  ADD COLUMN IF NOT EXISTS requested_for date,
+  ADD COLUMN IF NOT EXISTS assigned_to text,
+  ADD COLUMN IF NOT EXISTS jira_issue_key text,
+  ADD COLUMN IF NOT EXISTS resolved_at timestamptz,
+  ADD COLUMN IF NOT EXISTS resolution_notes text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;
 
 -- ============================================================================
 -- Done. Next: `supabase link --project-ref <ref>` then `supabase db push --yes`
