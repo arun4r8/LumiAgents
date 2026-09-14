@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { BidGateResult } from "@/lib/bid-gates";
 import { useFormStatus } from "react-dom";
 import { useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink, Radar } from "lucide-react";
@@ -31,6 +32,8 @@ export interface Opportunity {
   sharepoint_folder_url: string | null;
   naics_code: string | null;
   last_scored_at: string | null;
+  /** Tommy's bid/no-bid gates, evaluated on the server (#197). */
+  bid_gate?: BidGateResult;
 }
 
 // Beady's recommendation vocabulary is pursue | monitor | pass (see the column
@@ -225,7 +228,7 @@ function OpportunityRow({
 }) {
   const [open, setOpen] = useState(false);
   const rec = o.recommendation?.toLowerCase() ?? null;
-  const hasDetail = !!(o.fit_reason || o.red_flags || o.solicitation_number || o.last_scored_at);
+  const hasDetail = !!(o.fit_reason || o.red_flags || o.solicitation_number || o.last_scored_at || o.bid_gate);
 
   return (
     <>
@@ -286,6 +289,15 @@ function OpportunityRow({
                 <div>
                   <div className="rec-detail-label is-flag">Red flags</div>
                   <div className="rec-detail-body">{o.red_flags}</div>
+                </div>
+              )}
+              {o.bid_gate && (
+                <div>
+                  {/* A deal that meets none of the gates is flagged like a red flag: it
+                      is outside our lane however well it scored. Unknown stays neutral --
+                      most rows have never been assessed, and that is not a verdict. */}
+                  <div className={`rec-detail-label${o.bid_gate.status === "fail" ? " is-flag" : ""}`}>Bid gates</div>
+                  <div className="rec-detail-body">{o.bid_gate.summary}</div>
                 </div>
               )}
               <div className="rec-detail-meta">

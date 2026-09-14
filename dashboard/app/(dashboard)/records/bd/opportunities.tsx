@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { evaluateBidGates, type BidGateInputs } from "@/lib/bid-gates";
 import { revalidatePath } from "next/cache";
 import { fetchRuntime } from "@/lib/runtime-fetch";
 import { OpportunitiesClient, type Opportunity } from "@/components/opportunities-client";
@@ -154,12 +155,12 @@ export async function OpportunitiesTab({
   const applyIgnored = <T extends { or(f: string): T }>(q: T): T =>
     showIgnored ? q : q.or("disposition.is.null,disposition.neq.ignore");
 
-  const [rowsRes, totalRes, scoredRes, openRes, pastRes, ignoredRes] = await Promise.all([
+  const [rowsRes, totalRes, scoredRes, openRes, pastRes, ignoredRes, ourPpRes] = await Promise.all([
     applyIgnored(applyDeadline(
       supabase
         .from("opportunities")
         .select(
-          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition, sharepoint_folder_url",
+          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition, sharepoint_folder_url, evaluation_basis, num_past_performances_required, extracted_facts",
         ),
     ))
       .order("fit_score", { ascending: false, nullsFirst: false })
@@ -192,9 +193,17 @@ export async function OpportunitiesTab({
       .from("opportunities")
       .select("id", { count: "exact", head: true })
       .eq("disposition", "ignore"),
+    // Tommy's Option 1 is about OUR past performances, so it is one number for the
+    // whole page, not a per-row fact.
+    supabase.from("past_performance").select("id", { count: "exact", head: true }),
   ]);
 
-  const rows = (rowsRes.data ?? []) as Opportunity[];
+  // A failed count is unknown, not zero: zero would mark Option 1 "not met" everywhere.
+  const ourPastPerformances = ourPpRes.error ? null : (ourPpRes.count ?? null);
+  const rows = ((rowsRes.data ?? []) as (Opportunity & BidGateInputs)[]).map((o) => ({
+    ...o,
+    bid_gate: evaluateBidGates(o, ourPastPerformances),
+  }));
 
   return (
     <OpportunitiesClient

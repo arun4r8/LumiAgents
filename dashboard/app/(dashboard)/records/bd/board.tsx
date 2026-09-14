@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { evaluateBidGates, type BidGateInputs } from "@/lib/bid-gates";
 import { revalidatePath } from "next/cache";
 import { PipelineBoardClient, type BoardCard } from "@/components/pipeline-board-client";
 import { STAGES, FIRST_STAGE, isStage, type StageKey } from "@/lib/pipeline-stages";
@@ -51,16 +52,21 @@ export async function PipelineBoardTab() {
 
   const { data } = await supabase
     .from("opportunities")
-    .select("id, title, agency, fit_score, recommendation, response_deadline, pipeline_stage, pipeline_stage_at, solicitation_number, source_url")
+    .select("id, title, agency, fit_score, recommendation, response_deadline, pipeline_stage, pipeline_stage_at, solicitation_number, source_url, estimated_value_usd, evaluation_basis, num_past_performances_required, extracted_facts")
     .eq("disposition", "pursue")
     // Oldest movement first: a card nobody has touched in weeks should be the one
     // you see, not the one buried under this morning's additions.
     .order("pipeline_stage_at", { ascending: true, nullsFirst: true })
     .order("fit_score", { ascending: false, nullsFirst: false });
 
+  // Tommy's Option 1 is about OUR past performances: one count for the board.
+  const ourPp = await supabase.from("past_performance").select("id", { count: "exact", head: true });
+  const ourPastPerformances = ourPp.error ? null : (ourPp.count ?? null);
+
   const cards = (data ?? []).map((o) => ({
     ...o,
     pipeline_stage: isStage(o.pipeline_stage) ? o.pipeline_stage : FIRST_STAGE,
+    bid_gate: evaluateBidGates(o as BidGateInputs, ourPastPerformances),
   })) as BoardCard[];
 
   return <PipelineBoardClient cards={cards} moveCard={moveCard} />;

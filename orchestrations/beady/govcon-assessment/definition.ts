@@ -191,6 +191,13 @@ export default defineOrchestration({
             if ((!opp[f] || opp[f] === "Unknown") && facts[f]) patch[f] = facts[f];
           }
           if ((!opp.key_requirements || opp.key_requirements.length === 0) && facts.key_requirements?.length) patch.key_requirements = facts.key_requirements;
+          // Bid-gate inputs (#197). The scoring engine has read these columns all
+          // along (scoring.ts) and nothing ever wrote them, so Tommy's Options 1 and 2
+          // could not be evaluated on any opportunity. requires_demo stays in
+          // extracted_facts, merged below.
+          for (const f of ["num_past_performances_required", "num_key_personnel_required"] as const) {
+            if (opp[f] == null && facts[f] != null) patch[f] = facts[f];
+          }
           if (!opp.due_date && facts.due_date && facts.due_date !== "Unknown") patch.due_date = facts.due_date;
           // The sweep stores the deadline as `response_deadline`; the assessment reads
           // `due_date`. The SSA memo listed the due date as unknown while

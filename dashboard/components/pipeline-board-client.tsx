@@ -4,6 +4,7 @@ import { useFormStatus } from "react-dom";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { LocalTime, UrgencyTag } from "@/components/lumi";
 import { STAGES, type StageKey } from "@/lib/pipeline-stages";
+import type { BidGateResult } from "@/lib/bid-gates";
 
 export interface BoardCard {
   id: string;
@@ -16,7 +17,12 @@ export interface BoardCard {
   pipeline_stage_at: string | null;
   solicitation_number: string | null;
   source_url: string | null;
+  /** Dollars. GovWin publishes a value; SAM.gov does not, so it is null there. */
+  estimated_value_usd: number | null;
+  bid_gate: BidGateResult;
 }
+
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
 
 /**
  * Move button. Reads `useFormStatus` from inside the form rather than disabling on
@@ -55,6 +61,11 @@ function Card({ card, moveCard }: { card: BoardCard; moveCard: (fd: FormData) =>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 11.5, alignItems: "center" }}>
         {card.fit_score != null && <span className="tag tag-neutral">Fit {card.fit_score}/10</span>}
+        {/* Only a verdict earns a coloured tag. "Unknown" is the state of almost every
+            card until it is assessed, and colouring it would make the whole board
+            look alarmed about nothing. */}
+        {card.bid_gate.status === "fail" && <span className="tag tag-danger" title={card.bid_gate.summary}>Outside our lane</span>}
+        {card.bid_gate.status === "pass" && <span className="tag tag-accent" title={card.bid_gate.summary}>Bid gate met</span>}
         {card.response_deadline ? (
           <UrgencyTag expiresAt={card.response_deadline} />
         ) : (
@@ -62,11 +73,12 @@ function Card({ card, moveCard }: { card: BoardCard; moveCard: (fd: FormData) =>
         )}
       </div>
 
-      {/* The design's card carries a contract value. We do not hold one: there is no
-          value column on opportunities, and the syncup listed estimated value via
-          spreadsheet match as a future addition. Saying so is better than rendering an
-          empty field that reads as a bug. */}
-      <div className="sub" style={{ fontSize: 11, color: "var(--ink-3)" }}>Contract value not captured yet</div>
+      {/* GovWin publishes a contract value (opportunities.estimated_value_usd, #198);
+          SAM.gov does not. Say which, rather than an empty field that reads as a bug. */}
+      <div className="sub" style={{ fontSize: 11, color: "var(--ink-3)" }}>
+        {card.estimated_value_usd != null ? `Est. value ${usd.format(card.estimated_value_usd)}` : "No contract value published"}
+      </div>
+      <div className="sub" style={{ fontSize: 11, color: "var(--ink-3)" }}>{card.bid_gate.summary}</div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <div style={{ display: "flex", gap: 4 }}>

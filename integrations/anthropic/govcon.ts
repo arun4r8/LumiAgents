@@ -43,6 +43,11 @@ export interface OpportunityFacts {
   estimated_fte_range: string | null;
   key_requirements: string[];
   evaluation_basis: string | null;
+  /** Bid-gate inputs (#197). Nothing asked for these before, so the columns they
+   *  land in were never populated on any opportunity. */
+  num_past_performances_required: number | null;
+  num_key_personnel_required: number | null;
+  requires_demo: string | null;
   explicit_unknowns: string[];
 }
 
@@ -56,8 +61,24 @@ const EXTRACTOR_ATTRS: Array<{ name: string; description: string }> = [
   { name: "estimated_fte_range", description: "Estimated full-time equivalent staff range, e.g. 10-20 FTEs, or Unknown" },
   { name: "key_requirements", description: "List of the 5-10 most important technical or programmatic requirements as bullet points" },
   { name: "evaluation_basis", description: "How proposals will be evaluated, e.g. LPTA, Best Value, Technically Acceptable, or Unknown" },
+  { name: "num_past_performances_required", description: "How many past performance references the offeror must submit, as a whole number, or Unknown if not stated" },
+  { name: "num_key_personnel_required", description: "How many key personnel the offeror must name, as a whole number, or Unknown if not stated" },
+  { name: "requires_demo", description: "Whether the evaluation includes a live demonstration, oral presentation or proof of concept: Yes, No, or Unknown" },
   { name: "explicit_unknowns", description: "List any fields that could not be determined from the provided text" },
 ];
+
+/**
+ * A count from the extractor. The tool schema types every scalar as a string, so it
+ * arrives as "3" or "Unknown" -- or, from a model being helpful, "3 references" or
+ * "at least 3". Only a plain whole number is a count. Everything else is unknown,
+ * never a number pulled out of a sentence: "no more than 5" parsed as 5 is a
+ * different requirement, and "0 unless requested" parsed as 0 would pass Tommy's
+ * Option 2 on a deal that may well ask for five.
+ */
+export function parseFactCount(v: unknown): number | null {
+  const m = /^\s*(\d{1,3})\s*$/.exec(String(v ?? ""));
+  return m ? Number(m[1]) : null;
+}
 
 export async function extractOpportunityFacts(env: Env, combinedText: string, model = DEFAULT_MODEL): Promise<OpportunityFacts> {
   const properties: Record<string, unknown> = {};
@@ -80,10 +101,14 @@ export async function extractOpportunityFacts(env: Env, combinedText: string, mo
   const o = tu.input as Record<string, unknown>;
   const arr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
   const str = (v: unknown): string | null => (v == null || v === "" ? null : String(v));
+
   return {
     agency: str(o["agency"]), vehicle: str(o["vehicle"]), set_aside: str(o["set_aside"]),
     contract_type: str(o["contract_type"]), pop: str(o["pop"]), due_date: str(o["due_date"]),
     estimated_fte_range: str(o["estimated_fte_range"]), evaluation_basis: str(o["evaluation_basis"]),
+    num_past_performances_required: parseFactCount(o["num_past_performances_required"]),
+    num_key_personnel_required: parseFactCount(o["num_key_personnel_required"]),
+    requires_demo: str(o["requires_demo"]),
     key_requirements: arr(o["key_requirements"]), explicit_unknowns: arr(o["explicit_unknowns"]),
   };
 }
