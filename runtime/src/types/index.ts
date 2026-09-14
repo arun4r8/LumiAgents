@@ -67,12 +67,6 @@ export interface Env {
   CONTENT_CALENDAR_DRIVE_ID?: string;
   /** Graph drive hosting the Lumiture Labs document library, for per-project BD folders (#207). */
   BD_DRIVE_ID?: string;
-  /**
-   * Graph drive hosting the BD site's document library, where BD keeps the GovWin
-   * exports (#198). A DIFFERENT drive to BD_DRIVE_ID: the exports live on the BD
-   * site, the project folders on Lumiture Labs.
-   */
-  GOVWIN_DRIVE_ID?: string;
   CONTENT_CALENDAR_ITEM_ID?: string;
   CONTENT_CALENDAR_WORKSHEET?: string;
   // Name of the Excel Table the two-way sync reads/writes (default "ContentCalendar").

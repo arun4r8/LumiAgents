@@ -44,15 +44,21 @@ import {
  */
 
 /**
- * Where BD keeps the exports, on the BD site's document library.
+ * Where the exports live: a folder in the Lumiture Labs library, beside the
+ * per-pursuit folders BD already keeps under Opportunity Tracking.
  *
- * A FOLDER, not a file. There are three exports in it today -- VA.xlsx, "State
- * Local opportunitySearchResults_07-28-2026.xlsx" and "Upcoming Deals
+ * They started on the BD site, which the app's Sites.Selected grant does not
+ * cover (#244). Moving them here needed no new permission at all -- this library
+ * is already granted, for beady/project-folder -- which beats widening access to
+ * a second site for a read-only job.
+ *
+ * A FOLDER, not a file. There are three exports -- VA.xlsx, "State Local
+ * opportunitySearchResults_07-28-2026.xlsx" and "Upcoming Deals
  * opportunitySearchResults_07-28-2026.xlsx" -- and two of those names carry the
  * export date, so any fixed filename is wrong the next time someone re-exports.
  * The folder is the only part a person keeps stable, so that is what is configured.
  */
-const DEFAULT_FOLDER = "General/2026 Strategy";
+const DEFAULT_FOLDER = "Opportunity Tracking/GovWin";
 
 // Each scored row carries a summary, so its prompt share is bigger than a SAM
 // notice's. Scoring is still the same shape as the sweep: one llm_extract per batch
@@ -127,7 +133,7 @@ export const inputSchema = z.object({
   driveId: z
     .string()
     .optional()
-    .describe("Graph drive hosting the document library the exports live in (default: GOVWIN_DRIVE_ID, the BD site -- NOT BD_DRIVE_ID, which is Lumiture Labs)."),
+    .describe("Graph drive hosting the document library the exports live in (default: BD_DRIVE_ID, the Lumiture Labs library)."),
   folderPath: z
     .string()
     .default(DEFAULT_FOLDER)
@@ -190,11 +196,9 @@ export default defineOrchestration({
   async run(ctx, input): Promise<z.infer<typeof outputSchema>> {
     const empty = { workbooks: [] as string[], rows: 0, mapped: 0, selected: 0, scored: 0, shortlisted: 0, totalValueUsd: null };
 
-    // The BD site, not Lumiture Labs: BD keeps the exports on their own site, and
-    // the two are different drives with different Sites.Selected grants.
-    const driveId = input.driveId ?? ctx.env.GOVWIN_DRIVE_ID;
+    const driveId = input.driveId ?? ctx.env.BD_DRIVE_ID;
     if (!driveId || !ctx.env.MSGRAPH_TENANT_ID || !ctx.env.MSGRAPH_CLIENT_ID || !ctx.env.MSGRAPH_CLIENT_SECRET) {
-      return { ...empty, skipped: "Microsoft Graph or GOVWIN_DRIVE_ID not configured" };
+      return { ...empty, skipped: "Microsoft Graph or BD_DRIVE_ID not configured" };
     }
 
     const files = await step(ctx, "list-exports", async () =>
