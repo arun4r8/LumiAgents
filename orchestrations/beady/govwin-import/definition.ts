@@ -118,7 +118,28 @@ export function rowsToScore(
     }
   }
 
-  const inScope = selectForScoring(mapped, opts) as ImportRow[];
+  // Soonest deadline first, undated forecasts last, ties kept in file order.
+  //
+  // The cap means a run scores 180 of what can be ~2,000 in-scope rows, so the
+  // ORDER decides what reaches the board this week. Left in file order, that was
+  // the folder listing -- alphabetical -- so the first production run scored 180
+  // state and local rows from "State Local ..." and never reached a federal row in
+  // Super Swath or VA.xlsx. Which pursuits get looked at should not depend on how
+  // a filename sorts. The deadline is the one ordering that means something to BD:
+  // it is what makes a pursuit this week's problem.
+  const inScope = (selectForScoring(mapped, opts) as ImportRow[])
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => {
+      const da = a.row.responseDeadline;
+      const db = b.row.responseDeadline;
+      if (da !== db) {
+        if (da === null) return 1;
+        if (db === null) return -1;
+        return da < db ? -1 : 1; // ISO dates compare correctly as strings
+      }
+      return a.i - b.i;
+    })
+    .map((x) => x.row);
 
   // Already-scored rows are removed BEFORE the cap, not after. The other order
   // starves: with an export of thousands of in-scope rows, the first

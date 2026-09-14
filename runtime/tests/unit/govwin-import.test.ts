@@ -381,3 +381,67 @@ describe("the read step's return: what is scored, and whether it fits", () => {
     expect(deferred).toBe(2);
   });
 });
+
+/**
+ * The first real run scored 180 rows, all state and local, because the folder
+ * listing is alphabetical and "State Local ..." sorts before "Super Swath ..." and
+ * "VA.xlsx". With ~2,000 rows in scope and 180 scored per run, order decides what
+ * BD sees, and it should not be decided by a filename.
+ */
+describe("which rows a capped run scores first", () => {
+  const now = new Date("2026-09-12T00:00:00Z");
+  const opts = { naicsCodes: ["541512", "541511"], horizonMonths: 18, now };
+  const load = () => import("../../../orchestrations/beady/govwin-import/definition");
+  const row = (id: string, responseDate: string, solicitationDate = "") => {
+    const r = [...EDW];
+    r[HEADER.indexOf("Opp ID")] = id;
+    r[HEADER.indexOf("Response Date")] = responseDate;
+    r[HEADER.indexOf("Solicitation Date")] = solicitationDate;
+    return r;
+  };
+  const book = (name: string, rows: string[][]) => ({ name, webUrl: null, grid: [HEADER, ...rows] });
+
+  it("takes the soonest deadlines first, whichever export they are in", async () => {
+    const { rowsToScore } = await load();
+    const { selected } = rowsToScore(
+      [
+        // Alphabetically first, deadlines furthest out -- the production case.
+        book("State Local.xlsx", [row("S1", "06/01/2027"), row("S2", "05/01/2027")]),
+        book("VA.xlsx", [row("V1", "10/15/2026"), row("V2", "11/01/2026")]),
+      ],
+      opts,
+    );
+    expect(selected.map((r) => r.externalId)).toEqual(["V1", "V2", "S2", "S1"]);
+  });
+
+  it("puts undated forecasts last, not first", async () => {
+    const { rowsToScore } = await load();
+    // A null deadline is KEPT by the scope filter (early forecasts often have none),
+    // but it is the least urgent thing on the list.
+    const { selected } = rowsToScore(
+      [book("A.xlsx", [row("U1", "", ""), row("D1", "12/01/2026"), row("U2", "", "")])],
+      opts,
+    );
+    expect(selected.map((r) => r.externalId)).toEqual(["D1", "U1", "U2"]);
+  });
+
+  it("keeps file order between rows with the same deadline, so runs are repeatable", async () => {
+    const { rowsToScore } = await load();
+    const { selected } = rowsToScore(
+      [book("A.xlsx", [row("B", "12/01/2026"), row("A", "12/01/2026"), row("C", "12/01/2026")])],
+      opts,
+    );
+    expect(selected.map((r) => r.externalId)).toEqual(["B", "A", "C"]);
+  });
+
+  it("orders BEFORE the cap, so the urgent rows are the ones that make it in", async () => {
+    const { rowsToScore, MAX_ROWS_TO_SCORE } = await load();
+    const late = Array.from({ length: MAX_ROWS_TO_SCORE }, (_, i) => row(`L${i}`, "06/01/2027"));
+    const { selected } = rowsToScore(
+      [book("State Local.xlsx", late), book("VA.xlsx", [row("URGENT", "10/01/2026")])],
+      opts,
+    );
+    expect(selected).toHaveLength(MAX_ROWS_TO_SCORE);
+    expect(selected[0]!.externalId).toBe("URGENT");
+  });
+});
