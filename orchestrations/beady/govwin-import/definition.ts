@@ -44,21 +44,28 @@ import {
  */
 
 /**
- * Where the exports live: a folder in the Lumiture Labs library, beside the
- * per-pursuit folders BD already keeps under Opportunity Tracking.
+ * Where the exports live: their own folder in the Lumiture Labs library,
+ * General/GovWin, beside -- not inside -- General/Opportunity Tracking.
+ *
+ * Paths here are from the library root, and everything BD uses sits under
+ * General/. A path without it resolves to a folder that does not exist, which the
+ * importer reports as "no workbooks", the same as an empty week. The first cut of
+ * this constant made exactly that mistake.
+ *
+ * Not inside Opportunity Tracking, because that folder is BD's list of pursuits,
+ * one subfolder each (see OPPORTUNITY_ROOT in integrations/msgraph/folders.ts). A
+ * folder of exports in that list reads as a pursuit named "GovWin".
  *
  * They started on the BD site, which the app's Sites.Selected grant does not
- * cover (#244). Moving them here needed no new permission at all -- this library
- * is already granted, for beady/project-folder -- which beats widening access to
- * a second site for a read-only job.
+ * cover (#244). This library is already granted, for beady/project-folder, so
+ * moving them needed no new permission.
  *
- * A FOLDER, not a file. There are three exports -- VA.xlsx, "State Local
- * opportunitySearchResults_07-28-2026.xlsx" and "Upcoming Deals
- * opportunitySearchResults_07-28-2026.xlsx" -- and two of those names carry the
- * export date, so any fixed filename is wrong the next time someone re-exports.
- * The folder is the only part a person keeps stable, so that is what is configured.
+ * A FOLDER, not a file. There are four exports -- VA.xlsx and three
+ * "opportunitySearchResults_07-28-2026.xlsx" files (Super Swath, State Local,
+ * Upcoming Deals) -- and three of the four names carry the export date, so any
+ * fixed filename is wrong the next time someone re-exports.
  */
-const DEFAULT_FOLDER = "Opportunity Tracking/GovWin";
+const DEFAULT_FOLDER = "General/GovWin";
 
 // Each scored row carries a summary, so its prompt share is bigger than a SAM
 // notice's. Scoring is still the same shape as the sweep: one llm_extract per batch
