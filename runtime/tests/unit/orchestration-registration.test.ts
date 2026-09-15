@@ -77,3 +77,48 @@ describe("orchestration registration", () => {
     expect(missing).toEqual([]);
   });
 });
+
+
+/**
+ * The reverse direction, which the check above cannot see.
+ *
+ * `patch/vault-sync` had a registration migration and a route that dispatched it
+ * (/api/vault/sync), but was missing from the code registry after the May per-agent
+ * workers split. The Workflow resolves orchestrations from the registry, so every run
+ * failed with "not registered" -- for four months, unnoticed, because nothing else
+ * referenced it. A registry-to-SQL comparison passes that state. This compares the
+ * runtime's own literal dispatches against the registry instead.
+ */
+describe("every orchestration the runtime dispatches by name is registered in code", () => {
+  const RUNTIME_SRC = join(__dirname, "../../src");
+  const DISPATCH = [
+    /getOrchestrationByName\(\s*"([a-z0-9]+\/[a-z0-9-]+)"/g,
+    /orchestrationName:\s*"([a-z0-9]+\/[a-z0-9-]+)"/g,
+  ];
+
+  function dispatched(): Set<string> {
+    const names = new Set<string>();
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".ts")) {
+          const text = readFileSync(full, "utf8");
+          for (const re of DISPATCH) for (const m of text.matchAll(re)) names.add(m[1]!);
+        }
+      }
+    };
+    walk(RUNTIME_SRC);
+    return names;
+  }
+
+  it("finds dispatch sites at all, so a broken pattern cannot pass silently", () => {
+    expect(dispatched().has("patch/vault-sync")).toBe(true);
+  });
+
+  it("every dispatched name resolves in the registry", () => {
+    const registered = new Set([...orchestrations.values()].map((o) => o.name));
+    const missing = [...dispatched()].filter((n) => !registered.has(n));
+    expect(missing).toEqual([]);
+  });
+});

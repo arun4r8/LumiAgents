@@ -16,6 +16,12 @@ import re, sys, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 # /rest/v1/<something>.<something> where the first part is a bare identifier.
 BAD = re.compile(r"/rest/v1/([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)")
+# The same mistake with the base URL held in a variable: `${base}/orchestration.x`.
+# The literal /rest/v1/ never appears, which is how
+# runtime/src/agents/vault-sync.ts carried one past this guard (#181). Limited to
+# the non-public schemas PostgREST exposes, so `${dir}/file.ts` is not flagged.
+NON_PUBLIC_SCHEMAS = ("orchestration",)
+BAD_TEMPLATED = re.compile(r"\$\{[^}]+\}/(" + "|".join(NON_PUBLIC_SCHEMAS) + r")\.([a-z_][a-z0-9_]*)")
 SKIP = {"node_modules", ".git", ".next", ".open-next", "dist"}
 
 bad = []
@@ -25,7 +31,7 @@ for path in ROOT.rglob("*.ts*"):
         continue
     scanned += 1
     for i, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
-        m = BAD.search(line)
+        m = BAD.search(line) or BAD_TEMPLATED.search(line)
         if m:
             bad.append((path.relative_to(ROOT), i, m.group(0)))
 

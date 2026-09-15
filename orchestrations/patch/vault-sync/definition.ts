@@ -3,6 +3,7 @@ import { defineOrchestration, step } from "@/runtime";
 import { fetchFileContent, fetchRepoMarkdownFiles } from "../../../integrations/github/files";
 import { upsertVaultDocument, removeVaultDocument } from "../../../runtime/src/agents/vault-sync";
 import { vaultSourceUri } from "../../../integrations/github/base";
+import { sbHeaders } from "@/runtime/utils/supabase";
 
 export const inputSchema = z.object({
   repoOwner:    z.string().describe("GitHub owner (user or org) of the Obsidian vault repo"),
@@ -17,11 +18,50 @@ export const inputSchema = z.object({
 export const outputSchema = z.object({
   ingested: z.number().describe("Files newly embedded or re-embedded due to content change"),
   skipped:  z.number().describe("Files skipped because blob SHA was unchanged"),
+  remaining: z.number().default(0).describe("Changed files left for the next run, beyond MAX_VAULT_FILES_PER_RUN."),
   removed:  z.number().describe("Files removed from the RAG index"),
   errors:   z.array(z.string()),
 });
 
-const BATCH_SIZE = 20;
+/**
+ * The most files one run will (re-)embed. Each costs up to five subrequests -- the
+ * GitHub contents fetch, a delete of the old index row, the document insert, the
+ * chunk insert, and the embedding call -- against a ceiling of 50 for the whole
+ * invocation. Unchanged files cost nothing: they are skipped on the tree's blob
+ * SHA before their contents are fetched. A vault with more changed files than this
+ * finishes over several runs; `remaining` says how many are left.
+ */
+export const MAX_VAULT_FILES_PER_RUN = 6;
+
+export interface VaultCandidate { path: string; sha: string | null }
+export interface IndexedDoc { id: string; blobSha: string | null }
+
+/**
+ * Which files to embed this run, as a pure decision.
+ *
+ * A file whose tree SHA matches its indexed blob SHA is unchanged and skipped
+ * without a fetch. A file with no SHA (a webhook path list carries none) is
+ * treated as possibly changed; upsertVaultDocument re-checks after fetching.
+ * Order is the input's, so a capped run resumes predictably next time.
+ */
+export function selectVaultFiles(
+  candidates: VaultCandidate[],
+  index: Map<string, IndexedDoc>,
+  sourceUriFor: (path: string) => string,
+  cap: number = MAX_VAULT_FILES_PER_RUN,
+): { toIngest: Array<VaultCandidate & { existing: IndexedDoc | null }>; unchanged: number; remaining: number } {
+  const changed: Array<VaultCandidate & { existing: IndexedDoc | null }> = [];
+  let unchanged = 0;
+  for (const c of candidates) {
+    const existing = index.get(sourceUriFor(c.path)) ?? null;
+    if (existing && c.sha !== null && existing.blobSha === c.sha) {
+      unchanged++;
+      continue;
+    }
+    changed.push({ ...c, existing });
+  }
+  return { toIngest: changed.slice(0, cap), unchanged, remaining: Math.max(0, changed.length - cap) };
+}
 
 export default defineOrchestration({
   name: "patch/vault-sync",
@@ -39,63 +79,69 @@ export default defineOrchestration({
   async run(ctx, input) {
     const { repoOwner: owner, repoName: repo, branch } = input;
 
-    // ── Step 1: Resolve the file list ─────────────────────────────────────────
-    const filePaths = await step(ctx, "resolve-file-list", async () => {
+    // ── Step 1: Resolve the file list (with blob SHAs, from the tree) ─────────
+    const candidates = await step(ctx, "resolve-file-list", async (): Promise<VaultCandidate[]> => {
       if (input.changedPaths && input.changedPaths.length > 0) {
-        return input.changedPaths.filter((p) => p.endsWith(".md"));
+        return input.changedPaths.filter((p) => p.endsWith(".md")).map((path) => ({ path, sha: null }));
       }
       const entries = await fetchRepoMarkdownFiles(ctx, owner, repo, branch);
-      return entries.map((e) => e.path);
+      return entries.map((e) => ({ path: e.path, sha: e.sha }));
     });
 
-    // ── Step 2+: Ingest files in batches of BATCH_SIZE ───────────────────────
+    // ── Step 2: Load the whole vault index in ONE request ──────────────────────
+    const indexRows = await step(ctx, "load-index", async () => {
+      const res = await ctx.fetch(
+        `${ctx.env.SUPABASE_URL}/rest/v1/orch_documents?source_kind=eq.vault&select=id,source_uri,metadata`,
+        { headers: sbHeaders(ctx.env, { profile: "orchestration" }) },
+      );
+      if (!res.ok) throw new Error(`vault index load → ${res.status}: ${await res.text()}`);
+      const rows = (await res.json()) as Array<{ id: string; source_uri: string; metadata: Record<string, unknown> | null }>;
+      return rows.map((r) => ({ id: r.id, sourceUri: r.source_uri, blobSha: (r.metadata?.["github_blob_sha"] as string | undefined) ?? null }));
+    });
+    const index = new Map(indexRows.map((r) => [r.sourceUri, { id: r.id, blobSha: r.blobSha }]));
+
+    const sourceUriFor = (path: string) => vaultSourceUri(owner, repo, path);
+    const selection = selectVaultFiles(candidates, index, sourceUriFor);
+
+    // ── Step 3: Embed the selected files ──────────────────────────────────────
     let ingested = 0;
-    let skipped  = 0;
+    let skipped  = selection.unchanged;
     const errors: string[] = [];
 
-    for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
-      const batch = filePaths.slice(i, i + BATCH_SIZE);
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-
-      const result = await step(ctx, `ingest-batch-${batchNum}`, async () => {
+    if (selection.toIngest.length > 0) {
+      const result = await step(ctx, "ingest", async () => {
         let batchIngested = 0;
         let batchSkipped  = 0;
         const batchErrors: string[] = [];
 
-        for (const filePath of batch) {
+        for (const f of selection.toIngest) {
           try {
-            const file = await fetchFileContent(ctx, owner, repo, filePath);
+            const file = await fetchFileContent(ctx, owner, repo, f.path);
             if (file.content.trim().length === 0) {
               batchSkipped++;
               continue;
             }
-
-            const sourceUri  = vaultSourceUri(owner, repo, filePath);
-            const sourceName = filePath.split("/").pop() ?? filePath;
-
             const { ingested: wasIngested } = await upsertVaultDocument(ctx.env, {
-              sourceUri,
-              sourceName,
-              content:  file.content,
-              blobSha:  file.blobSha,
+              sourceUri:  sourceUriFor(f.path),
+              sourceName: f.path.split("/").pop() ?? f.path,
+              content:    file.content,
+              blobSha:    file.blobSha,
+              existing:   f.existing,
               metadata: {
-                vault_path:  filePath,
-                vault_repo:  `${owner}/${repo}`,
+                vault_path:   f.path,
+                vault_repo:   `${owner}/${repo}`,
                 vault_branch: branch,
-                folder: filePath.includes("/") ? filePath.split("/").slice(0, -1).join("/") : "/",
+                folder: f.path.includes("/") ? f.path.split("/").slice(0, -1).join("/") : "/",
               },
             });
-
             if (wasIngested) batchIngested++;
             else batchSkipped++;
           } catch (err) {
-            batchErrors.push(`${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+            batchErrors.push(`${f.path}: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
-
         return { batchIngested, batchSkipped, batchErrors };
       });
-
       ingested += result.batchIngested;
       skipped  += result.batchSkipped;
       errors.push(...result.batchErrors);
@@ -119,6 +165,6 @@ export default defineOrchestration({
       });
     }
 
-    return { ingested, skipped, removed, errors };
+    return { ingested, skipped, remaining: selection.remaining, removed, errors };
   },
 });

@@ -39,6 +39,10 @@ import systemRunWatchdog from "../../orchestrations/system/run-watchdog/definiti
 import beadyOpportunityHydrate from "../../orchestrations/beady/opportunity-hydrate/definition";
 import beadyProjectFolder from "../../orchestrations/beady/project-folder/definition";
 import beadyGovwinImport from "../../orchestrations/beady/govwin-import/definition";
+// Dropped from this list in the May per-agent-workers split (b957c3c) and never
+// re-added, while /api/vault/sync kept dispatching it. Every run since failed with
+// "not registered" -- see the reverse check in orchestration-registration.test.ts.
+import patchVaultSync from "../../orchestrations/patch/vault-sync/definition";
 
 type AnyOrch = OrchestrationDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
@@ -83,4 +87,5 @@ export const orchestrations = new Map<string, AnyOrch>([
   reg(beadyOpportunityHydrate as unknown as AnyOrch),
   reg(beadyProjectFolder as unknown as AnyOrch),
   reg(beadyGovwinImport as unknown as AnyOrch),
+  reg(patchVaultSync as unknown as AnyOrch),
 ]);
