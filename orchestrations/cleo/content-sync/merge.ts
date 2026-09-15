@@ -198,10 +198,15 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
   };
 
   // ── link a legacy db row to a sheet row without touching content ──────────────
-  const adopt = (s: SheetRow, db: DbRow): void => {
-    const newId = genId();
-    plan.idBackfills.push({ address: idAddress(s.sheetRow), value: newId });
-    counts.idsBackfilled++;
+  const adopt = (s: SheetRow, db: DbRow, existingId: string | null = null): void => {
+    // existingId: the sheet row already carries an id, written by an earlier run that
+    // died before it linked the app row. Reuse it; writing a second id would orphan
+    // the first.
+    const newId = existingId ?? genId();
+    if (!existingId) {
+      plan.idBackfills.push({ address: idAddress(s.sheetRow), value: newId });
+      counts.idsBackfilled++;
+    }
     // Baseline the snapshot to the app's current values; the next run diffs cleanly
     // and any genuine sheet edit then flows in as a normal 3-way pull.
     const base = { topic: norm(db.topic), description: norm(db.description), asset_ref: norm(db.asset_ref) };
@@ -211,6 +216,10 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
     });
     plan.plan.push({ action: "adopt-legacy", sheetId: newId, topic: base.topic });
   };
+
+  // An unlinked legacy one-way row whose key is this topic's hash.
+  const legacyFor = (topic: string): DbRow | undefined =>
+    dbRows.find((r) => r.sheet_id == null && !consumed.has(r.id) && r.source_key === legacySourceKey(topic));
 
   // ── 3-way merge a matched sheet row against its db row ────────────────────────
   const mergeMatched = (s: SheetRow, db: DbRow): void => {
@@ -298,16 +307,27 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
         mergeMatched(s, db);
         continue;
       }
-      // Sheet has an id but the app row is gone: re-materialize it in the app,
-      // reusing the existing sheet id (no backfill needed).
-      if (s.topic) newAppRow(s, s.id);
+      if (s.topic) {
+        // A sync writes the sheet BEFORE the app. If a run dies in between -- as the
+        // 2026-09-14 run did, on a NOT NULL violation in write-db -- the sheet holds
+        // ids no app row records. Read naively, that looks like "the app row was
+        // deleted", and re-materializing would insert a duplicate of every row while
+        // the originals sat unlinked. So adopt the unlinked legacy row first, keeping
+        // the id the sheet already has; only a row with no such twin is a deletion.
+        const orphaned = legacyFor(s.topic);
+        if (orphaned) {
+          consumed.add(orphaned.id);
+          adopt(s, orphaned, s.id);
+          continue;
+        }
+        // Genuinely gone from the app: re-materialize it, reusing the sheet id.
+        newAppRow(s, s.id);
+      }
       continue;
     }
 
     // Blank id + a topic: try to adopt a legacy one-way row, else insert new.
-    const adoptee = dbRows.find(
-      (r) => r.sheet_id == null && !consumed.has(r.id) && r.source_key === legacySourceKey(s.topic),
-    );
+    const adoptee = legacyFor(s.topic);
     if (adoptee) {
       consumed.add(adoptee.id);
       adopt(s, adoptee);
@@ -344,4 +364,38 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
   plan.planTruncated = plan.plan.length > PLAN_PREVIEW_LIMIT;
   plan.plan = plan.plan.slice(0, PLAN_PREVIEW_LIMIT);
   return plan;
+}
+
+/**
+ * The rows write-db upserts for plan.dbUpdates.
+ *
+ * write-db sends the updates as ONE upsert (POST ?on_conflict=id, merge-duplicates),
+ * which Postgres runs as INSERT ... ON CONFLICT DO UPDATE. The NOT NULL check runs on
+ * the proposed INSERT row BEFORE the conflict is found, so a patch that omits
+ * `topic` -- every adoption and every new-sheet-row link does -- is rejected even
+ * though the row exists and has a topic. That rejected the whole batch of 13 on the
+ * first real run (2026-09-14), after the sheet had already been written.
+ *
+ * So each row carries the topic it already has, unless the patch changes it. It is
+ * the only NOT NULL column without a default (id, channel, status and the
+ * timestamps all have one). Throws rather than sending a row it knows will fail:
+ * a topic-less update means the plan and the database disagree, which is worth
+ * stopping on.
+ */
+export function dbUpsertRows(
+  updates: SyncPlan["dbUpdates"],
+  dbRows: DbRow[],
+  now: string,
+): Array<Record<string, unknown>> {
+  const byId = new Map(dbRows.map((r) => [r.id, r]));
+  return updates.map((u) => {
+    const patched = u.patch["topic"];
+    const topic = typeof patched === "string" && patched !== "" ? patched : byId.get(u.id)?.topic;
+    if (!topic) {
+      throw new Error(
+        `content-sync: no topic for content_calendar row ${u.id}. The upsert would violate NOT NULL, so it is not sent.`,
+      );
+    }
+    return { id: u.id, ...u.patch, topic, updated_at: now };
+  });
 }

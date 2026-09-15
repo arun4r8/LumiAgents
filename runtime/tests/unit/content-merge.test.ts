@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   planSync,
+  dbUpsertRows,
   legacySourceKey,
   type DbRow,
   type SheetRow,
@@ -241,5 +242,86 @@ describe("planSync", () => {
     expect(plan.dbInserts).toHaveLength(0);
     expect(plan.idBackfills).toHaveLength(0);
     expect(plan.plan).toHaveLength(0);
+  });
+});
+
+
+/**
+ * The first real run of the two-way sync (2026-09-14) wrote ids into 13 sheet rows,
+ * then failed writing the app side. These tests pin the two things that made that
+ * dangerous: what a re-run does with ids nobody recorded, and why the write failed.
+ */
+describe("recovering from a run that died between the sheet write and the app write", () => {
+  it("adopts the legacy row using the id already in the sheet, instead of duplicating it", () => {
+    // What production looks like after the failed run: the sheet row HAS an id, the
+    // app row is still the unlinked legacy one-way row.
+    const s = sheetRow({ id: "94990782-c14f", topic: "Introduction", description: "Introduce mission" });
+    const db = dbRow({ id: "f090c4c9", sheet_id: null, source_key: legacySourceKey("Introduction"), topic: "Introduction" });
+    const plan = planSync([s], [db], opts());
+
+    expect(plan.dbInserts).toHaveLength(0); // no duplicate
+    expect(plan.idBackfills).toHaveLength(0); // the sheet already has its id
+    expect(plan.dbUpdates).toEqual([
+      expect.objectContaining({
+        id: "f090c4c9",
+        patch: expect.objectContaining({ sheet_id: "94990782-c14f", source_key: "sheet:94990782-c14f" }),
+      }),
+    ]);
+    expect(plan.counts).toMatchObject({ newAppRows: 0, idsBackfilled: 0 });
+  });
+
+  it("still re-materializes a row that really was deleted from the app", () => {
+    const s = sheetRow({ id: "s-9", topic: "Deleted in app" });
+    const plan = planSync([s], [], opts());
+    expect(plan.dbInserts).toHaveLength(1);
+    expect(plan.dbInserts[0]!.row).toMatchObject({ sheet_id: "s-9", source_key: "sheet:s-9" });
+    expect(plan.idBackfills).toHaveLength(0);
+  });
+
+  it("adopts a legacy row once: a second sheet row with the same topic does not steal it", () => {
+    const a = sheetRow({ id: "id-a", topic: "Culture", sheetRow: 5 });
+    const b = sheetRow({ id: "id-b", topic: "Culture", sheetRow: 6 });
+    const db = dbRow({ id: "db1", source_key: legacySourceKey("Culture"), topic: "Culture" });
+    const plan = planSync([a, b], [db], opts());
+    expect(plan.dbUpdates.filter((u) => u.id === "db1")).toHaveLength(1);
+    expect(plan.dbInserts).toHaveLength(1); // b re-materializes; db1 is not linked twice
+  });
+
+  it("the whole 13-row production shape re-runs to 13 links, 0 inserts, 0 new ids", () => {
+    const topics = Array.from({ length: 13 }, (_, i) => `Topic ${i + 1}`);
+    const sheet = topics.map((t, i) => sheetRow({ id: `sheet-${i}`, topic: t, sheetRow: 2 + i }));
+    const db = topics.map((t, i) => dbRow({ id: `db-${i}`, source_key: legacySourceKey(t), topic: t }));
+    const plan = planSync(sheet, db, opts());
+    expect(plan.dbInserts).toHaveLength(0);
+    expect(plan.idBackfills).toHaveLength(0);
+    expect(plan.dbUpdates).toHaveLength(13);
+  });
+});
+
+describe("dbUpsertRows: the payload the NOT NULL constraint rejected", () => {
+  const now = "2026-09-15T00:00:00.000Z";
+  const db = [dbRow({ id: "r1", topic: "Introduction" }), dbRow({ id: "r2", topic: "Old" })];
+
+  it("gives an adoption patch (which has no topic) the row's current topic", () => {
+    const rows = dbUpsertRows([{ id: "r1", patch: { sheet_id: "x", source_key: "sheet:x" } }], db, now);
+    expect(rows[0]).toMatchObject({ id: "r1", topic: "Introduction", sheet_id: "x", updated_at: now });
+  });
+
+  it("keeps a patch's own new topic", () => {
+    const rows = dbUpsertRows([{ id: "r2", patch: { topic: "New" } }], db, now);
+    expect(rows[0]!["topic"]).toBe("New");
+  });
+
+  it("never emits a row without a topic", () => {
+    const rows = dbUpsertRows(
+      [{ id: "r1", patch: { sync_base: {} } }, { id: "r2", patch: { topic: "" } }],
+      db,
+      now,
+    );
+    for (const r of rows) expect(typeof r["topic"] === "string" && r["topic"] !== "").toBe(true);
+  });
+
+  it("refuses, loudly, when it cannot find a topic at all", () => {
+    expect(() => dbUpsertRows([{ id: "missing", patch: { sheet_id: "x" } }], db, now)).toThrow(/NOT NULL/);
   });
 });

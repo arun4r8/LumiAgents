@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineOrchestration, step } from "@/runtime";
 import { sbHeaders } from "@/runtime/utils/supabase";
 import { readTable, updateCells, addTableRows, colLetter } from "../../../integrations/msgraph/workbook";
-import { planSync, type DbRow, type SheetRow, type SheetLayout } from "./merge";
+import { planSync, dbUpsertRows, type DbRow, type SheetRow, type SheetLayout } from "./merge";
 
 // Two-way content-calendar sync between public.content_calendar and the Microsoft
 // 365 Excel Table `ContentCalendar`. Replaces the one-way v1 (which only pulled the
@@ -219,7 +219,8 @@ export default defineOrchestration({
               headers: sbHeaders(env, {
                 extra: { Prefer: "resolution=merge-duplicates,return=minimal" },
               }),
-              body: JSON.stringify(plan.dbUpdates.map((u) => ({ id: u.id, ...u.patch, updated_at: now }))),
+              // Each row carries its topic: see dbUpsertRows for why a bare patch fails.
+              body: JSON.stringify(dbUpsertRows(plan.dbUpdates, dbRows, now)),
             },
           );
           if (!res.ok) throw new Error(`content_calendar update x${plan.dbUpdates.length} → ${res.status}: ${await res.text()}`);
