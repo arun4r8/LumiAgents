@@ -445,3 +445,71 @@ describe("which rows a capped run scores first", () => {
     expect(selected[0]!.externalId).toBe("URGENT");
   });
 });
+
+
+/**
+ * A GovWin row's summary is the only real text the source gives us: the scoring
+ * prompt reads it, and until it was persisted, a row reached beady/govcon-assessment
+ * carrying a title and a NAICS code. The assessment then asked SAM.gov about
+ * `govwin_<id>`, which can never match, and scored a black box.
+ */
+describe("what a GovWin row carries into an assessment", () => {
+  const load = () => import("../../../orchestrations/beady/govwin-import/definition");
+
+  it("keeps the summary it scored on, as the notice body", async () => {
+    const { toScoringRow, SUMMARY_CHARS } = await load();
+    const row = toScoringRow({
+      externalId: "256570", title: "AI agents", status: "Forecast Pre-RFP", agency: "MARYLAND",
+      subAgency: null, solicitationNumber: null, estimatedValueUsd: null,
+      summary: "The agency seeks agentic AI for claims processing.", naicsCode: "541512",
+      setAside: null, incumbent: null, vehicle: null, responseDeadline: "2026-10-30",
+      sourceFile: "VA.xlsx", sourceUrl: null,
+    });
+    expect(row.summary).toBe("The agency seeks agentic AI for claims processing.");
+    expect(SUMMARY_CHARS).toBeGreaterThan(500); // enough of it survives to be worth grounding on
+  });
+});
+
+
+/**
+ * The row the importer actually writes.
+ *
+ * This exists because the first version of the summary fix was untestable: the row
+ * was built inline in run(), so deleting `notice_text` from it left every test
+ * green. The assessment reads that column; if it is dropped, a GovWin opportunity
+ * is assessed on its title alone and nothing fails.
+ */
+describe("opportunityRow (what the importer writes to opportunities)", () => {
+  const load = () => import("../../../orchestrations/beady/govwin-import/definition");
+  const SCORED_AT = "2026-09-16T20:00:00.000Z";
+  const row = {
+    externalId: "256570", title: "AI agents for claims", status: "Forecast Pre-RFP",
+    agency: "MARYLAND", subAgency: "DoIT", solicitationNumber: "BPM057687",
+    estimatedValueUsd: 56_443_000, summary: "The agency seeks agentic AI for claims processing.",
+    naicsCode: "541512", setAside: "Small Business", incumbent: "CONDUENT, INCORPORATED",
+    vehicle: null, responseDeadline: "2026-10-30",
+    sourceFile: "VA.xlsx", sourceUrl: "https://x/VA.xlsx", contentHash: "abc123",
+  };
+  const score = { fitScore: 8, fitReason: "Strong data-platform match.", redFlags: null };
+
+  it("carries the summary as the notice body, so an assessment has something to read", async () => {
+    const { opportunityRow } = await load();
+    const r = opportunityRow(row, score, SCORED_AT);
+    expect(r["notice_text"]).toBe("The agency seeks agentic AI for claims processing.");
+  });
+
+  it("marks the notice text as fetched, so the hydrator does not chase a SAM notice that will never exist", async () => {
+    const { opportunityRow } = await load();
+    expect(opportunityRow(row, score, SCORED_AT)["notice_text_fetched_at"]).toBe(SCORED_AT);
+  });
+
+  it("prefixes the external id, and carries the fields SAM.gov never provides", async () => {
+    const { opportunityRow } = await load();
+    const r = opportunityRow(row, score, SCORED_AT);
+    expect(r["sam_notice_id"]).toBe("govwin_256570");
+    expect(r["source"]).toBe("govwin");
+    expect(r["estimated_value_usd"]).toBe(56_443_000);
+    expect(r["incumbent"]).toBe("CONDUENT, INCORPORATED");
+    expect(r["recommendation"]).toBe("pursue");
+  });
+});

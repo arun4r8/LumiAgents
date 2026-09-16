@@ -166,7 +166,12 @@ export default defineOrchestration({
       // it is, and "Very Low" on thin input is the right answer rather than an error.
       if (!docs.some((d) => d.doc_type === "rfp_pdf") && opp?.sam_notice_id) {
         const noticeId = String(opp.sam_notice_id);
-        if (!noticeId.startsWith("sbir_")) {
+        // Only SAM notice ids resolve in SAM. sam_notice_id is the generic external
+        // id -- `sbir_<topic>`, `govwin_<Opp ID>` -- and handing one of those to the
+        // SAM search spends a request against the shared daily quota to be told
+        // "notice not found", which then reads like a missing solicitation rather
+        // than a source that was never SAM's to begin with.
+        if (!/^(sbir|govwin)_/.test(noticeId)) {
           const attachment = await fetchOpportunityAttachmentText(
             env,
             noticeId,

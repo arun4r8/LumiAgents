@@ -290,6 +290,53 @@ const scoreSchema = z.object({
   ),
 });
 
+/**
+ * The `opportunities` row for one scored GovWin opportunity.
+ *
+ * Pure and exported because this is the WIRING, and the wiring is what breaks. It
+ * was written inline in run(), so no test could reach it -- and when notice_text was
+ * added, the mutation that deleted the line again left every test green. A field
+ * that exists only inside a closure is a field nothing defends.
+ */
+export function opportunityRow(
+  row: ScoringRow,
+  score: { fitScore: number; fitReason: string; redFlags: string | null },
+  scoredAt: string,
+): Record<string, unknown> {
+  return {
+    sam_notice_id:       `govwin_${row.externalId}`,
+    solicitation_number: row.solicitationNumber,
+    title:         row.title,
+    agency:        row.agency,
+    naics_code:    row.naicsCode,
+    set_aside:     row.setAside,
+    response_deadline:   row.responseDeadline,
+    source:        "govwin",
+    // GovWin's web UI is licence-walled, so there is no per-row public URL
+    // to link. The export it came from is the provenance, and it is a link a
+    // person can actually open.
+    source_url:    row.sourceUrl,
+    notice_type:         row.status,
+    // The summary is the richest text GovWin gives us -- it is what the scoring
+    // prompt reads -- and until now it was read, scored on, and thrown away. A
+    // GovWin row then reached beady/govcon-assessment carrying a title and a
+    // NAICS code, which is the "black box" assessment #192 was written to end.
+    // notice_text is the column that already means "the body of this notice"
+    // (#219); fetched_at records that this is all there will ever be, so the
+    // hydrator does not keep looking for a SAM notice that does not exist.
+    notice_text:      row.summary,
+    notice_text_fetched_at: scoredAt,
+    estimated_value_usd: row.estimatedValueUsd,
+    incumbent:     row.incumbent,
+    vehicle:       row.vehicle,
+    fit_score:     score.fitScore,
+    fit_reason:    score.fitReason,
+    red_flags:     score.redFlags,
+    recommendation:      recommendationFor(score.fitScore),
+    last_scored_at:      scoredAt,
+  };
+}
+
 export default defineOrchestration({
   name: "beady/govwin-import",
   version: 1,
@@ -490,29 +537,7 @@ and costs the batch a great deal.
 
     if (shortlist.length > 0) {
       await step(ctx, "upsert-opportunities", async () => {
-        const rows = shortlist.map(({ row, score }) => ({
-          sam_notice_id:       externalId(row),
-          solicitation_number: row.solicitationNumber,
-          title:               row.title,
-          agency:              row.agency,
-          naics_code:          row.naicsCode,
-          set_aside:           row.setAside,
-          response_deadline:   row.responseDeadline,
-          source:              "govwin",
-          // GovWin's web UI is licence-walled, so there is no per-row public URL
-          // to link. The export it came from is the provenance, and it is a link a
-          // person can actually open.
-          source_url:          row.sourceUrl,
-          notice_type:         row.status,
-          estimated_value_usd: row.estimatedValueUsd,
-          incumbent:           row.incumbent,
-          vehicle:             row.vehicle,
-          fit_score:           score.fitScore,
-          fit_reason:          score.fitReason,
-          red_flags:           score.redFlags,
-          recommendation:      recommendationFor(score.fitScore),
-          last_scored_at:      scoredAt,
-        }));
+        const rows = shortlist.map(({ row, score }) => opportunityRow(row, score, scoredAt));
 
         const res = await ctx.fetch(
           `${ctx.env.SUPABASE_URL}/rest/v1/opportunities?on_conflict=sam_notice_id`,
