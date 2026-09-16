@@ -48,6 +48,7 @@ export const outputSchema = z.object({
   updatedInApp: z.number(),
   updatedInSheet: z.number(),
   idsBackfilled: z.number(),
+  linked: z.number().default(0).describe("Existing app rows linked to a sheet row (adoptions). A run that only links reports zero everywhere else."),
   conflicts: z.number(),
   newSheetRows: z.number(),
   newAppRows: z.number(),

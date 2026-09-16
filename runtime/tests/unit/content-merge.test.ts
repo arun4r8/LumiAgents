@@ -325,3 +325,38 @@ describe("dbUpsertRows: the payload the NOT NULL constraint rejected", () => {
     expect(() => dbUpsertRows([{ id: "missing", patch: { sheet_id: "x" } }], db, now)).toThrow(/NOT NULL/);
   });
 });
+
+
+/**
+ * #258: the 2026-09-16 run linked 13 app rows to their sheet rows and reported every
+ * count as 0, because linking touches no content and the ids were already in the
+ * sheet. A run that did work must not look like a no-op.
+ */
+describe("linked count", () => {
+  it("counts a legacy adoption", () => {
+    const s = sheetRow({ id: "", topic: "Legacy Topic" });
+    const db = dbRow({ id: "db9", source_key: legacySourceKey("Legacy Topic"), topic: "Legacy Topic" });
+    expect(planSync([s], [db], opts()).counts).toMatchObject({ linked: 1, idsBackfilled: 1 });
+  });
+
+  it("counts a link that reuses an id already in the sheet, where nothing else moves", () => {
+    const s = sheetRow({ id: "sheet-1", topic: "Introduction" });
+    const db = dbRow({ id: "db1", source_key: legacySourceKey("Introduction"), topic: "Introduction" });
+    const counts = planSync([s], [db], opts()).counts;
+    expect(counts).toMatchObject({ linked: 1, idsBackfilled: 0, updatedInApp: 0, pulledFromSheet: 0 });
+  });
+
+  it("reports linked 13 for the production shape, instead of all zeros", () => {
+    const topics = Array.from({ length: 13 }, (_, i) => `Topic ${i + 1}`);
+    const sheet = topics.map((t, i) => sheetRow({ id: `sheet-${i}`, topic: t, sheetRow: 2 + i }));
+    const db = topics.map((t, i) => dbRow({ id: `db-${i}`, source_key: legacySourceKey(t), topic: t }));
+    expect(planSync(sheet, db, opts()).counts.linked).toBe(13);
+  });
+
+  it("stays 0 when a run really does nothing", () => {
+    const base = { topic: "Same", description: "", asset_ref: "" };
+    const s = sheetRow({ id: "s1", topic: "Same" });
+    const db = dbRow({ id: "db1", sheet_id: "s1", source_key: "sheet:s1", topic: "Same", sync_base: base });
+    expect(planSync([s], [db], opts()).counts.linked).toBe(0);
+  });
+});

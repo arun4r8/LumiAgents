@@ -99,6 +99,14 @@ export interface SyncCounts {
   newSheetRows: number;    // app-origin rows appended to the sheet
   newAppRows: number;      // sheet-origin rows inserted into the app
   skipped: number;         // rows skipped because the merged topic went empty
+  /**
+   * Existing app rows linked to a sheet row this run (adoptions): a legacy one-way
+   * row matched by topic hash, or a row whose sheet id was written by an earlier
+   * run that then failed. Linking touches no content, so it is counted by none of
+   * the other fields -- which is why the 2026-09-16 run reported every count as 0
+   * while changing 13 rows (#258).
+   */
+  linked: number;
 }
 
 /**
@@ -153,6 +161,7 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
     newSheetRows: 0,
     newAppRows: 0,
     skipped: 0,
+    linked: 0,
   };
   const plan: SyncPlan = {
     idBackfills: [],
@@ -203,6 +212,7 @@ export function planSync(sheetRows: SheetRow[], dbRows: DbRow[], opts: PlanOptio
     // died before it linked the app row. Reuse it; writing a second id would orphan
     // the first.
     const newId = existingId ?? genId();
+    counts.linked++;
     if (!existingId) {
       plan.idBackfills.push({ address: idAddress(s.sheetRow), value: newId });
       counts.idsBackfilled++;
