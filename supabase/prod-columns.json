@@ -582,6 +582,7 @@
       "sharepoint_folder_url",
       "solicitation_number",
       "source",
+      "source_file",
       "source_url",
       "title",
       "updated_at",
