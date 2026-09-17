@@ -316,6 +316,10 @@ export function opportunityRow(
     // to link. The export it came from is the provenance, and it is a link a
     // person can actually open.
     source_url:    row.sourceUrl,
+    // Which export this row came from. Carried per row since the import read four
+    // workbooks; it was dropped here, so every GovWin row on the board looked like
+    // it came from one file.
+    source_file:   row.sourceFile,
     notice_type:         row.status,
     // The summary is the richest text GovWin gives us -- it is what the scoring
     // prompt reads -- and until now it was read, scored on, and thrown away. A

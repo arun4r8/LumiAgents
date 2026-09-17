@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { sourceLabel } from "@/lib/opportunity-source";
 import type { BidGateResult } from "@/lib/bid-gates";
 import { useFormStatus } from "react-dom";
 import { useState } from "react";
@@ -32,6 +33,12 @@ export interface Opportunity {
   sharepoint_folder_url: string | null;
   naics_code: string | null;
   last_scored_at: string | null;
+  /** When the sweep first stored this opportunity. Distinct from last_scored_at,
+   *  which moves every time it is re-scored (125 of 292 rows differ). */
+  created_at: string | null;
+  source: string | null;
+  /** GovWin only: the export it was imported from. */
+  source_file: string | null;
   /** Tommy's bid/no-bid gates, evaluated on the server (#197). */
   bid_gate?: BidGateResult;
 }
@@ -202,7 +209,11 @@ export function OpportunitiesClient({ opportunities, total, scoredTotal, limit, 
                 <th style={{ textAlign: "right" }}>Fit</th>
                 <th>Rec.</th>
                 <th>Deadline</th>
-                <th>Status</th>
+                <th>Swept</th>
+                <th>Source</th>
+                {/* There used to be a "Status" header with no cell beneath it: nine
+                    headers over eight columns, so every label from Status rightward
+                    sat above the wrong column and the detail row spanned 8. */}
                 <th>Decision</th>
                 <th aria-label="Expand" />
               </tr>
@@ -252,6 +263,11 @@ function OpportunityRow({
         <td style={{ textAlign: "right" }}><ScoreCell score={o.fit_score} max={10} /></td>
         <td>{rec ? <span className={`tag ${REC_TAG[rec] ?? "tag-outline"}`} style={{ textTransform: "capitalize" }}>{rec}</span> : "-"}</td>
         <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)", whiteSpace: "nowrap" }}><LocalTime iso={o.response_deadline} format="date" placeholder="-" /></td>
+        {/* When the sweep found it, not when it was last scored: a row re-scored
+            today did not arrive today, and "how long has this been sitting here"
+            is the question the column answers. */}
+        <td className="mono" style={{ fontSize: 12, color: "var(--ink-3)", whiteSpace: "nowrap" }}><LocalTime iso={o.created_at} format="date" placeholder="-" /></td>
+        <td style={{ whiteSpace: "nowrap" }}><span className="tag tag-outline">{sourceLabel(o)}</span></td>
         <td onClick={(e) => e.stopPropagation()}>
           {/* stopPropagation: these are decisions, and a click that both triages an
               opportunity and expands the row would make a mis-click ambiguous. */}
@@ -277,7 +293,7 @@ function OpportunityRow({
       </tr>
       {open && (
         <tr className="rec-detail-row">
-          <td colSpan={8}>
+          <td colSpan={10}>
             <div className="rec-detail">
               {o.fit_reason && (
                 <div>

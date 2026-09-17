@@ -160,7 +160,7 @@ export async function OpportunitiesTab({
       supabase
         .from("opportunities")
         .select(
-          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, source_url, disposition, sharepoint_folder_url, evaluation_basis, num_past_performances_required, extracted_facts",
+          "id, title, agency, set_aside, fit_score, fit_reason, red_flags, recommendation, response_deadline, solicitation_number, naics_code, last_scored_at, created_at, source, source_file, source_url, disposition, sharepoint_folder_url, evaluation_basis, num_past_performances_required, extracted_facts",
         ),
     ))
       .order("fit_score", { ascending: false, nullsFirst: false })
